@@ -81,8 +81,6 @@ export default function Konfigurator() {
 
     parseInt(formData.metraz) * 50 || 0;
 
-
-
       basePrice += parseInt(formData.metraz) * 75 || 0;
 
     let packageMultiplier = 1;
