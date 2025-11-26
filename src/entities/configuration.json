@@ -1,0 +1,61 @@
+{
+  "name": "Configuration",
+  "type": "object",
+  "properties": {
+    "share_code": {
+      "type": "string",
+      "description": "Unique code for sharing configuration"
+    },
+    "metraz": {
+      "type": "number",
+      "description": "House size in square meters"
+    },
+    "pakiet": {
+      "type": "string",
+      "description": "Selected package"
+    },
+    "podstawowe": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Basic options selected"
+    },
+    "dodatkowe": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Additional options selected"
+    },
+    "estimated_price": {
+      "type": "number",
+      "description": "Calculated estimated price"
+    },
+    "room_layout": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Layout of rooms with smart features"
+    }
+  },
+  "required": [
+    "metraz",
+    "pakiet"
+  ]
+}
