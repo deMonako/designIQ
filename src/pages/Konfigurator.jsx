@@ -69,74 +69,98 @@ export default function Konfigurator() {
     "Ładowarka elektryczna", "Pompa ciepła"
   ];
 
+  const priceCalculator = () => {
+    const projectBaseMul = {
+      "Oświetlenie": 0.1,
+      "Zacienianie": 0.1,
+      "Ogrzewanie": 0.05,
+      "Wentylacja": 0.05,
+      "System alarmowy": 0.1,
+      "Monitoring": 0.1,
+      "Sieć komputerowa": 0.05,
+      "Oświetlenie zewnętrzne": 0.1,
+      "Kontrola dostępu": 0.1
+    };
+
+    const projectAddMul = {
+      "Brama garażowa": 0.05,
+      "Brama wjazdowa": 0.05,
+      "Nawadnianie": 0.05,
+      "Audio": 0.2,
+      "Fotowoltaika": 0.2,
+      "Rekuperacja": 0.05,
+      "Klimatyzacja": 0.05,
+      "Zarządzanie energią": 0.1,
+      "Analiza pogody": 0.05,
+      "Inteligentne gniazdka": 0.05,
+      "Ładowarka elektryczna": 0.05,
+      "Pompa ciepła": 0.1
+    };
+
+    const basePrice = 3300;
+    const metraz = Number(formData.metraz);
+
+    const roomsMultiplier = 1 + formData.roomLayout.length * 0.05;
+    let sizeMultiplier = 1 + metraz / 1000;
+
+    if (metraz > 200) {
+      sizeMultiplier *= 1.2;
+    } else if (metraz < 100) {
+      sizeMultiplier *= 0.9;
+    }
+
+    const baseOptionsSum =
+      formData.podstawowe.reduce((sum, opt) => sum + (projectBaseMul[opt] || 0), 0);
+
+    const addOptionsSum =
+      formData.dodatkowe.reduce((sum, opt) => sum + (projectAddMul[opt] || 0), 0);
+
+    const baseLimited = Math.min(baseOptionsSum, 0.6);
+    const addLimited = Math.min(addOptionsSum, 0.4);
+
+    const optionsMultiplier = 1 + baseLimited + addLimited;
+
+    const projectPrice = basePrice * roomsMultiplier * sizeMultiplier * optionsMultiplier;
+
+    if (formData.pakiet === "Smart design") {
+      return {
+        cenaRobocizny: projectPrice, // projekt = robocizna (brak prefabrykacji)
+        materialy: 0
+      };
+    }
+
+    if (formData.pakiet === "Smart design+") {
+      const cenaRobocizny = projectPrice * 1.4; // projekt + 40% za prefabrykację
+      const materialy = projectPrice * 2.5; // 250% kosztów materiałów
+
+      return {
+        cenaRobocizny,
+        materialy
+      };
+    }
+
+    if (formData.pakiet === "Full House") {
+      const cenaRobocizny = projectPrice * 1.6; // projekt + 40% szafa + 20% integracja
+      const materialy = projectPrice * 3.5; // 250% szafa + 50% uruchomienie/integracja
+
+      return {
+        cenaRobocizny,
+        materialy
+      };
+    }
+
+    return {
+      cenaRobocizny: projectPrice,
+      materialy: 0
+    };
+  };
+
   const calculatePrice = () => {
-    let basePrice = 2500;
-    
-    if (formData.pakiet === "Smart design")
-      formData.podstawowe.forEach(option => {
-        basicOptionsPrice += basicPrices[option] || 1000;
-      });
-    else if (formData.pakiet === "Full house")
-      basePrice +=  0;
-
-    parseInt(formData.metraz) * 50 || 0;
-
-      basePrice += parseInt(formData.metraz) * 75 || 0;
-
-    let packageMultiplier = 1;
-    if (formData.pakiet === "Smart design+") packageMultiplier = 1.3;
-    if (formData.pakiet === "Full house") packageMultiplier = 1.8;
-
-    // Ceny opcji podstawowych (różne dla różnych opcji)
-    const basicPrices = {
-      "Oświetlenie": 1500,
-      "Zacienianie": 2000,
-      "Ogrzewanie": 2500,
-      "Wentylacja": 1800,
-      "System alarmowy": 3000,
-      "Monitoring": 2500,
-      "Sieć komputerowa": 1200,
-      "Oświetlenie zewnętrzne": 1000,
-      "Kontrola dostępu": 2000
-    };
-    
-    // Ceny opcji dodatkowych
-    const additionalPrices = {
-      "Brama garażowa": 1500,
-      "Brama wjazdowa": 2000,
-      "Nawadnianie": 1200,
-      "Audio": 2500,
-      "Fotowoltaika": 15000,
-      "Rekuperacja": 8000,
-      "Klimatyzacja": 5000,
-      "Zarządzanie energią": 3000,
-      "Analiza pogody": 800,
-      "Inteligentne gniazdka": 1000,
-      "Ładowarka elektryczna": 3500,
-      "Pompa ciepła": 12000
-    };
-
-    // Oblicz cenę opcji podstawowych
-    let basicOptionsPrice = 0;
-    formData.podstawowe.forEach(option => {
-      basicOptionsPrice += basicPrices[option] || 1000;
-    });
-
-    // Oblicz cenę opcji dodatkowych
-    let additionalOptionsPrice = 0;
-    formData.dodatkowe.forEach(option => {
-      additionalOptionsPrice += additionalPrices[option] || 800;
-    });
-
-    // Dodaj koszt za pomieszczenia
-    const roomsPrice = (formData.roomLayout?.length || 0) * 300;
-
-    // Całkowita cena
-    const total = (basePrice + basicOptionsPrice + additionalOptionsPrice + roomsPrice) * packageMultiplier;
-
+    const { cenaRobocizny, materialy } = priceCalculator();
+    const total = cenaRobocizny + materialy;
     setEstimatedPrice(Math.round(total));
     setShowResult(true);
-  };
+  }
 
   const handleReset = () => {
     setFormData({
