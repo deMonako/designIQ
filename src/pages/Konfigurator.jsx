@@ -38,6 +38,12 @@ export default function Konfigurator() {
     }
   };
 
+  const scrollToForm = () => {
+  // Przewijanie do góry strony (pozycja 0) jest najbardziej niezawodne 
+  // na wszystkich urządzeniach, zwłaszcza po wyrenderowaniu nowego formularza.
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const pakiety = [
     { 
       value: "Smart design", 
@@ -139,7 +145,7 @@ export default function Konfigurator() {
       };
     }
 
-    if (formData.pakiet === "Full House") {
+    if (formData.pakiet === "Full house") {
       const cenaRobocizny = projectPrice * 1.6; // projekt + 40% szafa + 20% integracja
       const materialy = projectPrice * 3.5; // 250% szafa + 50% uruchomienie/integracja
 
@@ -775,7 +781,7 @@ export default function Konfigurator() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.8 }}
-                  className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
+                  className="grid grid-cols-1 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8"
                 >
                   {[
                     { value: `${formData.metraz} m²`, label: "Metraż" },
@@ -812,8 +818,8 @@ export default function Konfigurator() {
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
                     <Button
                       onClick={() => {
+                        scrollToForm();
                         setShowContactForm(true);
-                        scrollToConfigurator();
                       }}
                       size="lg"
                       className="bg-gradient-to-r from-orange-600 to-orange-500 hover:shadow-2xl hover:shadow-orange-500/50 text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 rounded-xl w-full"
@@ -826,7 +832,7 @@ export default function Konfigurator() {
                     <Button
                       onClick={() => {
                         handleReset();
-                        scrollToConfigurator();
+                        scrollToForm();
                       }}
                       variant="outline"
                       size="lg"

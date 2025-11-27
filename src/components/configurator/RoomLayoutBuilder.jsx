@@ -16,11 +16,9 @@ import {
 const roomTypes = [
   { value: "Dzienne", icon: Home, color: "from-orange-500 to-orange-400", category: "dzienne", examples: "salon, kuchnia, jadalnia" },
   { value: "Sypialniane", icon: Bed, color: "from-purple-500 to-purple-400", category: "sypialniane", examples: "sypialnia, pokój gościnny" },
-  { value: "Komunikacyjne", icon: DoorOpen, color: "from-blue-500 to-blue-400", category: "komunikacyjne", examples: "korytarz, łazienka, hol" },
+  { value: "Komunikacyjne", icon: DoorOpen, color: "from-blue-500 to-blue-400", category: "komunikacyjne", examples: "korytarz, przedsionek, hol" },
   { value: "Gospodarcze", icon: Warehouse, color: "from-slate-600 to-slate-500", category: "gospodarcze", examples: "garaż, pralnia, kotłownia" },
 ];
-
-
 
 export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) {
   const [editingRoom, setEditingRoom] = useState(null);
@@ -269,10 +267,10 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
       { name: "Salon", type: "Dzienne" },
       { name: "Kuchnia", type: "Dzienne" },
       { name: "Sypialnia główna", type: "Sypialniane" },
-      { name: "Łazienka", type: "Komunikacyjne" },
+      { name: "Łazienka", type: "Dzienne" },
       { name: "Korytarz", type: "Komunikacyjne" },
       { name: "Sypialnia 2", type: "Sypialniane" },
-      { name: "Łazienka gościnna", type: "Komunikacyjne" },
+      { name: "Łazienka gościnna", type: "Dzienne" },
       { name: "Pokój gościnny", type: "Sypialniane" },
       { name: "Pralnia", type: "Gospodarcze" },
       { name: "Garaż", type: "Gospodarcze" },
@@ -280,10 +278,14 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
       { name: "Sypialnia 3", type: "Sypialniane" },
       { name: "Kotłownia", type: "Gospodarcze" },
       { name: "Korytarz 2", type: "Komunikacyjne" },
-      { name: "Łazienka 3", type: "Komunikacyjne" },
+      { name: "Łazienka 3", type: "Dzienne" },
       { name: "Jadalnia", type: "Dzienne" },
       { name: "Garderoba", type: "Sypialniane" },
       { name: "Hol", type: "Komunikacyjne" },
+      { name: "Spiżarnia", type: "Gospodarcze" },
+      { name: "Biuro", type: "Dzienne" },
+      { name: "Przedsionek", type: "Komunikacyjne" },
+      { name: "Bawialnia", type: "Dzienne" },
     ];
 
     const roomsToAdd = defaultRooms.slice(0, count).map((room, idx) => ({
@@ -413,7 +415,7 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
                   onValueChange={(value) => setNewRoom({ ...newRoom, type: value })}
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue className="text-left" />
+                    <SelectValue placeholder="Typ pomieszczenia" className="text-left" />
                   </SelectTrigger>
                   <SelectContent>
                     {roomTypes.map((type) => (
@@ -506,7 +508,7 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
                         <>
                           {/* Room Header */}
                           <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            <div className="flex items-center space-x-1 sm:space-x-3 flex-1 min-w-0">
                               <div className={`w-12 h-12 flex-shrink-0 bg-gradient-to-br ${roomConfig.color} rounded-lg flex items-center justify-center`}>
                                 <RoomIcon className="w-6 h-6 text-white" />
                               </div>

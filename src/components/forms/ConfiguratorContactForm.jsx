@@ -2,7 +2,6 @@ import React, { useState, useCallback } from 'react';
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { motion } from "framer-motion";
 
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 
@@ -12,7 +11,7 @@ import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
   
   // Twój poprawny Adres URL z wdrożenia Google Apps Script
-  const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbzv03HG3aqupyohOxUy1Fc_ZqtZrxl1xeQbykFca5NNo2fYVSaCylwxvLLNdfYn6iJ4/exec"; 
+  const GAS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwl3IlqxAbzxkipu28oMHOnVxs4HUJT_PJm7i8SogMDOeBVNc7gvR0Jzph9kp1TXipZ/exec"; 
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -49,7 +48,10 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
       message: contactData.wiadomosc || 'Brak dodatkowych informacji',
       
       // Pola Konfiguracji
-      price: estimatedPrice.toLocaleString('pl-PL', { minimumFractionDigits: 0 }) + ' PLN',
+      price:
+      `${Math.round(estimatedPrice * 0.8).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} – ` +
+      `${Math.round(estimatedPrice * 1.3).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} PLN`,
+
       // Zmieniamy klucz na configurationJsonString
       configuration: configurationJsonString,
       
@@ -129,16 +131,30 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     setIsSubmitting(false);
   }, [contactData, estimatedPrice, formData]); // Zaktualizowano zależności
 
-  // Widok po udanej wysyłce
+  // Widok po udanej wysyłce (ConfiguratorContactForm) - ZIELONY STYL Z IKONĄ SEND
   if (submitted) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 bg-white rounded-xl shadow-2xl text-center transition-all duration-500">
-        <Send className="w-16 h-16 text-orange-500 mb-4" />
+      // Kontener z zielonym tłem sukcesu
+      <div className="p-8 bg-green-50 border border-green-400 rounded-xl shadow-lg text-center transition-all duration-500 max-w-lg mx-auto">
+        {/* Używamy ikony Send, ale w kolorze akcentu (orange) */}
+        <Send className="w-16 h-16 text-orange-600 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Zapytanie wysłane!</h2>
-        <p className="text-gray-600 max-w-sm">
-          Potwierdzenie konfiguracji zostało wysłane na adres <span className="font-semibold text-orange-500">{contactData.email}</span>. Wkrótce skontaktujemy się z Tobą w celu omówienia szczegółów wyceny.
+        <p className="text-gray-700 max-w-sm mx-auto">
+          Potwierdzenie konfiguracji oraz szacunkowa wycena zostały wysłane na adres:
+          {/* Adres e-mail pozostawiamy w kolorze pomarańczowym dla wyróżnienia */}
+          <span className="font-semibold text-orange-600 block my-1">{contactData.email}</span>
+          Wkrótce skontaktujemy się z Tobą w celu omówienia szczegółów wyceny.
+          <br />
+          {/* Komunikat o spamie w nowym stylu */}
+          <span className="text-sm text-gray-500 mt-2 block pt-2 border-t border-green-200">
+            Jeśli maila nie ma w twojej skrzynce, prosimy sprawdzić folder <i>Spam</i> lub <i>Oferty</i>.
+          </span>
         </p>
-        <Button onClick={onCancel} className="mt-6 h-12" variant="outline">
+        <Button 
+          onClick={onCancel} 
+          className="mt-6 h-12 mx-auto block" // Dodajemy 'mx-auto' i 'block'
+          variant="outline"
+        >
           <Undo2 className="w-5 h-5 mr-2" /> Wróć do konfiguratora
         </Button>
       </div>

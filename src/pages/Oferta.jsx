@@ -22,6 +22,7 @@ export default function Oferta() {
       gradient: "from-orange-500 to-orange-400",
       features: [
         { icon: Home, text: "Projekt smart home" },
+        { icon: Pencil, text: "Projekt szafy sterowniczej"},
         { icon: Plug, text: "Lista okablowania" },
         { icon: Cpu, text: "Lista podzespołów" },
         { icon: Headphones, text: "Wsparcie techniczne" }
@@ -34,10 +35,10 @@ export default function Oferta() {
       isPopular: true,
       features: [
         { icon: Home, text: "Projekt smart home" },
+        { icon: Pencil, text: "Projekt szafy sterowniczej"},
         { icon: Plug, text: "Lista okablowania" },
         { icon: Cpu, text: "Lista podzespołów" },
         { icon: Headphones, text: "Wsparcie techniczne" },
-        { icon: Pencil, text: "Projekt szafy sterowniczej", highlight: true },
         { icon: Factory, text: "Prefabrykacja szafy sterowniczej", highlight: true },
         { icon: Wrench, text: "Uruchomienie i integracja", highlight: true }
       ]
@@ -48,10 +49,11 @@ export default function Oferta() {
       gradient: "from-orange-600 to-orange-500",
       features: [
         { icon: Home, text: "Projekt smart home" },
+        { icon: Pencil, text: "Projekt szafy sterowniczej"},
         { icon: Plug, text: "Lista okablowania" },
         { icon: Cpu, text: "Lista podzespołów" },
         { icon: Headphones, text: "Wsparcie techniczne" },
-        { icon: Pencil, text: "Projekt szafy sterowniczej", highlight: true }
+        { icon: Factory, text: "Prefabrykacja szafy sterowniczej", highlight: true }
       ]
     }
   ];
@@ -142,8 +144,8 @@ export default function Oferta() {
             Nie wiesz, który pakiet wybrać?
           </h2>
           <p className="text-lg text-slate-600 mb-8">
-            Kliknij w jeden z pakietów, aby otrzymać więcej informacji przez nasz formularz kontaktowy. 
-            Możesz również sam skonfigurować swój smart home.
+            Napisz do nas, aby otrzymać więcej informacji przez nasz formularz kontaktowy. 
+            Możesz również sam skonfigurować swój smart home i zobaczyć szacunkowy koszt twojej realizacji.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
