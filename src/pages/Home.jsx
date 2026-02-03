@@ -9,11 +9,12 @@ import {
   Radio, 
   Camera, 
   Wifi,
-  CheckCircle,
+  Terminal,
   ArrowRight,
   Sparkles,
   Zap,
-  Lock
+  Lock,
+  Activity,
 } from "lucide-react";
 
 
@@ -80,7 +81,7 @@ export default function Home() {
   return (
     <div className="w-full overflow-x-hidden">
       {/* Hero Section */}
-      <section className="relative min-h-[95vh] flex flex-col justify-center overflow-hidden">
+      <section className="relative min-h-[calc(100vh-80px)] flex flex-col justify-center overflow-hidden">
         {/* Animated Background */}
         <div className="absolute inset-0 bg-gradient-to-br from-orange-600 via-orange-700 to-slate-800">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzBoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yeiIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
@@ -178,7 +179,7 @@ export default function Home() {
       </section>
 
       {/* About Section */}
-      <section className="py-20 lg:py-32">
+      <section className="pt-20 lg:pt-32 pb-0">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-16">
             <h2 className="pb-[10px] text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
@@ -338,6 +339,41 @@ export default function Home() {
                 </motion.div>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+{/* SEKCJA LIVE DEMO - Naprawiona szerokość kontenera */}
+      <section className="pb-24">
+        <div className="container mx-auto px-4 lg:px-8">
+          <div className="bg-slate-900 rounded-[3rem] p-8 lg:p-12 overflow-hidden relative group border border-slate-800 shadow-2xl">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-orange-600/10 rounded-full blur-[100px] pointer-events-none" />
+            
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-10 relative z-10">
+              <div className="text-left space-y-4 max-w-xl">
+                <div className="inline-flex items-center space-x-2 bg-orange-600/20 text-orange-400 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
+                  <Activity className="w-4 h-4 animate-pulse" />
+                  <span>Live Technology Demo</span>
+                </div>
+                <h3 className="text-3xl lg:text-4xl font-bold text-white">
+                  Zobacz potęgę integracji <span className="text-orange-500 italic">na żywo</span>
+                </h3>
+                <p className="text-slate-400 leading-relaxed">
+                  Przygotowaliśmy unikalny pokaz możliwości. Jednym kliknięciem możesz wysłać sygnał 
+                  z tej strony bezpośrednio do naszego biura i sprawdzić, jak systemy firm trzecich 
+                  współpracują z Loxone w czasie rzeczywistym.
+                </p>
+              </div>
+
+              <Link
+                to="/Instalator"
+                className="group flex-shrink-0 relative inline-flex items-center justify-center px-10 py-5 font-black text-white transition-all bg-orange-600 rounded-2xl hover:bg-orange-500 shadow-xl hover:shadow-orange-600/40 active:scale-95"
+              >
+                <span className="relative flex items-center gap-3">
+                  URUCHOM TEST <Terminal className="w-5 h-5" />
+                </span>
+              </Link>
+            </div>
           </div>
         </div>
       </section>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Edit2, Save, X, Lightbulb, Sun, Wind, Thermometer, Shield, Camera, Wifi, Home, Wand2, Car, Waves, Bed, DoorOpen, Warehouse } from "lucide-react";
+import { Plus, Trash2, Edit2, Save, X, Lightbulb, Sun, Wind, Thermometer, Shield, Camera, Wifi, Home, Wand2, Car, Waves, Bed, DoorOpen, Warehouse, Bath, Sofa, WashingMachine, Flame, Boxes, Shirt, Utensils, Laugh, Briefcase, Book, Dumbbell } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -255,8 +255,6 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
     return roomTypes.find(rt => rt.value === type) || roomTypes[0];
   };
 
-
-
   const handleAutoFill = () => {
     const count = parseInt(autoFillCount);
     if (!count || count < 1 || count > 20) {
@@ -264,28 +262,33 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
     }
 
     const defaultRooms = [
-      { name: "Salon", type: "Dzienne" },
-      { name: "Kuchnia", type: "Dzienne" },
-      { name: "Sypialnia główna", type: "Sypialniane" },
-      { name: "Łazienka", type: "Dzienne" },
-      { name: "Korytarz", type: "Komunikacyjne" },
-      { name: "Sypialnia 2", type: "Sypialniane" },
-      { name: "Łazienka gościnna", type: "Dzienne" },
-      { name: "Pokój gościnny", type: "Sypialniane" },
-      { name: "Pralnia", type: "Gospodarcze" },
-      { name: "Garaż", type: "Gospodarcze" },
-      { name: "Taras", type: "Dzienne" },
-      { name: "Sypialnia 3", type: "Sypialniane" },
-      { name: "Kotłownia", type: "Gospodarcze" },
-      { name: "Korytarz 2", type: "Komunikacyjne" },
-      { name: "Łazienka 3", type: "Dzienne" },
-      { name: "Jadalnia", type: "Dzienne" },
-      { name: "Garderoba", type: "Sypialniane" },
-      { name: "Hol", type: "Komunikacyjne" },
-      { name: "Spiżarnia", type: "Gospodarcze" },
-      { name: "Biuro", type: "Dzienne" },
-      { name: "Przedsionek", type: "Komunikacyjne" },
-      { name: "Bawialnia", type: "Dzienne" },
+      { name: "Salon", type: "Dzienne", icon: Sofa },
+      { name: "Kuchnia", type: "Dzienne", icon: Utensils },
+      { name: "Sypialnia główna", type: "Sypialniane", icon: Bed },
+      { name: "Łazienka", type: "Dzienne", icon: Bath },
+      { name: "Korytarz", type: "Komunikacyjne", icon: DoorOpen },
+      { name: "Sypialnia 2", type: "Sypialniane", icon: Bed },
+      { name: "Łazienka gościnna", type: "Dzienne", icon: Bath },
+      { name: "Pokój gościnny", type: "Sypialniane", icon: Bed },
+      { name: "Pralnia", type: "Gospodarcze", icon: WashingMachine },
+      { name: "Garaż", type: "Gospodarcze", icon: Warehouse },
+      { name: "Taras", type: "Dzienne", icon: Sun },
+      { name: "Sypialnia 3", type: "Sypialniane", icon: Bed },
+      { name: "Kotłownia", type: "Gospodarcze", icon: Flame },
+      { name: "Korytarz 2", type: "Komunikacyjne", icon: DoorOpen },
+      { name: "Łazienka 3", type: "Dzienne", icon: Bath },
+      { name: "Jadalnia", type: "Dzienne", icon: Utensils },
+      { name: "Garderoba", type: "Sypialniane", icon: Shirt },
+      { name: "Hol", type: "Komunikacyjne", icon: DoorOpen },
+      { name: "Spiżarnia", type: "Gospodarcze", icon: Boxes },
+      { name: "Biuro", type: "Dzienne", icon: Briefcase },
+      { name: "Przedsionek", type: "Komunikacyjne", icon: DoorOpen },
+      { name: "Bawialnia", type: "Dzienne", icon: Laugh },
+      { name: "Pokój dziecięcy", type: "Sypialniane", icon: Bed },
+      { name: "Siłownia", type: "Gospodarcze", icon: Dumbbell }, 
+      { name: "Pokój hobby", type: "Dzienne", icon: Wand2 },
+      { name: "Biblioteka", type: "Dzienne", icon: Book }, 
+      { name: "Balkon", type: "Dzienne", icon: Sun },
     ];
 
     const roomsToAdd = defaultRooms.slice(0, count).map((room, idx) => ({
@@ -460,7 +463,7 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
             <AnimatePresence>
               {rooms.map((room) => {
                 const roomConfig = getRoomTypeConfig(room.type);
-                const RoomIcon = roomConfig.icon;
+                const RoomIcon = room.icon || roomConfig.icon;
                 const isEditing = editingRoom === room.id;
 
                 return (

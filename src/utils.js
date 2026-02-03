@@ -8,6 +8,10 @@ export function createPageUrl(name) {
     case "PolitykaPrywatnosci": return "/PolitykaPrywatnosci";
     case "Sukces": return "/Sukces";
     case "CoZyskasz": return "/CoZyskasz";
+    case "StatusInwestycji": return "/StatusInwestycji";
+    case "FAQ": return "/FAQ";
+    case "Realizacje": return "/Realizacje";
+    case "Instalator": return "/Instalator";
     default: return "/";
   }
 }

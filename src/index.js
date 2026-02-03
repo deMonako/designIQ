@@ -12,6 +12,10 @@ import Oferta from "./pages/Oferta";
 import ONas from "./pages/ONas";
 import Kontakt from "./pages/Kontakt";
 import PolitykaPrywatnosci from "./pages/PolitykaPrywatnosci";
+import StatusInwestycji from "./pages/StatusInwestycji";
+import FAQ from "./pages/FAQ";
+import Realizacje from "./pages/Realizacje";
+import Instalator from "./pages/Instalator";
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
@@ -27,6 +31,10 @@ root.render(
           <Route path="/ONas" element={<ONas />} />
           <Route path="/Kontakt" element={<Kontakt />} />
           <Route path="/PolitykaPrywatnosci" element={<PolitykaPrywatnosci />} />
+          <Route path="/StatusInwestycji" element={<StatusInwestycji />} />
+          <Route path="/FAQ" element={<FAQ />} />
+          <Route path="/Realizacje" element={<Realizacje />} />
+          <Route path="/Instalator" element={<Instalator />} />
         </Routes>
       </Layout>
     </BrowserRouter>

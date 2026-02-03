@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { gtmEvent } from "../analytics";
 
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 
+/* global fbq */
 
 // --- Główny Komponent Formularza Kontaktowego (Logika gotowa do produkcji) ---
 
@@ -85,6 +87,13 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
         return;
     }
 
+    const scrollToConfigurator = () => {
+      setTimeout(() => {
+        const top = 100;
+        document.documentElement.scrollTo({ top, behavior: "smooth" });
+        document.body.scrollTo({ top, behavior: "smooth" });
+      }, 30);
+    };
 
     for (let i = 0; i < maxRetries; i++) {
       try {
@@ -123,6 +132,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     }
 
     if (success) {
+      scrollToConfigurator();
       setSubmitted(true);
     } else {
       setErrorMessage("Niestety, wystąpił krytyczny błąd podczas wysyłania zapytania po kilku próbach. Sprawdź, czy ustawienia wdrożenia GAS (dostęp: 'Każdy') są poprawne.");
@@ -130,6 +140,13 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     
     setIsSubmitting(false);
   }, [contactData, estimatedPrice, formData]); // Zaktualizowano zależności
+
+  useEffect(() => {
+    if (submitted) {
+      gtmEvent("contact_form_success");
+      fbq("track", "Contact");
+    }
+  }, [submitted]);
 
   // Widok po udanej wysyłce (ConfiguratorContactForm) - ZIELONY STYL Z IKONĄ SEND
   if (submitted) {
@@ -260,6 +277,11 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
               disabled={isSubmitting}
               className="w-full h-14" // h-14 dla większego przycisku
               variant="primary"
+              onClick={() => {
+                if (!isSubmitting) {
+                  gtmEvent("contact_form_submit_click");
+                }
+              }}
             >
               {isSubmitting ? (
                 <>

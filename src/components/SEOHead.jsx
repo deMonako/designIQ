@@ -3,15 +3,17 @@ import { useLocation } from 'react-router-dom';
 
 const pageMetadata = {
   '/': {
-    title: 'designiQ - Inteligentny Dom | Certyfikowany Partner Loxone',
-    description: 'Profesjonalne systemy Smart Home i automatyka budynkowa z Loxone. Certyfikowany partner - projekty, instalacje i programowanie inteligentnych domów. Bydgoszcz i okolice.',
-    keywords: 'smart home, inteligentny dom, automatyka budynkowa, loxone, designiq, system smart home, projektowanie smart home, loxone partner, smart home bydgoszcz',
+    // TITLE: Inteligentny Dom Bydgoszcz na początku.
+    title: 'Inteligentny Dom Bydgoszcz - Smart Home Loxone | designiQ', 
+    // DESCRIPTION: Wzmocnienie obu fraz obok siebie.
+    description: 'Inteligentny Dom Bydgoszcz i okolice. Profesjonalne systemy Smart Home Loxone – automatyka budynkowa. Certyfikowany partner: projekty, instalacje i programowanie.',
+    keywords: 'inteligentny dom bydgoszcz, smart home bydgoszcz, automatyka budynkowa, loxone partner bydgoszcz, projektowanie smart home, designiq',
     ogImage: 'https://designiq.pl/og-image.jpg',
     schema: {
       "@context": "https://schema.org",
       "@type": "Organization",
       "name": "designiQ",
-      "url": "https://designiq.pl",
+      "url": "https://www.designiq.pl",
       "logo": "https://designiq.pl/logo.png",
       "description": "Profesjonalne systemy Smart Home i automatyka budynkowa",
       "address": {
@@ -34,8 +36,8 @@ const pageMetadata = {
     }
   },
   '/Konfigurator': {
-    title: 'Konfigurator Smart Home - Bezpłatna Wycena Online | designiQ Loxone',
-    description: 'Stwórz konfigurację inteligentnego domu i otrzymaj darmową wycenę. Interaktywny konfigurator Smart Home z Loxone - zaprojektuj swój dom w 4 krokach.',
+    title: 'Wycena Smart Home Bydgoszcz - Konfigurator Inteligentnego Domu Online | designiQ',
+    description: 'Odbierz darmową wycenę Smart Home w Bydgoszczy. Stwórz konfigurację inteligentnego domu i otrzymaj kosztorys. Interaktywny konfigurator Loxone w 4 krokach.',
     keywords: 'konfigurator smart home, wycena smart home online, kalkulator smart home, konfigurator loxone, cena inteligentnego domu, darmowa wycena',
     schema: {
       "@context": "https://schema.org",
@@ -51,7 +53,7 @@ const pageMetadata = {
     }
   },
   '/CoZyskasz': {
-    title: 'Korzyści Smart Home - Oszczędność, Bezpieczeństwo, Komfort | designiQ',
+    title: 'Korzyści Inteligentnego Domu (Smart Home) - Oszczędność, Bezpieczeństwo | designiQ',
     description: 'Odkryj zalety inteligentnego domu Loxone: do 30% oszczędności energii, pełne bezpieczeństwo, komfort życia i wzrost wartości nieruchomości. ROI 2-4 lata.',
     keywords: 'korzyści smart home, oszczędność energii, bezpieczeństwo domu, automatyzacja domu, zalety smart home, loxone korzyści, zarządzanie energią',
     schema: {
@@ -66,7 +68,7 @@ const pageMetadata = {
     }
   },
   '/Oferta': {
-    title: 'Oferta Smart Home - Pakiety od 5000 PLN | designiQ Partner Loxone',
+    title: 'Pakiety Smart Home Loxone - Projekty i Instalacje od 5000 PLN | designiQ',
     description: 'Wybierz pakiet Smart Home: Smart Design (projekt), Smart Design+ (prefabrykacja) lub Full House (pełne uruchomienie). Kompleksowe rozwiązania Loxone.',
     keywords: 'oferta smart home, pakiety smart home, cena smart home, smart design, projektowanie smart home, instalacja loxone, koszt inteligentnego domu',
     schema: {
@@ -108,7 +110,7 @@ const pageMetadata = {
     }
   },
   '/ONas': {
-    title: 'O Nas - Eksperci Smart Home | Certyfikowany Partner Loxone designiQ',
+    title: 'O Nas - Eksperci Smart Home Loxone Bydgoszcz | designiQ',
     description: 'designiQ to zespół ekspertów Smart Home i automatyki budynkowej. Certyfikowany partner Loxone z wieloletnim doświadczeniem w projektowaniu i programowaniu systemów.',
     keywords: 'partner loxone, firma smart home, inteligentny dom bydgoszcz, projektowanie automatyki, certyfikowany partner loxone',
     schema: {
@@ -121,8 +123,8 @@ const pageMetadata = {
     }
   },
   '/Kontakt': {
-    title: 'Kontakt - Bezpłatna Konsultacja Smart Home | designiQ Bydgoszcz',
-    description: 'Skontaktuj się z designiQ - ekspertami Smart Home Loxone. Bezpłatna konsultacja i wycena. Tel: 782-109-286, Email: kontakt@designiq.pl. Żeglarska 18/1, Bydgoszcz.',
+    title: 'Kontakt Smart Home Bydgoszcz - Bezpłatna Konsultacja | designiQ',
+    description: 'Skontaktuj się z designiQ - ekspertami Smart Home Loxone w Bydgoszczy. Bezpłatna konsultacja i wycena. Tel: 782-109-286, Email: kontakt@designiq.pl.',
     keywords: 'kontakt smart home, konsultacja smart home, wycena smart home, bydgoszcz smart home, loxone bydgoszcz',
     schema: {
       "@context": "https://schema.org",
@@ -157,7 +159,8 @@ export default function SEOHead() {
     updateMetaTag('property', 'og:title', metadata.title);
     updateMetaTag('property', 'og:description', metadata.description);
     updateMetaTag('property', 'og:type', 'website');
-    updateMetaTag('property', 'og:url', window.location.href);
+    // Używamy wersji z WWW jako kanonicznej w tagach OG
+    updateMetaTag('property', 'og:url', window.location.protocol + '//www.designiq.pl' + currentPath); 
     updateMetaTag('property', 'og:site_name', 'designiQ');
     updateMetaTag('property', 'og:locale', 'pl_PL');
     if (metadata.ogImage) {
@@ -172,14 +175,16 @@ export default function SEOHead() {
       updateMetaTag('name', 'twitter:image', metadata.ogImage);
     }
 
-    // Canonical URL
+    // Canonical URL (NAPRAWA BŁĘDU KANONICZNEGO W GSC)
+    const canonicalUrl = window.location.protocol + '//www.designiq.pl' + currentPath;
     let canonical = document.querySelector('link[rel="canonical"]');
     if (!canonical) {
       canonical = document.createElement('link');
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = window.location.href;
+    // Zawsze ustawiamy wersję z www jako kanoniczną, niezależnie od tego, jak wszedł użytkownik
+    canonical.href = canonicalUrl; 
 
     // Schema.org structured data
     if (metadata.schema) {

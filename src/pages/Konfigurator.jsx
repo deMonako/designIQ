@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calculator, Home, CheckCircle, ArrowRight, Layout as LayoutIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -6,7 +6,7 @@ import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radioGroup";
 import { Card, CardContent } from "../components/ui/card";
-import { createPageUrl } from "../utils";
+import { gtmEvent } from "../components/analytics";
 import { motion, AnimatePresence } from "framer-motion";
 import RoomLayoutBuilder from "../components/configurator/RoomLayoutBuilder";
 import ConfiguratorContactForm from "../components/forms/ConfiguratorContactForm";
@@ -20,6 +20,10 @@ export default function Konfigurator() {
     dodatkowe: [],
     roomLayout: []
   });
+
+  useEffect(() => {
+    gtmEvent("configurator_start");
+  }, []);
 
   const [showResult, setShowResult] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
@@ -39,9 +43,11 @@ export default function Konfigurator() {
   };
 
   const scrollToForm = () => {
-  // Przewijanie do góry strony (pozycja 0) jest najbardziej niezawodne 
-  // na wszystkich urządzeniach, zwłaszcza po wyrenderowaniu nowego formularza.
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      const top = 100;
+      document.documentElement.scrollTo({ top, behavior: "smooth" });
+      document.body.scrollTo({ top, behavior: "smooth" });
+    }, 30);
   };
 
   const pakiety = [
@@ -136,8 +142,8 @@ export default function Konfigurator() {
     }
 
     if (formData.pakiet === "Smart design+") {
-      const cenaRobocizny = projectPrice * 1.4; // projekt + 40% za prefabrykację
-      const materialy = projectPrice * 2.5; // 250% kosztów materiałów
+      const cenaRobocizny = projectPrice * 1.5; // projekt + 40% za prefabrykację
+      const materialy = 8000 + projectPrice * 2.5; // 250% kosztów materiałów
 
       return {
         cenaRobocizny,
@@ -146,8 +152,8 @@ export default function Konfigurator() {
     }
 
     if (formData.pakiet === "Full house") {
-      const cenaRobocizny = projectPrice * 1.6; // projekt + 40% szafa + 20% integracja
-      const materialy = projectPrice * 3.5; // 250% szafa + 50% uruchomienie/integracja
+      const cenaRobocizny = projectPrice * 2; // projekt + 40% szafa + 20% integracja
+      const materialy = 10000 + projectPrice * 3.5; // 250% szafa + 50% uruchomienie/integracja
 
       return {
         cenaRobocizny,
@@ -298,8 +304,10 @@ export default function Konfigurator() {
                           opacity: currentStep > step.number ? 1 : 0.3,
                         }}
                         transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-                        className={`h-0.5 sm:h-1 w-full transition-all origin-left rounded-full ${
-                          currentStep > step.number ? "bg-gradient-to-r from-orange-500 to-orange-400" : "bg-slate-300"
+                        className={`hidden sm:block h-0.5 w-full origin-left rounded-full ${
+                        currentStep > step.number
+                          ? "bg-gradient-to-r from-orange-500 to-orange-400"
+                          : "bg-slate-300"
                         }`}
                       />
                     </div>
@@ -390,6 +398,7 @@ export default function Konfigurator() {
                           onClick={() => {
                             const isValid = formData.metraz && parseInt(formData.metraz) >= 20 && parseInt(formData.metraz) <= 2000;
                             if (isValid) {
+                              gtmEvent("configurator_step", { step: 1 });
                               setCurrentStep(2);
                               setShowValidationError({ ...showValidationError, step1: false });
                               scrollToConfigurator();
@@ -498,6 +507,7 @@ export default function Konfigurator() {
                   <Button
                     onClick={() => {
                       if (formData.podstawowe.length > 0) {
+                        gtmEvent("configurator_step", { step: 2 });
                         setCurrentStep(3);
                         setShowValidationError({ ...showValidationError, step2: false });
                         scrollToConfigurator();
@@ -560,6 +570,7 @@ export default function Konfigurator() {
                     onClick={() => {
                       if (formData.roomLayout.length > 0) {
                         calculatePrice();
+                        gtmEvent("configurator_step", { step: 3 });
                         setCurrentStep(4);
                         setShowValidationError({ ...showValidationError, step3: false });
                         scrollToConfigurator();
@@ -818,6 +829,7 @@ export default function Konfigurator() {
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">
                     <Button
                       onClick={() => {
+                        gtmEvent("configurator_step", { step: 4 });
                         scrollToForm();
                         setShowContactForm(true);
                       }}
@@ -825,7 +837,7 @@ export default function Konfigurator() {
                       className="bg-gradient-to-r from-orange-600 to-orange-500 hover:shadow-2xl hover:shadow-orange-500/50 text-base sm:text-lg px-6 sm:px-8 py-4 sm:py-6 rounded-xl w-full"
                     >
                       <ArrowRight className="w-5 h-5 mr-2" />
-                      Otrzymaj wycenę
+                      Poznaj cenę
                     </Button>
                   </motion.div>
                   <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="w-full sm:w-auto">

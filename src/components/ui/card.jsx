@@ -1,10 +1,24 @@
-// src/components/ui/card.jsx
 import React from "react";
 
-export function Card({ children, className }) {
-  return <div className={`rounded-2xl shadow-lg p-6 ${className}`}>{children}</div>;
+// Dodajemy ...props, aby przechwycić onClick i inne parametry
+export function Card({ children, className, ...props }) {
+  return (
+    <div 
+      {...props} 
+      className={`rounded-2xl shadow-lg ${className}`}
+    >
+      {children}
+    </div>
+  );
 }
 
-export function CardContent({ children, className }) {
-  return <div className={`p-4 ${className}`}>{children}</div>;
+export function CardContent({ children, className, ...props }) {
+  return (
+    <div 
+      {...props} 
+      className={`${className}`}
+    >
+      {children}
+    </div>
+  );
 }
