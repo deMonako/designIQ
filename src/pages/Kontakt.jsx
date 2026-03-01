@@ -1,9 +1,8 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
-import { Mail, Phone, MapPin, Send, Calculator, Facebook, Instagram } from "lucide-react";
+import { Mail, Phone, MapPin, Calculator, Facebook, Instagram } from "lucide-react";
 import { Card, CardContent } from "../components/ui/card";
-import { motion } from "framer-motion";
 import ContactForm from "../components/forms/ContactForm";
 import { COMPANY } from "../config/company";
 
