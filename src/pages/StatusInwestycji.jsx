@@ -3,18 +3,29 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Card, CardContent } from "../components/ui/card";
 import { Label } from "../components/ui/label";
-import { 
-  Search, AlertCircle, Package, Calendar, 
-  DollarSign, ShoppingCart, ArrowLeft 
+import {
+  Search, AlertCircle, Package,
+  ArrowLeft, Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { logger } from "../logger";
 
 // Importy widoków
 import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
 
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzaygYUtnj50uxOWsMCqIH0EvjlheXka59q96r6fvikZ4ESVZvOtyDwvzCjrg5x7QZbmw/exec";
+const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
+
+// Bezpieczny JSON.parse - zwraca fallback przy błędnych danych
+function safeJsonParse(value, fallback) {
+  if (typeof value !== 'string') return value ?? fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
 
 export default function StatusInwestycji() {
   // --- STANY ---
@@ -31,7 +42,12 @@ export default function StatusInwestycji() {
   const scrollToResults = () => {
     // Krótkie opóźnienie, aby klawiatura na telefonach zdążyła się schować
     setTimeout(() => {
-      window.scrollTo({ top: 60, behavior: "smooth" });
+      if (resultsRef.current) {
+        const top = resultsRef.current.getBoundingClientRect().top + window.scrollY - 90;
+        window.scrollTo({ top, behavior: "smooth" });
+      } else {
+        window.scrollTo({ top: 80, behavior: "smooth" });
+      }
     }, 100);
   };
 
@@ -51,25 +67,25 @@ export default function StatusInwestycji() {
 
       if (data && !data.error) {
         // 1. Parsowanie i filtrowanie pokoi (usuwamy wiersz nagłówkowy z Excela)
-        const rawRooms = typeof data.rooms === 'string' ? JSON.parse(data.rooms) : (data.rooms || []);
-        const filteredRooms = rawRooms.filter(room => 
-          room.name && 
-          room.name !== "Pomieszczenie" && // To usuwa Twój nagłówek z arkusza
+        const rawRooms = safeJsonParse(data.rooms, []);
+        const filteredRooms = rawRooms.filter(room =>
+          room.name &&
+          room.name !== "Pomieszczenie" && // To usuwa nagłówek z arkusza
           room.name.trim() !== ""
         );
 
         // 2. Formatowanie głównego obiektu inwestycji
         const formattedInvestment = {
           ...data,
-          stages: typeof data.stages === 'string' ? JSON.parse(data.stages) : (data.stages || []),
-          documents: typeof data.documents === 'string' ? JSON.parse(data.documents) : (data.documents || []),
-          rooms: filteredRooms // Wstrzykujemy czystą listę pokoi
+          stages: safeJsonParse(data.stages, []),
+          documents: safeJsonParse(data.documents, []),
+          rooms: filteredRooms
         };
 
         // 3. Obsługa wyceny (quotation)
         let formattedQuotation = null;
         if (data.quotation) {
-          formattedQuotation = typeof data.quotation === 'string' ? JSON.parse(data.quotation) : data.quotation;
+          formattedQuotation = safeJsonParse(data.quotation, null);
         }
 
         const isUpdate = !!investment;
@@ -89,7 +105,7 @@ export default function StatusInwestycji() {
         toast.error(data.error || "Nie znaleziono inwestycji");
       }
     } catch (error) {
-      console.error("Error fetching:", error);
+      logger.error("Błąd pobierania danych inwestycji:", error);
       toast.error("Błąd połączenia z bazą danych");
     } finally {
       setIsSearching(false);
@@ -184,7 +200,10 @@ export default function StatusInwestycji() {
                     className="h-14 text-lg"
                   />
                   <Button onClick={handleSearch} disabled={isSearching} className="h-14 px-8 bg-orange-600 hover:bg-orange-700 text-white transition-colors">
-                    {isSearching ? "Szukam..." : <><Search className="w-5 h-5 mr-2" /> Sprawdź</>}
+                    {isSearching
+                      ? <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Szukam...</>
+                      : <><Search className="w-5 h-5 mr-2" /> Sprawdź</>
+                    }
                   </Button>
                 </div>
                 

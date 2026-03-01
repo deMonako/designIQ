@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { Plus, Trash2, Edit2, Save, X, Lightbulb, Sun, Wind, Thermometer, Shield, Camera, Wifi, Home, Wand2, Car, Waves, Bed, DoorOpen, Warehouse, Bath, Sofa, WashingMachine, Flame, Boxes, Shirt, Utensils, Laugh, Briefcase, Book, Dumbbell } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -602,3 +603,12 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
     </div>
   );
 }
+RoomLayoutBuilder.propTypes = {
+  rooms: PropTypes.arrayOf(PropTypes.shape({
+    name: PropTypes.string,
+    type: PropTypes.string,
+    features: PropTypes.array,
+  })).isRequired,
+  onChange: PropTypes.func.isRequired,
+  selectedOptions: PropTypes.object.isRequired,
+};

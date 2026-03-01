@@ -34,7 +34,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingType, setSubmittingType] = useState(null);
 
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbzaygYUtnj50uxOWsMCqIH0EvjlheXka59q96r6fvikZ4ESVZvOtyDwvzCjrg5x7QZbmw/exec";
+  const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
 
   const generatePDF = () => {
     const doc = new jsPDF();

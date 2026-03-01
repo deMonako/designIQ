@@ -1,32 +1,33 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Zap, Code2, Server, Globe, Cpu, Sun, ThermometerSun, Activity,
-  Layers, Radio, Blocks, ShieldCheck, Heart, Power, Smartphone
+import {
+  Zap, Server, Globe, Sun, ThermometerSun, Activity,
+  Radio, Blocks, ShieldCheck, Heart, Power
 } from "lucide-react";
-import _ from "lodash";
+
+const GAS_URL = process.env.REACT_APP_GAS_LOXONE_URL;
 
 export default function Instalator() {
   const [particles, setParticles] = useState([]);
   const [isConnecting, setIsConnecting] = useState(false);
-  
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbwfV7DnjYtwfzqlguc9QRFIZzg3VQW9g7Zn_H8M_qibUZAzoinJ6-9Ds9MYm23JzsPR/exec?key=zirytuj_mnie";
+  const lastCallRef = useRef(0);
 
-  const sendToLoxone = useCallback(
-    _.throttle(() => {
-      setIsConnecting(true);
-      fetch(GAS_URL).finally(() => {
-        setTimeout(() => setIsConnecting(false), 800);
-      });
-    }, 1000, { trailing: false }),
-    []
-  );
+  // Natywny throttle bez lodash (1 wywołanie na sekundę, leading edge)
+  const sendToLoxone = useCallback(() => {
+    const now = Date.now();
+    if (now - lastCallRef.current < 1000) return;
+    lastCallRef.current = now;
+    setIsConnecting(true);
+    fetch(GAS_URL).finally(() => {
+      setTimeout(() => setIsConnecting(false), 800);
+    });
+  }, []);
 
   const handleButtonClick = () => {
     const id = Date.now();
     const newParticle = {
       id,
-      x: Math.random() * 200 - 100, 
+      x: Math.random() * 200 - 100,
       y: Math.random() * -80 - 20,
       color: ["text-orange-600", "text-slate-900"][Math.floor(Math.random() * 2)]
     };
@@ -92,6 +93,7 @@ export default function Instalator() {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleButtonClick}
+                aria-label="Wyślij impuls do systemu Loxone"
                 className="relative w-40 h-40 bg-orange-600 rounded-full shadow-2xl shadow-orange-500/40 flex items-center justify-center group mx-auto"
               >
                 <Zap className={`w-12 h-12 text-white transition-all ${isConnecting ? 'scale-125' : ''}`} />
@@ -214,24 +216,6 @@ export default function Instalator() {
           </div>
         </div>
 
-        {/* MIEJSCE NA VIDEO */}
-        {/* <div className="mt-32">
-          <div className="relative group">
-             <div className="absolute -inset-2 bg-gradient-to-r from-orange-600 to-slate-200 rounded-[3.5rem] blur opacity-20 transition duration-1000"></div>
-             <div className="relative bg-slate-900 rounded-[3rem] overflow-hidden shadow-2xl aspect-video border-8 border-white">
-                <iframe 
-                    className="absolute inset-0 w-full h-full opacity-90"
-                    src="https://www.youtube.com/embed/7hI_3uM-heQ" 
-                    title="Loxone Integration Demo"
-                    allowFullScreen
-                  ></iframe>
-             </div>
-          </div>
-          <div className="flex items-center justify-center mt-8 space-x-3 text-slate-400">
-            <Smartphone className="w-5 h-5" />
-            <p className="text-sm font-medium uppercase tracking-widest">Nagranie rzeczywistej reakcji systemu</p>
-          </div>
-        </div> */}
 
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from "prop-types";
 import { Card, CardContent } from "../ui/card";
 import { Calendar, DollarSign, ShoppingCart, Map, Cpu } from "lucide-react";
 import { motion } from "framer-motion";
@@ -140,3 +141,17 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
     </div>
   );
 }
+
+StatusDashboard.propTypes = {
+  investment: PropTypes.shape({
+    project_name: PropTypes.string,
+    package_type: PropTypes.string,
+    start_date: PropTypes.string,
+    current_stage: PropTypes.number,
+    stages: PropTypes.array,
+    investment_code: PropTypes.string,
+    documents: PropTypes.array,
+  }).isRequired,
+  onNavigate: PropTypes.func.isRequired,
+  onRefresh: PropTypes.func.isRequired,
+};

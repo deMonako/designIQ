@@ -37,17 +37,18 @@ export default function CookieConsent() {
     }
 
     // Load Google Analytics if consent given
-    if (prefs.analytics && !document.querySelector('script[src*="googletagmanager"]')) {
+    const GA_ID = process.env.REACT_APP_GA_ID;
+    if (prefs.analytics && GA_ID && !GA_ID.includes('XXXXXXXXXX') && !document.querySelector('script[src*="googletagmanager"]')) {
       const script = document.createElement('script');
       script.async = true;
-      script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX';
+      script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
       document.head.appendChild(script);
 
       window.dataLayer = window.dataLayer || [];
       function gtag(){ window.dataLayer.push(arguments); }
       window.gtag = gtag;
       gtag('js', new Date());
-      gtag('config', 'G-XXXXXXXXXX');
+      gtag('config', GA_ID);
     }
   };
 

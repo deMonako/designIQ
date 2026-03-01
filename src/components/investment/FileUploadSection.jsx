@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import PropTypes from "prop-types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card, CardContent } from "../ui/card";
@@ -8,7 +9,7 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzaygYUtnj50uxOWsMCqIH0EvjlheXka59q96r6fvikZ4ESVZvOtyDwvzCjrg5x7QZbmw/exec";
+const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
 
 export default function FileUploadSection({ investment, onFileUploaded, isReadOnly }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -200,3 +201,12 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
     </Card>
   );
 }
+FileUploadSection.propTypes = {
+  investment: PropTypes.shape({
+    investment_code: PropTypes.string,
+    client_name: PropTypes.string,
+    documents: PropTypes.array,
+  }).isRequired,
+  onFileUploaded: PropTypes.func.isRequired,
+  isReadOnly: PropTypes.bool,
+};

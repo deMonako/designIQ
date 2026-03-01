@@ -5,6 +5,7 @@ import { Mail, Phone, MapPin, Send, Calculator, Facebook, Instagram } from "luci
 import { Card, CardContent } from "../components/ui/card";
 import { motion } from "framer-motion";
 import ContactForm from "../components/forms/ContactForm";
+import { COMPANY } from "../config/company";
 
 export default function Kontakt() {
   return (
@@ -31,7 +32,7 @@ export default function Kontakt() {
                 <h2 className="text-2xl font-bold text-slate-900 mb-6">Dane kontaktowe</h2>
                 <div className="space-y-6">
                   <a
-                    href="mailto:kontakt@designiq.pl"
+                    href={`mailto:${COMPANY.email}`}
                     className="flex items-start space-x-4 p-4 rounded-xl hover:bg-orange-50 transition-colors group"
                   >
                     <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-600 to-orange-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -39,12 +40,12 @@ export default function Kontakt() {
                     </div>
                     <div>
                       <div className="font-semibold text-slate-900">Email</div>
-                      <div className="text-orange-600">kontakt@designiq.pl</div>
+                      <div className="text-orange-600">{COMPANY.email}</div>
                     </div>
                   </a>
 
                   <a
-                    href="tel:+48782109286"
+                    href={`tel:${COMPANY.phone}`}
                     className="flex items-start space-x-4 p-4 rounded-xl hover:bg-orange-50 transition-colors group"
                   >
                     <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-600 to-orange-500 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -52,7 +53,7 @@ export default function Kontakt() {
                     </div>
                     <div>
                       <div className="font-semibold text-slate-900">Telefon</div>
-                      <div className="text-orange-600">782-109-286</div>
+                      <div className="text-orange-600">{COMPANY.phoneDisplay}</div>
                     </div>
                   </a>
 
@@ -63,8 +64,8 @@ export default function Kontakt() {
                     <div>
                       <div className="font-semibold text-slate-900">Adres</div>
                       <div className="text-slate-600">
-                        Żeglarska 18/1<br />
-                        85-519 Bydgoszcz
+                        {COMPANY.address}<br />
+                        {COMPANY.city}
                       </div>
                     </div>
                   </div>
@@ -75,17 +76,19 @@ export default function Kontakt() {
                   <h3 className="font-semibold text-slate-900 mb-4">Obserwuj nas</h3>
                   <div className="flex space-x-4">
                     <a
-                      href="https://www.facebook.com/profile.php?id=61579262927664"
+                      href={COMPANY.facebook}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label="Facebook"
                       className="w-12 h-12 bg-orange-600 hover:bg-orange-700 rounded-xl flex items-center justify-center transition-all hover:scale-110"
                     >
                       <Facebook className="w-6 h-6 text-white" />
                     </a>
                     <a
-                      href="https://www.instagram.com/designiq_pl/"
+                      href={COMPANY.instagram}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label="Instagram"
                       className="w-12 h-12 bg-gradient-to-br from-orange-600 to-orange-500 hover:from-orange-700 hover:to-orange-600 rounded-xl flex items-center justify-center transition-all hover:scale-110"
                     >
                       <Instagram className="w-6 h-6 text-white" />

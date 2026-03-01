@@ -44,9 +44,10 @@ export default function Konfigurator() {
 
   const scrollToForm = () => {
     setTimeout(() => {
-      const top = 100;
-      document.documentElement.scrollTo({ top, behavior: "smooth" });
-      document.body.scrollTo({ top, behavior: "smooth" });
+      if (configuratorRef.current) {
+        const top = configuratorRef.current.getBoundingClientRect().top + window.scrollY - 35;
+        window.scrollTo({ top, behavior: 'smooth' });
+      }
     }, 30);
   };
 
@@ -175,6 +176,9 @@ export default function Konfigurator() {
   }
 
   const handleReset = () => {
+    if (!window.confirm("Czy na pewno chcesz rozpocząć od nowa? Twoja aktualna konfiguracja zostanie utracona.")) {
+      return;
+    }
     setFormData({
       metraz: "",
       pakiet: "Smart design",
