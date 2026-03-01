@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(printf '\\\\nFileUploadSection.propTypes = {\\\\n  investment: PropTypes.shape\\({\\\\n    investment_code: PropTypes.string,\\\\n    client_name: PropTypes.string,\\\\n    documents: PropTypes.array,\\\\n  }\\).isRequired,\\\\n  onFileUploaded: PropTypes.func.isRequired,\\\\n  isReadOnly: PropTypes.bool,\\\\n};\\\\n')",
+      "Bash(npm install prop-types --save)",
+      "Bash(npm run build)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(command -v npm)",
+      "Bash(node -e \"console.log\\(process.execPath\\)\")",
+      "Bash(git add package.json package-lock.json src/Layout.js src/components/CookieConsent.jsx src/components/configurator/RoomLayoutBuilder.jsx src/components/forms/ConfiguratorContactForm.jsx src/components/forms/ContactForm.jsx src/components/investment/ClientWycenaView.jsx src/components/investment/FileUploadSection.jsx src/components/investment/StatusDashboard.jsx src/index.js src/pages/Instalator.jsx src/pages/Konfigurator.jsx src/pages/Kontakt.jsx src/pages/StatusInwestycji.jsx tailwind.config.js src/components/ErrorBoundary.jsx src/config/ src/hooks/ src/logger.js src/pages/NotFound.jsx .env.example)",
+      "Bash(git commit:*)",
+      "Bash(git push -u origin claude/inspiring-easley)",
+      "Bash(gh pr:*)",
+      "Bash(git add src/tailwind-output.css .claude/)"
+    ]
+  }
+}
