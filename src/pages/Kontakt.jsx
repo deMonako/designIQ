@@ -20,7 +20,7 @@ export default function Kontakt() {
             Skontaktuj się z nami
           </h1>
           <p className="text-lg text-slate-600 max-w-3xl mx-auto">
-            Twój inteligentny dom zaczyna się od wyceny! Jesteśmy gotowi odpowiedzieć na wszystkie Twoje pytania.
+            Twój inteligentny dom zaczyna się od wyceny! Obsługujemy klientów z <strong className="text-slate-800">Bydgoszczy</strong> i całego regionu <strong className="text-slate-800">kujawsko-pomorskiego</strong>. Jesteśmy gotowi odpowiedzieć na wszystkie Twoje pytania.
           </p>
         </div>
 

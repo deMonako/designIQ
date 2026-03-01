@@ -55,8 +55,10 @@ export default function ONas() {
             </h2>
             <div className="text-slate-600 leading-relaxed space-y-4">
               <p>
-                <strong className="text-slate-900">designiQ</strong> to zespół specjalistów od automatyki budynkowej 
-                i systemów smart home. Naszą misją jest wprowadzenie najnowszych technologii do domów, 
+                <strong className="text-slate-900">designiQ</strong> to zespół specjalistów od automatyki budynkowej
+                i systemów Smart Home z siedzibą w <strong className="text-slate-900">Bydgoszczy</strong>.
+                Obsługujemy klientów z całego regionu <strong className="text-slate-900">kujawsko-pomorskiego</strong> –
+                Torunia, Włocławka, Grudziądza i okolic. Naszą misją jest wprowadzenie najnowszych technologii do domów,
                 tworząc przestrzenie, które są nie tylko inteligentne, ale przede wszystkim funkcjonalne i intuicyjne.
               </p>
               <p>
