@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Plus, Search, Filter, User, Calendar, Banknote,
+  ArrowLeft, Plus, Search, FolderKanban, User, Calendar, Banknote,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote,
 } from "lucide-react";
