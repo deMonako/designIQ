@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { FolderKanban, CheckSquare, AlertTriangle, TrendingUp, Users, Banknote } from "lucide-react";
+import { FolderKanban, CheckSquare, AlertTriangle, TrendingUp, Banknote } from "lucide-react";
 import { isOverdue } from "../mockData";
 
 function HorizontalBar({ label, value, max, color, count }) {
@@ -53,14 +53,6 @@ export default function Analityka({ projects, tasks, checklists }) {
   const priorityCounts = priorities.map(p => ({ label: p, count: tasks.filter(t => t.priority === p).length }));
   const maxPriorityCount = Math.max(...priorityCounts.map(p => p.count), 1);
 
-  // Assignee workload
-  const assignees = [...new Set(tasks.map(t => t.assignee))];
-  const assigneeData = assignees.map(a => ({
-    name: a,
-    total: tasks.filter(t => t.assignee === a).length,
-    open:  tasks.filter(t => t.assignee === a && t.status !== "Zrobione").length,
-  }));
-  const maxAssignee = Math.max(...assigneeData.map(a => a.total), 1);
 
   // Checklist stats
   const totalCheckItems = checklists.reduce((acc, cl) => acc + cl.items.length, 0);
@@ -141,37 +133,6 @@ export default function Analityka({ projects, tasks, checklists }) {
           <div className="space-y-3">
             {priorityCounts.map(p => (
               <HorizontalBar key={p.label} label={p.label} value={p.count} max={maxPriorityCount} count={p.count} color={priorityColors[p.label]} />
-            ))}
-          </div>
-        </div>
-
-        {/* Assignee workload */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-          <h3 className="font-semibold text-slate-900 text-sm mb-4 flex items-center gap-2">
-            <Users className="w-4 h-4 text-orange-500" />
-            Obciążenie zadaniami
-          </h3>
-          <div className="space-y-4">
-            {assigneeData.map(a => (
-              <div key={a.name}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                      {a.name[0]}
-                    </div>
-                    <span className="text-sm font-medium text-slate-700">{a.name}</span>
-                  </div>
-                  <span className="text-xs text-slate-500">{a.open} otwartych / {a.total} łącznie</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${(a.total / maxAssignee) * 100}%` }}
-                    transition={{ duration: 0.7 }}
-                    className="h-full bg-orange-400 rounded-full"
-                  />
-                </div>
-              </div>
             ))}
           </div>
         </div>

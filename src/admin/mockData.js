@@ -89,14 +89,16 @@ export const mockProjects = [
 ];
 
 export const mockTasks = [
-  { id: "t1", projectId: "proj-1", title: "Schemat szafy sterowniczej – v2", assignee: "Marcin", status: "W trakcie", priority: "Wysoki", dueDate: "2026-03-05", description: "Przygotować schemat elektryczny szafy sterowniczej." },
-  { id: "t2", projectId: "proj-1", title: "Zamówienie kabli – lista BOM", assignee: "Tomek", status: "Todo", priority: "Normalny", dueDate: "2026-03-10", description: "Przygotować listę materiałową i złożyć zamówienie." },
-  { id: "t3", projectId: "proj-3", title: "Projekt automatyki – dom Wiśniewski", assignee: "Marcin", status: "Zrobione", priority: "Normalny", dueDate: "2026-02-28", description: "Projekt gotowy, przesłany do klienta." },
-  { id: "t4", projectId: "proj-4", title: "Wycena dodatkowych modułów I/O", assignee: "Tomek", status: "Todo", priority: "Wysoki", dueDate: "2026-03-02", description: "Klient zapytał o 4 dodatkowe moduły wejść/wyjść." },
-  { id: "t5", projectId: "proj-2", title: "Kontakt z architektem – Nowak", assignee: "Marcin", status: "Todo", priority: "Niski", dueDate: "2026-03-15", description: "Uzgodnić zmiany w projekcie po decyzji architekta." },
-  { id: "t6", projectId: "proj-4", title: "Programowanie sterownika Loxone", assignee: "Tomek", status: "W trakcie", priority: "Krytyczny", dueDate: "2026-03-01", description: "Zakończenie programowania logiki sterowania biura." },
-  { id: "t7", projectId: "proj-1", title: "Integracja alarmu Satel z Loxone", assignee: "Tomek", status: "Todo", priority: "Wysoki", dueDate: "2026-03-20", description: "Integracja systemu alarmowego Satel z miniServerem." },
-  { id: "t8", projectId: "proj-3", title: "Aktualizacja oferty – Wiśniewski", assignee: "Marcin", status: "Todo", priority: "Normalny", dueDate: "2026-03-08", description: "Zaktualizować ofertę o dodatkowe gniazdka." },
+  { id: "t1", projectId: "proj-1", title: "Schemat szafy sterowniczej – v2", assignee: "Adam", status: "W trakcie", priority: "Wysoki", dueDate: "2026-03-05", description: "Przygotować schemat elektryczny szafy sterowniczej." },
+  { id: "t2", projectId: "proj-1", title: "Zamówienie kabli – lista BOM", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-10", description: "Przygotować listę materiałową i złożyć zamówienie." },
+  { id: "t3", projectId: "proj-3", title: "Projekt automatyki – dom Wiśniewski", assignee: "Adam", status: "Zrobione", priority: "Normalny", dueDate: "2026-02-28", description: "Projekt gotowy, przesłany do klienta." },
+  { id: "t4", projectId: "proj-4", title: "Wycena dodatkowych modułów I/O", assignee: "Adam", status: "Todo", priority: "Wysoki", dueDate: "2026-03-02", description: "Klient zapytał o 4 dodatkowe moduły wejść/wyjść." },
+  { id: "t5", projectId: "proj-2", title: "Kontakt z architektem – Nowak", assignee: "Adam", status: "Todo", priority: "Niski", dueDate: "2026-03-15", description: "Uzgodnić zmiany w projekcie po decyzji architekta." },
+  { id: "t6", projectId: "proj-4", title: "Programowanie sterownika Loxone", assignee: "Adam", status: "W trakcie", priority: "Krytyczny", dueDate: "2026-03-01", description: "Zakończenie programowania logiki sterowania biura." },
+  { id: "t7", projectId: "proj-1", title: "Integracja alarmu Satel z Loxone", assignee: "Adam", status: "Todo", priority: "Wysoki", dueDate: "2026-03-20", description: "Integracja systemu alarmowego Satel z miniServerem." },
+  { id: "t8", projectId: "proj-3", title: "Aktualizacja oferty – Wiśniewski", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-08", description: "Zaktualizować ofertę o dodatkowe gniazdka." },
+  { id: "t9", projectId: null, title: "Przygotować szkolenie KNX", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-10", description: "Szkolenie z obsługi ETS i topologii KNX." },
+  { id: "t10", projectId: null, title: "Aktualizacja szablonów dokumentów", assignee: "Adam", status: "Todo", priority: "Niski", dueDate: "2026-03-20", description: "Zaktualizować szablony Excel i Word do nowego brandu." },
 ];
 
 export const mockChecklists = [
@@ -169,11 +171,18 @@ export const mockChecklists = [
   },
 ];
 
-export const mockActivity = [
-  { id: "a1", text: "Dodano zadanie: Schemat szafy – v2", project: "Dom Kowalski", time: "12 min temu", type: "task" },
-  { id: "a2", text: "Ukończono etap: Projekt szafy", project: "Dom Kowalski", time: "2h temu", type: "stage" },
-  { id: "a3", text: "Nowy projekt dodany do systemu", project: "Dom Wiśniewski", time: "5h temu", type: "project" },
-  { id: "a4", text: "Status zmieniony na Wstrzymany", project: "Apt. Nowak", time: "1 dzień temu", type: "status" },
-  { id: "a5", text: "Zaznaczono 2 punkty checklisty odbioru", project: "Dom Kowalski", time: "1 dzień temu", type: "checklist" },
-  { id: "a6", text: "Projekt oznaczony jako Ukończony", project: "Dom Zieliński", time: "2 dni temu", type: "project" },
+export const mockMaterials = [
+  { id: "mat-1", title: "Dokumentacja Loxone Config 14", category: "Dokumentacje", description: "Oficjalna dokumentacja oprogramowania Loxone Config v14 – wszystkie bloki funkcyjne", url: "https://www.loxone.com/pol/kb/", date: "2026-01-10" },
+  { id: "mat-2", title: "Skrypt konfiguracji interfejsu KNX", category: "Skrypty", description: "Bash script do automatycznej konfiguracji interfejsu IP/USB KNX na Raspberry Pi", url: "#", date: "2026-01-20" },
+  { id: "mat-3", title: "Instrukcja Satel INTEGRA 128-WRL", category: "Instrukcje", description: "Instrukcja programowania i obsługi centrali alarmowej Satel INTEGRA 128", url: "#", date: "2026-02-01" },
+  { id: "mat-4", title: "Kalkulator długości kabli (Excel)", category: "Skrypty", description: "Arkusz Excel do obliczania długości kabli na podstawie rzutu budynku", url: "#", date: "2026-02-15" },
+  { id: "mat-5", title: "Szablon schematu szafy sterowniczej", category: "Dokumentacje", description: "Szablon schematu elektrycznego szafy sterowniczej – AutoCAD .dwg", url: "#", date: "2026-02-20" },
+  { id: "mat-6", title: "Loxone HTTP API Reference", category: "Linki", description: "API do komunikacji z miniServerem przez HTTP/REST – odczyt i sterowanie punktami", url: "https://www.loxone.com/enen/kb/api/", date: "2026-03-01" },
+];
+
+export const mockProjectDocs = [
+  { id: "pd-1", projectId: "proj-1", name: "Projekt automatyki v1.2.pdf", type: "pdf", description: "Projekt automatyki instalacji elektrycznej – rewizja 1.2", url: "#", date: "2026-02-10", clientVisible: true },
+  { id: "pd-2", projectId: "proj-1", name: "Lista BOM – szafa sterownicza.xlsx", type: "xlsx", description: "Lista materiałów do szafy sterowniczej", url: "#", date: "2026-02-15", clientVisible: false },
+  { id: "pd-3", projectId: "proj-1", name: "Schemat szafy v2.pdf", type: "pdf", description: "Schemat elektryczny szafy – rewizja 2", url: "#", date: "2026-02-20", clientVisible: false },
+  { id: "pd-4", projectId: "proj-3", name: "Projekt automatyki Wiśniewski.pdf", type: "pdf", description: "Projekt automatyki – dom Wiśniewski, Wrocław", url: "#", date: "2026-02-28", clientVisible: true },
 ];

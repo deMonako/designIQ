@@ -6,7 +6,8 @@ import Projekty from "../admin/views/Projekty";
 import Zadania from "../admin/views/Zadania";
 import Checklisty from "../admin/views/Checklisty";
 import Analityka from "../admin/views/Analityka";
-import { mockProjects, mockTasks, mockChecklists } from "../admin/mockData";
+import Materialy from "../admin/views/Materialy";
+import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs } from "../admin/mockData";
 
 function PlaceholderView({ title }) {
   return (
@@ -27,52 +28,71 @@ export default function Admin() {
   const [currentView, setCurrentView] = useState("dashboard");
   const [selectedProject, setSelectedProject] = useState(null);
 
-  // State – będzie zastąpione przez GAS
-  const [projects, setProjects]     = useState(mockProjects);
-  const [tasks, setTasks]           = useState(mockTasks);
-  const [checklists, setChecklists] = useState(mockChecklists);
+  // ── State (mock – zastąpione przez GAS) ──
+  const [projects,     setProjects]     = useState(mockProjects);
+  const [tasks,        setTasks]        = useState(mockTasks);
+  const [checklists,   setChecklists]   = useState(mockChecklists);
+  const [materials,    setMaterials]    = useState(mockMaterials);
+  const [projectDocs,  setProjectDocs]  = useState(mockProjectDocs);
 
   const handleLogout = () => {
     localStorage.removeItem("designiq_admin_auth");
     setIsAuthenticated(false);
   };
 
-  // ----------- data handlers -----------
+  // ── Projects ──
   const handleUpdateProject = (updated) => {
     setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
   };
 
+  // ── Tasks ──
   const handleUpdateTask = (updated) => {
     setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
   };
-
   const handleAddTask = (newTask) => {
     setTasks(prev => [newTask, ...prev]);
   };
 
+  // ── Checklists ──
   const handleToggleChecklistItem = (checklistId, itemId) => {
     setChecklists(prev => prev.map(cl => {
       if (cl.id !== checklistId) return cl;
       return { ...cl, items: cl.items.map(item => item.id === itemId ? { ...item, done: !item.done } : item) };
     }));
   };
-
   const handleAddChecklistItem = (checklistId, text) => {
     setChecklists(prev => prev.map(cl => {
       if (cl.id !== checklistId) return cl;
       return { ...cl, items: [...cl.items, { id: `chi-${Date.now()}`, text, done: false }] };
     }));
   };
-
   const handleAddChecklist = (newChecklist) => {
     setChecklists(prev => [newChecklist, ...prev]);
   };
-
   const handleDeleteChecklist = (id) => {
     setChecklists(prev => prev.filter(cl => cl.id !== id));
   };
 
-  // ------------------------------------------
+  // ── Materials ──
+  const handleAddMaterial = (newMaterial) => {
+    setMaterials(prev => [newMaterial, ...prev]);
+  };
+  const handleDeleteMaterial = (id) => {
+    setMaterials(prev => prev.filter(m => m.id !== id));
+  };
+
+  // ── Project docs ──
+  const handleAddProjectDoc = (newDoc) => {
+    setProjectDocs(prev => [...prev, newDoc]);
+  };
+  const handleDeleteProjectDoc = (id) => {
+    setProjectDocs(prev => prev.filter(d => d.id !== id));
+  };
+  const handleToggleDocClientVisible = (id) => {
+    setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !d.clientVisible } : d));
+  };
+
+  // ──────────────────────────────────────────
   if (!isAuthenticated) {
     return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
   }
@@ -84,9 +104,7 @@ export default function Admin() {
           <Dashboard
             projects={projects}
             tasks={tasks}
-            checklists={checklists}
-            setCurrentView={setCurrentView}
-            setSelectedProject={setSelectedProject}
+            onUpdateTask={handleUpdateTask}
           />
         );
       case "projekty":
@@ -98,6 +116,10 @@ export default function Admin() {
             onUpdateProject={handleUpdateProject}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
+            projectDocs={projectDocs}
+            onAddProjectDoc={handleAddProjectDoc}
+            onDeleteProjectDoc={handleDeleteProjectDoc}
+            onToggleDocClientVisible={handleToggleDocClientVisible}
           />
         );
       case "zadania":
@@ -118,6 +140,14 @@ export default function Admin() {
             onAddItem={handleAddChecklistItem}
             onAddChecklist={handleAddChecklist}
             onDeleteChecklist={handleDeleteChecklist}
+          />
+        );
+      case "materialy":
+        return (
+          <Materialy
+            materials={materials}
+            onAddMaterial={handleAddMaterial}
+            onDeleteMaterial={handleDeleteMaterial}
           />
         );
       case "analityka":

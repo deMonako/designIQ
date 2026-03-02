@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar, Banknote,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
-  Edit3, Trash2, X, StickyNote,
+  Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
 import { isOverdue } from "../mockData";
 
@@ -80,20 +80,24 @@ function ProjectCard({ project, onClick }) {
   );
 }
 
-function ProjectDetail({ project, tasks, checklists, onBack, onUpdateProject }) {
+function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [editingNote, setEditingNote] = useState(false);
   const [note, setNote] = useState(project.notes);
+  const [showAddDoc, setShowAddDoc] = useState(false);
+  const [newDoc, setNewDoc] = useState({ name: "", type: "pdf", description: "", url: "" });
 
-  const projectTasks = tasks.filter(t => t.projectId === project.id);
+  const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
-  const tasksDone = projectTasks.filter(t => t.status === "Zrobione").length;
+  const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
-    { id: "overview",    label: "Przegląd" },
-    { id: "tasks",       label: `Zadania (${projectTasks.length})` },
-    { id: "checklists",  label: `Checklisty (${projectChecklists.length})` },
-    { id: "notes",       label: "Notatki" },
+    { id: "overview",      label: "Przegląd" },
+    { id: "tasks",         label: `Zadania (${projectTasks.length})` },
+    { id: "checklists",    label: `Checklisty (${projectChecklists.length})` },
+    { id: "dokumentacja",  label: `Dokumentacja (${projectDocList.length})` },
+    { id: "notes",         label: "Notatki" },
   ];
 
   const priorityColor = { "Niski": "text-slate-400", "Normalny": "text-blue-500", "Wysoki": "text-orange-500", "Krytyczny": "text-red-500" };
@@ -291,6 +295,122 @@ function ProjectDetail({ project, tasks, checklists, onBack, onUpdateProject }) 
             </div>
           )}
 
+          {activeTab === "dokumentacja" && (
+            <div className="space-y-3">
+              {/* Add doc button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowAddDoc(!showAddDoc)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all"
+                >
+                  <Plus className="w-4 h-4" /> Dodaj dokument
+                </button>
+              </div>
+
+              {/* Add doc form */}
+              <AnimatePresence>
+                {showAddDoc && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="bg-white rounded-xl border border-orange-200 p-4 space-y-3"
+                  >
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-xs text-slate-500 mb-1 font-medium">Nazwa pliku / dokumentu *</label>
+                        <input value={newDoc.name} onChange={e => setNewDoc(d => ({ ...d, name: e.target.value }))}
+                          placeholder="np. Schemat szafy v2.pdf"
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20" />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1 font-medium">Typ</label>
+                        <select value={newDoc.type} onChange={e => setNewDoc(d => ({ ...d, type: e.target.value }))}
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none">
+                          {["pdf","xlsx","dwg","docx","image","link","inne"].map(t => <option key={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 mb-1 font-medium">URL / link</label>
+                        <input value={newDoc.url} onChange={e => setNewDoc(d => ({ ...d, url: e.target.value }))}
+                          placeholder="https://..."
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20" />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs text-slate-500 mb-1 font-medium">Opis</label>
+                        <input value={newDoc.description} onChange={e => setNewDoc(d => ({ ...d, description: e.target.value }))}
+                          placeholder="Krótki opis dokumentu..."
+                          className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20" />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowAddDoc(false)} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Anuluj</button>
+                      <button
+                        onClick={() => {
+                          if (!newDoc.name.trim()) return;
+                          onAddProjectDoc({ ...newDoc, id: `pd-${Date.now()}`, projectId: project.id, date: "2026-03-02", clientVisible: false });
+                          setNewDoc({ name: "", type: "pdf", description: "", url: "" });
+                          setShowAddDoc(false);
+                        }}
+                        className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600"
+                      >Dodaj</button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Doc list */}
+              {projectDocList.length === 0 && !showAddDoc ? (
+                <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  Brak dokumentów dla tego projektu
+                </div>
+              ) : (
+                projectDocList.map(doc => (
+                  <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
+                    <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                      <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
+                      {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        <span className="text-xs text-slate-400">{doc.date}</span>
+                        <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
+                        {doc.clientVisible ? (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                            <Eye className="w-3 h-3" /> Widoczny dla klienta
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <EyeOff className="w-3 h-3" /> Tylko dla mnie
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {doc.url && doc.url !== "#" && (
+                        <a href={doc.url} target="_blank" rel="noopener noreferrer"
+                          className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                      <button
+                        onClick={() => onToggleDocClientVisible(doc.id)}
+                        title={doc.clientVisible ? "Ukryj przed klientem" : "Pokaż klientowi"}
+                        className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}
+                      >
+                        {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                      </button>
+                      <button onClick={() => onDeleteProjectDoc(doc.id)}
+                        className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
           {activeTab === "notes" && (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
               <div className="flex items-center justify-between mb-3">
@@ -327,7 +447,7 @@ function ProjectDetail({ project, tasks, checklists, onBack, onUpdateProject }) 
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, onUpdateProject, selectedProject, setSelectedProject }) {
+export default function Projekty({ projects, tasks, checklists, onUpdateProject, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -349,8 +469,12 @@ export default function Projekty({ projects, tasks, checklists, onUpdateProject,
         project={selectedProject}
         tasks={tasks}
         checklists={checklists}
+        projectDocs={projectDocs}
         onBack={() => setSelectedProject(null)}
         onUpdateProject={(updated) => { onUpdateProject(updated); setSelectedProject(updated); }}
+        onAddProjectDoc={onAddProjectDoc}
+        onDeleteProjectDoc={onDeleteProjectDoc}
+        onToggleDocClientVisible={onToggleDocClientVisible}
       />
     );
   }

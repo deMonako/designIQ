@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
-  BarChart2, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight,
+  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { id: "projekty",     label: "Projekty",     icon: FolderKanban,    badge: "projekty" },
   { id: "zadania",      label: "Zadania",      icon: CheckSquare,     badge: "zadania" },
   { id: "checklisty",   label: "Checklisty",   icon: ClipboardList },
+  { id: "materialy",    label: "Materiały",    icon: Package },
   { id: "analityka",    label: "Analityka",    icon: BarChart2 },
 ];
 
@@ -57,6 +58,7 @@ export default function AdminLayout({ currentView, setCurrentView, onLogout, pro
     projekty:   "Projekty",
     zadania:    "Zadania",
     checklisty: "Checklisty",
+    materialy:  "Materiały",
     analityka:  "Analityka",
     ustawienia: "Ustawienia",
   };
