@@ -7,7 +7,7 @@ import {
 import { isOverdue, TODAY } from "../mockData";
 import TaskCalendar from "./TaskCalendar";
 
-const STATUS_OPTIONS   = ["Todo", "W trakcie", "Zrobione"];
+const STATUS_OPTIONS   = ["Niezrobione", "Zrobione"];
 const PRIORITY_OPTIONS = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
 function PriorityBadge({ priority }) {
@@ -22,11 +22,10 @@ function PriorityBadge({ priority }) {
 
 function StatusBadge({ status }) {
   const s = {
-    "Todo":     "bg-slate-100 text-slate-600",
-    "W trakcie":"bg-blue-50 text-blue-700 border border-blue-200",
-    "Zrobione": "bg-green-50 text-green-700 border border-green-200",
+    "Niezrobione": "bg-slate-100 text-slate-600",
+    "Zrobione":    "bg-green-50 text-green-700 border border-green-200",
   };
-  return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${s[status] ?? s["Todo"]}`}>{status}</span>;
+  return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${s[status] ?? s["Niezrobione"]}`}>{status}</span>;
 }
 
 function TaskRow({ task, project, onStatusChange }) {
@@ -40,13 +39,11 @@ function TaskRow({ task, project, onStatusChange }) {
     >
       <button
         onClick={() => {
-          const next = { "Todo": "W trakcie", "W trakcie": "Zrobione", "Zrobione": "Todo" };
+          const next = { "Niezrobione": "Zrobione", "Zrobione": "Niezrobione" };
           onStatusChange(task.id, next[task.status]);
         }}
         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-          task.status === "Zrobione"   ? "bg-green-500 border-green-500" :
-          task.status === "W trakcie" ? "border-blue-400"               :
-          "border-slate-300 hover:border-orange-400"
+          task.status === "Zrobione" ? "bg-green-500 border-green-500" : "border-slate-300 hover:border-orange-400"
         }`}
       >
         {task.status === "Zrobione" && <CheckCircle2 className="w-3 h-3 text-white" />}
@@ -102,7 +99,7 @@ function KanbanColumn({ title, tasks, projects, color, onStatusChange, nextStatu
                   onClick={() => onStatusChange(task.id, nextStatus)}
                   className="mt-2 text-xs text-orange-600 hover:text-orange-700 font-medium"
                 >
-                  → {nextStatus === "W trakcie" ? "Rozpocznij" : nextStatus === "Zrobione" ? "Zakończ" : "Wróć do Todo"}
+                  → {nextStatus === "Zrobione" ? "Zakończ" : "Cofnij"}
                 </button>
               )}
             </div>
@@ -126,7 +123,7 @@ function AddTaskModal({ projects, onAdd, onClose }) {
     onAdd({
       ...form,
       id:        `t-${Date.now()}`,
-      status:    "Todo",
+      status:    "Niezrobione",
       assignee:  "Adam",
       projectId: form.projectId === "none" ? null : form.projectId,
     });
@@ -313,9 +310,8 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask }) {
       {/* Kanban view */}
       {viewMode === "kanban" && (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          <KanbanColumn title="Todo"      tasks={filtered.filter(t => t.status === "Todo")}      projects={projects} color="border-slate-200"  onStatusChange={handleStatusChange} nextStatus="W trakcie" />
-          <KanbanColumn title="W trakcie" tasks={filtered.filter(t => t.status === "W trakcie")} projects={projects} color="border-blue-200"   onStatusChange={handleStatusChange} nextStatus="Zrobione" />
-          <KanbanColumn title="Zrobione"  tasks={filtered.filter(t => t.status === "Zrobione")}  projects={projects} color="border-green-200"  onStatusChange={handleStatusChange} nextStatus="Todo" />
+          <KanbanColumn title="Niezrobione" tasks={filtered.filter(t => t.status === "Niezrobione")} projects={projects} color="border-slate-200"  onStatusChange={handleStatusChange} nextStatus="Zrobione" />
+          <KanbanColumn title="Zrobione"   tasks={filtered.filter(t => t.status === "Zrobione")}   projects={projects} color="border-green-200"  onStatusChange={handleStatusChange} nextStatus="Niezrobione" />
         </div>
       )}
 

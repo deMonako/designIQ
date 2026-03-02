@@ -175,8 +175,8 @@ export default function AdminLayout({ currentView, setCurrentView, onLogout, pro
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full"></span>
             </button>
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-sm text-slate-700 font-medium">
-              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-xs font-bold">M</div>
-              <span className="hidden sm:block">Marcin</span>
+              <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center text-white text-xs font-bold">A</div>
+              <span className="hidden sm:block">Adam</span>
             </div>
           </div>
         </header>

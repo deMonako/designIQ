@@ -101,7 +101,7 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
   ];
 
   const priorityColor = { "Niski": "text-slate-400", "Normalny": "text-blue-500", "Wysoki": "text-orange-500", "Krytyczny": "text-red-500" };
-  const taskStatusStyle = { "Todo": "bg-slate-100 text-slate-600", "W trakcie": "bg-blue-50 text-blue-700", "Zrobione": "bg-green-50 text-green-700" };
+  const taskStatusStyle = { "Niezrobione": "bg-slate-100 text-slate-600", "Zrobione": "bg-green-50 text-green-700" };
 
   return (
     <div className="p-4 lg:p-6">

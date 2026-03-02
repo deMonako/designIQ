@@ -45,7 +45,7 @@ export default function Analityka({ projects, tasks, checklists }) {
   const maxPkgCount = Math.max(...packageCounts.map(p => p.count), 1);
 
   // Task stats
-  const taskStatuses = ["Todo", "W trakcie", "Zrobione"];
+  const taskStatuses = ["Niezrobione", "Zrobione"];
   const taskStatusCounts = taskStatuses.map(s => ({ label: s, count: tasks.filter(t => t.status === s).length }));
   const maxTaskCount = Math.max(...taskStatusCounts.map(t => t.count), 1);
 
@@ -71,7 +71,7 @@ export default function Analityka({ projects, tasks, checklists }) {
     "Wstępny": "bg-slate-400", "W trakcie": "bg-blue-500", "Wstrzymany": "bg-amber-500", "Ukończony": "bg-green-500",
   };
   const pkgBarColors = { "Smart design": "bg-slate-500", "Smart design+": "bg-indigo-500", "Full house": "bg-orange-500" };
-  const taskStatusColors = { "Todo": "bg-slate-400", "W trakcie": "bg-blue-500", "Zrobione": "bg-green-500" };
+  const taskStatusColors = { "Niezrobione": "bg-slate-400", "Zrobione": "bg-green-500" };
   const priorityColors = { "Krytyczny": "bg-red-500", "Wysoki": "bg-orange-500", "Normalny": "bg-blue-400", "Niski": "bg-slate-400" };
 
   return (

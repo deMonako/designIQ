@@ -27,13 +27,11 @@ function TaskCard({ task, project, onStatusChange }) {
       {/* Status toggle */}
       <button
         onClick={() => {
-          const next = { "Todo": "W trakcie", "W trakcie": "Zrobione", "Zrobione": "Todo" };
+          const next = { "Niezrobione": "Zrobione", "Zrobione": "Niezrobione" };
           onStatusChange(task.id, next[task.status]);
         }}
         className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all ${
-          task.status === "Zrobione"   ? "bg-green-500 border-green-500" :
-          task.status === "W trakcie" ? "border-blue-400 bg-blue-50"    :
-          "border-slate-300 hover:border-orange-400"
+          task.status === "Zrobione" ? "bg-green-500 border-green-500" : "border-slate-300 hover:border-orange-400"
         }`}
       >
         {task.status === "Zrobione" && <CheckCircle2 className="w-3 h-3 text-white" />}
@@ -58,8 +56,8 @@ function TaskCard({ task, project, onStatusChange }) {
             {task.dueDate}
           </span>
         )}
-        {!overdue && task.status === "W trakcie" && (
-          <span className="text-xs text-blue-500 font-medium">W trakcie</span>
+        {!overdue && task.status === "Niezrobione" && (
+          <span className="text-xs text-slate-500 font-medium">Niezrobione</span>
         )}
       </div>
     </motion.div>

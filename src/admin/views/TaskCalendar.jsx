@@ -28,11 +28,10 @@ function TaskChip({ task, compact }) {
   const overdue = isOverdue(task.dueDate, task.status);
   const cls = overdue
     ? "bg-red-100 text-red-700"
-    : task.status === "Zrobione"   ? "bg-green-100 text-green-700"
-    : task.status === "W trakcie"  ? "bg-blue-100 text-blue-700"
+    : task.status === "Zrobione" ? "bg-green-100 text-green-700"
     : "bg-slate-100 text-slate-600";
   if (compact) {
-    return <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${overdue ? "bg-red-500" : task.status === "Zrobione" ? "bg-green-500" : task.status === "W trakcie" ? "bg-blue-500" : "bg-slate-400"}`} />;
+    return <span className={`inline-block w-1.5 h-1.5 rounded-full flex-shrink-0 ${overdue ? "bg-red-500" : task.status === "Zrobione" ? "bg-green-500" : "bg-slate-400"}`} />;
   }
   return (
     <div className={`text-[10px] leading-4 px-1 py-0.5 rounded truncate ${cls}`}>
@@ -69,12 +68,12 @@ function DayTaskPanel({ dateStr, tasks, projects }) {
             const overdue = isOverdue(t.dueDate, t.status);
             return (
               <div key={t.id} className="px-5 py-3 flex items-center gap-3">
-                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${overdue ? "bg-red-500" : t.status === "Zrobione" ? "bg-green-500" : t.status === "W trakcie" ? "bg-blue-500" : "bg-slate-400"}`} />
+                <div className={`w-2 h-2 rounded-full flex-shrink-0 ${overdue ? "bg-red-500" : t.status === "Zrobione" ? "bg-green-500" : "bg-slate-400"}`} />
                 <div className="flex-1 min-w-0">
                   <div className={`text-sm font-medium ${t.status === "Zrobione" ? "line-through text-slate-400" : "text-slate-800"}`}>{t.title}</div>
                   <div className="text-xs text-slate-400">{proj?.name ?? "Nieprzypisany"}</div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${overdue ? "bg-red-50 text-red-600 border border-red-200" : t.status === "Zrobione" ? "bg-green-50 text-green-700" : t.status === "W trakcie" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${overdue ? "bg-red-50 text-red-600 border border-red-200" : t.status === "Zrobione" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>
                   {t.status}
                 </span>
               </div>
@@ -241,7 +240,7 @@ export default function TaskCalendar({ tasks, projects }) {
                     {wd.dayTasks.slice(0, 6).map(t => {
                       const overdue = isOverdue(t.dueDate, t.status);
                       return (
-                        <div key={t.id} className={`text-[11px] px-1.5 py-1 rounded truncate leading-4 ${overdue ? "bg-red-100 text-red-700" : t.status === "Zrobione" ? "bg-green-100 text-green-700" : t.status === "W trakcie" ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                        <div key={t.id} className={`text-[11px] px-1.5 py-1 rounded truncate leading-4 ${overdue ? "bg-red-100 text-red-700" : t.status === "Zrobione" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"}`}>
                           {t.title}
                         </div>
                       );
@@ -284,7 +283,7 @@ export default function TaskCalendar({ tasks, projects }) {
                           {t.description && <div className="text-xs text-slate-500 mt-1">{t.description}</div>}
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${overdue ? "bg-red-50 text-red-600 border border-red-200" : t.status === "Zrobione" ? "bg-green-50 text-green-700" : t.status === "W trakcie" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"}`}>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${overdue ? "bg-red-50 text-red-600 border border-red-200" : t.status === "Zrobione" ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>
                             {t.status}
                           </span>
                           <span className="text-xs text-slate-400">{t.priority}</span>
