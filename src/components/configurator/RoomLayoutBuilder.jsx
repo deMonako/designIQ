@@ -231,13 +231,13 @@ export default function RoomLayoutBuilder({ rooms, onChange, selectedOptions }) 
     
     const roomToAdd = {
       ...newRoom,
-      id: Date.now().toString(),
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       features: roomFeatures,
       suggestedFeatures: suggestedFeatures
     };
     
     onChange([...rooms, roomToAdd]);
-    setNewRoom({ name: "", type: "Salon", features: [] });
+    setNewRoom({ name: "", type: roomTypes[0].value, features: [] });
     setIsAddingRoom(false);
   };
 

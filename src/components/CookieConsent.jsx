@@ -15,13 +15,17 @@ export default function CookieConsent() {
   });
 
   useEffect(() => {
-    const consent = localStorage.getItem(CONSENT_KEY);
-    if (!consent) {
+    try {
+      const consent = localStorage.getItem(CONSENT_KEY);
+      if (!consent) {
+        setShowBanner(true);
+      } else {
+        const saved = JSON.parse(consent);
+        setPreferences(saved);
+        applyConsent(saved);
+      }
+    } catch {
       setShowBanner(true);
-    } else {
-      const saved = JSON.parse(consent);
-      setPreferences(saved);
-      applyConsent(saved);
     }
   }, []);
 
@@ -53,7 +57,11 @@ export default function CookieConsent() {
   };
 
   const saveConsent = (prefs) => {
-    localStorage.setItem(CONSENT_KEY, JSON.stringify(prefs));
+    try {
+      localStorage.setItem(CONSENT_KEY, JSON.stringify(prefs));
+    } catch {
+      // localStorage niedostępne (np. tryb prywatny) — kontynuuj bez zapisu
+    }
     setPreferences(prefs);
     applyConsent(prefs);
     setShowBanner(false);
@@ -179,6 +187,9 @@ export default function CookieConsent() {
                   </div>
                   <div className="ml-4">
                     <button
+                      role="switch"
+                      aria-checked={preferences.analytics}
+                      aria-label="Cookies analityczne"
                       onClick={() => setPreferences({ ...preferences, analytics: !preferences.analytics })}
                       className={`w-12 h-6 rounded-full flex items-center transition-colors ${
                         preferences.analytics ? 'bg-orange-600 justify-end' : 'bg-slate-300 justify-start'
@@ -200,6 +211,9 @@ export default function CookieConsent() {
                   </div>
                   <div className="ml-4">
                     <button
+                      role="switch"
+                      aria-checked={preferences.marketing}
+                      aria-label="Cookies marketingowe"
                       onClick={() => setPreferences({ ...preferences, marketing: !preferences.marketing })}
                       className={`w-12 h-6 rounded-full flex items-center transition-colors ${
                         preferences.marketing ? 'bg-orange-600 justify-end' : 'bg-slate-300 justify-start'

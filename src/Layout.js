@@ -7,6 +7,26 @@ import SEOHead from "./components/SEOHead";
 import CookieConsent from "./components/CookieConsent";
 import { COMPANY } from "./config/company";
 
+const navigation = [
+  { name: "Start", href: createPageUrl("Home"), icon: Home },
+  { name: "Konfigurator", href: createPageUrl("Konfigurator"), icon: Calculator },
+  {
+    name: "Dla Klienta",
+    icon: Package,
+    isDropdown: true,
+    items: [
+      { name: "Panel Klienta", href: createPageUrl("StatusInwestycji"), icon: Users },
+      { name: "Możliwości", href: createPageUrl("Instalator"), icon: Cpu },
+      { name: "Co zyskasz", href: createPageUrl("CoZyskasz"), icon: Package },
+      { name: "FAQ", href: createPageUrl("FAQ"), icon: Mail }
+    ]
+  },
+  { name: "Realizacje", href: createPageUrl("Realizacje"), icon: Home },
+  { name: "Oferta", href: createPageUrl("Oferta"), icon: Package },
+  { name: "O nas", href: createPageUrl("ONas"), icon: Users },
+  { name: "Kontakt", href: createPageUrl("Kontakt"), icon: Mail },
+];
+
 export default function Layout({ children }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
@@ -16,26 +36,6 @@ export default function Layout({ children }) {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [location.pathname]);
-
-  const navigation = [
-    { name: "Start", href: createPageUrl("Home"), icon: Home },
-    { name: "Konfigurator", href: createPageUrl("Konfigurator"), icon: Calculator },
-    { 
-      name: "Dla Klienta", 
-      icon: Package,
-      isDropdown: true,
-      items: [
-        { name: "Panel Klienta", href: createPageUrl("StatusInwestycji"), icon: Users },
-        { name: "Możliwości", href: createPageUrl("Instalator"), icon: Cpu },
-        { name: "Co zyskasz", href: createPageUrl("CoZyskasz"), icon: Package },
-        { name: "FAQ", href: createPageUrl("FAQ"), icon: Mail }
-      ]
-    },
-    // { name: "Realizacje", href: createPageUrl("Realizacje"), icon: Home },
-    { name: "Oferta", href: createPageUrl("Oferta"), icon: Package },
-    { name: "O nas", href: createPageUrl("ONas"), icon: Users },
-    { name: "Kontakt", href: createPageUrl("Kontakt"), icon: Mail },
-  ];
 
   // Ulepszona funkcja sprawdzająca aktywność (obsługuje też podstrony dropdownu)
   const isItemActive = (item) => {
