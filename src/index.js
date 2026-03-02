@@ -18,6 +18,28 @@ import FAQ from "./pages/FAQ";
 import Realizacje from "./pages/Realizacje";
 import Instalator from "./pages/Instalator";
 import NotFound from "./pages/NotFound";
+import Admin from "./pages/Admin";
+
+function PublicSite() {
+  return (
+    <Layout>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/CoZyskasz" element={<CoZyskasz />} />
+        <Route path="/Konfigurator" element={<Konfigurator />} />
+        <Route path="/Oferta" element={<Oferta />} />
+        <Route path="/ONas" element={<ONas />} />
+        <Route path="/Kontakt" element={<Kontakt />} />
+        <Route path="/PolitykaPrywatnosci" element={<PolitykaPrywatnosci />} />
+        <Route path="/StatusInwestycji" element={<StatusInwestycji />} />
+        <Route path="/FAQ" element={<FAQ />} />
+        <Route path="/Realizacje" element={<Realizacje />} />
+        <Route path="/Instalator" element={<Instalator />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Layout>
+  );
+}
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 
@@ -25,23 +47,12 @@ root.render(
   <React.StrictMode>
     <ErrorBoundary>
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/CoZyskasz" element={<CoZyskasz />} />
-            <Route path="/Konfigurator" element={<Konfigurator />} />
-            <Route path="/Oferta" element={<Oferta />} />
-            <Route path="/ONas" element={<ONas />} />
-            <Route path="/Kontakt" element={<Kontakt />} />
-            <Route path="/PolitykaPrywatnosci" element={<PolitykaPrywatnosci />} />
-            <Route path="/StatusInwestycji" element={<StatusInwestycji />} />
-            <Route path="/FAQ" element={<FAQ />} />
-            <Route path="/Realizacje" element={<Realizacje />} />
-            <Route path="/Instalator" element={<Instalator />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/*" element={<PublicSite />} />
+        </Routes>
       </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>
 );
+
