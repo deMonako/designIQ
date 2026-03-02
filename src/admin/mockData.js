@@ -89,16 +89,21 @@ export const mockProjects = [
 ];
 
 export const mockTasks = [
-  { id: "t1", projectId: "proj-1", title: "Schemat szafy sterowniczej – v2", assignee: "Adam", status: "W trakcie", priority: "Wysoki", dueDate: "2026-03-05", description: "Przygotować schemat elektryczny szafy sterowniczej." },
-  { id: "t2", projectId: "proj-1", title: "Zamówienie kabli – lista BOM", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-10", description: "Przygotować listę materiałową i złożyć zamówienie." },
-  { id: "t3", projectId: "proj-3", title: "Projekt automatyki – dom Wiśniewski", assignee: "Adam", status: "Zrobione", priority: "Normalny", dueDate: "2026-02-28", description: "Projekt gotowy, przesłany do klienta." },
-  { id: "t4", projectId: "proj-4", title: "Wycena dodatkowych modułów I/O", assignee: "Adam", status: "Todo", priority: "Wysoki", dueDate: "2026-03-02", description: "Klient zapytał o 4 dodatkowe moduły wejść/wyjść." },
-  { id: "t5", projectId: "proj-2", title: "Kontakt z architektem – Nowak", assignee: "Adam", status: "Todo", priority: "Niski", dueDate: "2026-03-15", description: "Uzgodnić zmiany w projekcie po decyzji architekta." },
-  { id: "t6", projectId: "proj-4", title: "Programowanie sterownika Loxone", assignee: "Adam", status: "W trakcie", priority: "Krytyczny", dueDate: "2026-03-01", description: "Zakończenie programowania logiki sterowania biura." },
-  { id: "t7", projectId: "proj-1", title: "Integracja alarmu Satel z Loxone", assignee: "Adam", status: "Todo", priority: "Wysoki", dueDate: "2026-03-20", description: "Integracja systemu alarmowego Satel z miniServerem." },
-  { id: "t8", projectId: "proj-3", title: "Aktualizacja oferty – Wiśniewski", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-08", description: "Zaktualizować ofertę o dodatkowe gniazdka." },
-  { id: "t9", projectId: null, title: "Przygotować szkolenie KNX", assignee: "Adam", status: "Todo", priority: "Normalny", dueDate: "2026-03-10", description: "Szkolenie z obsługi ETS i topologii KNX." },
-  { id: "t10", projectId: null, title: "Aktualizacja szablonów dokumentów", assignee: "Adam", status: "Todo", priority: "Niski", dueDate: "2026-03-20", description: "Zaktualizować szablony Excel i Word do nowego brandu." },
+  // ── Zadania ────────────────────────────────────────────────────────────────
+  { id: "t1",  type: "task",  projectId: "proj-1", title: "Schemat szafy sterowniczej – v2",    assignee: "Adam", status: "W trakcie", priority: "Wysoki",    dueDate: "2026-03-05", description: "Przygotować schemat elektryczny szafy sterowniczej." },
+  { id: "t2",  type: "task",  projectId: "proj-1", title: "Zamówienie kabli – lista BOM",        assignee: "Adam", status: "Todo",      priority: "Normalny",  dueDate: "2026-03-03", description: "Przygotować listę materiałową i złożyć zamówienie." },
+  { id: "t3",  type: "task",  projectId: "proj-3", title: "Projekt automatyki – dom Wiśniewski", assignee: "Adam", status: "Zrobione",  priority: "Normalny",  dueDate: "2026-02-28", description: "Projekt gotowy, przesłany do klienta." },
+  { id: "t4",  type: "task",  projectId: "proj-4", title: "Wycena dodatkowych modułów I/O",      assignee: "Adam", status: "Todo",      priority: "Wysoki",    dueDate: "2026-03-02", description: "Klient zapytał o 4 dodatkowe moduły wejść/wyjść." },
+  { id: "t5",  type: "task",  projectId: "proj-2", title: "Kontakt z architektem – Nowak",       assignee: "Adam", status: "Todo",      priority: "Niski",     dueDate: "2026-03-07", description: "Uzgodnić zmiany w projekcie po decyzji architekta." },
+  { id: "t6",  type: "task",  projectId: "proj-4", title: "Programowanie sterownika Loxone",     assignee: "Adam", status: "W trakcie", priority: "Krytyczny", dueDate: "2026-03-04", description: "Zakończenie programowania logiki sterowania biura." },
+  { id: "t7",  type: "task",  projectId: "proj-1", title: "Integracja alarmu Satel z Loxone",   assignee: "Adam", status: "Todo",      priority: "Wysoki",    dueDate: "2026-03-06", description: "Integracja systemu alarmowego Satel z miniServerem." },
+  { id: "t8",  type: "task",  projectId: "proj-3", title: "Aktualizacja oferty – Wiśniewski",    assignee: "Adam", status: "Todo",      priority: "Normalny",  dueDate: "2026-03-08", description: "Zaktualizować ofertę o dodatkowe gniazdka." },
+  { id: "t9",  type: "task",  projectId: null,     title: "Przygotować szkolenie KNX",           assignee: "Adam", status: "Todo",      priority: "Normalny",  dueDate: "2026-03-05", description: "Szkolenie z obsługi ETS i topologii KNX." },
+  { id: "t10", type: "task",  projectId: null,     title: "Aktualizacja szablonów dokumentów",   assignee: "Adam", status: "Todo",      priority: "Niski",     dueDate: "2026-03-07", description: "Zaktualizować szablony Excel i Word do nowego brandu." },
+  // ── Wydarzenia ─────────────────────────────────────────────────────────────
+  { id: "ev1", type: "event", projectId: "proj-1", title: "Spotkanie z klientem Kowalski",       assignee: "Adam", status: "Todo",      priority: "Wysoki",    dueDate: "2026-03-03", description: "Omówienie postępu prac na etapie 3. Prefabrykacja szafy." },
+  { id: "ev2", type: "event", projectId: "proj-4", title: "Prezentacja systemu – Malinowski",    assignee: "Adam", status: "Todo",      priority: "Krytyczny", dueDate: "2026-03-04", description: "Finalna prezentacja gotowego systemu automatyki biura." },
+  { id: "ev3", type: "event", projectId: null,     title: "Szkolenie wewnętrzne KNX / ETS5",     assignee: "Adam", status: "Todo",      priority: "Normalny",  dueDate: "2026-03-06", description: "Szkolenie z obsługi ETS5 i konfiguracji topologii KNX." },
 ];
 
 export const mockChecklists = [
