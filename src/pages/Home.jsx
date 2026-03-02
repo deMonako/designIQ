@@ -18,6 +18,15 @@ import {
 } from "lucide-react";
 
 
+const PARTICLES = [...Array(20)].map((_, i) => ({
+  id: i,
+  x: Math.random() * 100 - 50,
+  duration: 5 + Math.random() * 5,
+  delay: Math.random() * 5,
+  left: Math.random() * 100,
+  top: Math.random() * 100,
+}));
+
 export default function Home() {
   const features = [
     {
@@ -86,23 +95,23 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-br from-orange-600 via-orange-700 to-slate-800">
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmZmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48cGF0aCBkPSJNMzYgMzBoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yem00LTRoMnYyaC0ydi0yem0wIDRoMnYyaC0ydi0yeiIvPjwvZz48L2c+PC9zdmc+')] opacity-20"></div>
           {/* Floating particles */}
-          {[...Array(20)].map((_, i) => (
+          {PARTICLES.map((p) => (
             <motion.div
-              key={i}
+              key={p.id}
               className="absolute w-2 h-2 bg-white/20 rounded-full"
               animate={{
                 y: [0, -100, 0],
-                x: [0, Math.random() * 100 - 50, 0],
+                x: [0, p.x, 0],
                 opacity: [0, 1, 0],
               }}
               transition={{
-                duration: 5 + Math.random() * 5,
+                duration: p.duration,
                 repeat: Infinity,
-                delay: Math.random() * 5,
+                delay: p.delay,
               }}
               style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
+                left: `${p.left}%`,
+                top: `${p.top}%`,
               }}
             />
           ))}

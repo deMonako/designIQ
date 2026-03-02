@@ -41,7 +41,14 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
               <span className="text-sm font-semibold text-slate-700">Postęp realizacji</span>
               <span className="text-lg font-bold text-orange-600">{getProgressPercentage()}%</span>
             </div>
-            <div className="h-4 bg-slate-200 rounded-full overflow-hidden">
+            <div
+              role="progressbar"
+              aria-valuenow={getProgressPercentage()}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Postęp realizacji"
+              className="h-4 bg-slate-200 rounded-full overflow-hidden"
+            >
               <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${getProgressPercentage()}%` }}

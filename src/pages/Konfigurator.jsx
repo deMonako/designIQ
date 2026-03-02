@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Calculator, Home, CheckCircle, ArrowRight, Layout as LayoutIcon } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -82,7 +82,7 @@ export default function Konfigurator() {
     "Ładowarka elektryczna", "Pompa ciepła"
   ];
 
-  const priceCalculator = () => {
+  const priceResult = useMemo(() => {
     const projectBaseMul = {
       "Oświetlenie": 0.1,
       "Zacienianie": 0.1,
@@ -143,8 +143,8 @@ export default function Konfigurator() {
     }
 
     if (formData.pakiet === "Smart design+") {
-      const cenaRobocizny = projectPrice * 1.5; // projekt + 40% za prefabrykację
-      const materialy = 8000 + projectPrice * 2.5; // 250% kosztów materiałów
+      const cenaRobocizny = projectPrice * 1.5; // projekt + 50% za prefabrykację szafy
+      const materialy = 8000 + projectPrice * 2.5; // baza + 250% wartości projektu
 
       return {
         cenaRobocizny,
@@ -153,8 +153,8 @@ export default function Konfigurator() {
     }
 
     if (formData.pakiet === "Full house") {
-      const cenaRobocizny = projectPrice * 2; // projekt + 40% szafa + 20% integracja
-      const materialy = 10000 + projectPrice * 3.5; // 250% szafa + 50% uruchomienie/integracja
+      const cenaRobocizny = projectPrice * 2; // projekt + 100% (szafa, konfiguracja, uruchomienie)
+      const materialy = 10000 + projectPrice * 3.5; // baza + 350% wartości projektu
 
       return {
         cenaRobocizny,
@@ -166,10 +166,10 @@ export default function Konfigurator() {
       cenaRobocizny: projectPrice,
       materialy: 0
     };
-  };
+  }, [formData]);
 
   const calculatePrice = () => {
-    const { cenaRobocizny, materialy } = priceCalculator();
+    const { cenaRobocizny, materialy } = priceResult;
     const total = cenaRobocizny + materialy;
     setEstimatedPrice(Math.round(total));
     setShowResult(true);
