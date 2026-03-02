@@ -1,11 +1,87 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, X, CheckCircle2, AlertTriangle, Calendar,
-  LayoutList, Columns, CalendarDays,
+  LayoutList, Columns, CalendarDays, Play, Pause, Timer, RotateCcw,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
 import TaskCalendar from "./TaskCalendar";
+
+// ── Time Tracker ──────────────────────────────────────────────────────────────
+
+function fmtTime(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+function useTimeTracker() {
+  const [data, setData] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("diq_timers") || "{}"); }
+    catch { return {}; }
+  });
+  const [tick, setTick] = useState(0);
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const hasActive = Object.values(dataRef.current).some(t => t.startedAt);
+      if (hasActive) setTick(n => n + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const persist = (newData) => {
+    setData(newData);
+    localStorage.setItem("diq_timers", JSON.stringify(newData));
+  };
+
+  const getElapsed = (taskId) => {
+    const t = data[taskId];
+    if (!t) return 0;
+    const live = t.startedAt ? Math.floor((Date.now() - new Date(t.startedAt).getTime()) / 1000) : 0;
+    return t.total + live;
+  };
+
+  const isActive = (taskId) => !!data[taskId]?.startedAt;
+
+  const toggle = (taskId) => {
+    const now = new Date().toISOString();
+    const newData = { ...data };
+    // Pause any other running timer
+    Object.keys(newData).forEach(id => {
+      if (newData[id].startedAt && id !== taskId) {
+        const elapsed = Math.floor((Date.now() - new Date(newData[id].startedAt).getTime()) / 1000);
+        newData[id] = { total: newData[id].total + elapsed, startedAt: null };
+      }
+    });
+    const cur = newData[taskId] || { total: 0, startedAt: null };
+    if (cur.startedAt) {
+      const elapsed = Math.floor((Date.now() - new Date(cur.startedAt).getTime()) / 1000);
+      newData[taskId] = { total: cur.total + elapsed, startedAt: null };
+    } else {
+      newData[taskId] = { total: cur.total, startedAt: now };
+    }
+    persist(newData);
+  };
+
+  const reset = (taskId) => {
+    const newData = { ...data };
+    delete newData[taskId];
+    persist(newData);
+  };
+
+  const getTotalLogged = () =>
+    Object.values(data).reduce((s, t) => {
+      const live = t.startedAt ? Math.floor((Date.now() - new Date(t.startedAt).getTime()) / 1000) : 0;
+      return s + t.total + live;
+    }, 0);
+
+  return { getElapsed, isActive, toggle, reset, getTotalLogged, tick };
+}
 
 const STATUS_OPTIONS   = ["Niezrobione", "Zrobione"];
 const PRIORITY_OPTIONS = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
@@ -28,14 +104,18 @@ function StatusBadge({ status }) {
   return <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${s[status] ?? s["Niezrobione"]}`}>{status}</span>;
 }
 
-function TaskRow({ task, project, onStatusChange }) {
-  const overdue = isOverdue(task.dueDate, task.status);
+function TaskRow({ task, project, onStatusChange, timeTracker }) {
+  const overdue  = isOverdue(task.dueDate, task.status);
+  const elapsed  = timeTracker.getElapsed(task.id);
+  const active   = timeTracker.isActive(task.id);
+  const hasTime  = elapsed > 0;
+
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${overdue ? "bg-red-50/30" : ""}`}
+      className={`flex items-center gap-3 px-4 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0 ${overdue ? "bg-red-50/30" : active ? "bg-orange-50/40" : ""}`}
     >
       <button
         onClick={() => {
@@ -53,8 +133,14 @@ function TaskRow({ task, project, onStatusChange }) {
         <div className={`text-sm font-medium ${task.status === "Zrobione" ? "line-through text-slate-400" : "text-slate-800"}`}>
           {task.title}
         </div>
-        <div className="text-xs text-slate-400 mt-0.5">
-          {project?.name ?? <span className="italic">Nieprzypisany</span>}
+        <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+          <span>{project?.name ?? <span className="italic">Nieprzypisany</span>}</span>
+          {hasTime && (
+            <span className={`flex items-center gap-0.5 font-mono font-medium ${active ? "text-orange-500" : "text-slate-400"}`}>
+              <Timer className="w-3 h-3" />
+              {fmtTime(elapsed)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -66,6 +152,25 @@ function TaskRow({ task, project, onStatusChange }) {
           <Calendar className="w-3 h-3" />
           {task.dueDate === TODAY ? "Dziś" : task.dueDate}
         </span>
+        {/* Timer button */}
+        {task.status !== "Zrobione" && (
+          <button
+            onClick={() => timeTracker.toggle(task.id)}
+            title={active ? "Zatrzymaj timer" : "Zacznij mierzyć czas"}
+            className={`p-1 rounded-md transition-all ${active ? "text-orange-500 bg-orange-100 hover:bg-orange-200" : "text-slate-300 hover:text-orange-400 hover:bg-orange-50"}`}
+          >
+            {active ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+          </button>
+        )}
+        {hasTime && (
+          <button
+            onClick={() => timeTracker.reset(task.id)}
+            title="Zresetuj timer"
+            className="p-1 rounded-md text-slate-200 hover:text-red-400 hover:bg-red-50 transition-all"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </motion.div>
   );
@@ -201,6 +306,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask }) {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [showOverdueOnly, setShowOverdueOnly] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const timeTracker = useTimeTracker();
 
   const filtered = useMemo(() => {
     return tasks.filter(t => {
@@ -276,13 +382,22 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask }) {
 
       {/* Stats */}
       {viewMode !== "calendar" && (
-        <div className="flex gap-3 flex-wrap text-sm text-slate-500">
+        <div className="flex gap-3 flex-wrap text-sm text-slate-500 items-center">
           {STATUS_OPTIONS.map(s => {
             const count = tasks.filter(t => t.status === s).length;
             return <span key={s}><span className="font-semibold text-slate-700">{count}</span> {s}</span>;
           })}
           <span className="text-slate-300">·</span>
           <span>{filtered.length} wyników</span>
+          {timeTracker.getTotalLogged() > 0 && (
+            <>
+              <span className="text-slate-300">·</span>
+              <span className="flex items-center gap-1 text-orange-500 font-medium">
+                <Timer className="w-3.5 h-3.5" />
+                {fmtTime(timeTracker.getTotalLogged())} zalogowane
+              </span>
+            </>
+          )}
         </div>
       )}
 
@@ -301,6 +416,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask }) {
                 task={task}
                 project={projects.find(p => p.id === task.projectId)}
                 onStatusChange={handleStatusChange}
+                timeTracker={timeTracker}
               />
             ))
           )}

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
-  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight,
+  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight, Calculator,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { id: "checklisty",   label: "Checklisty",   icon: ClipboardList },
   { id: "materialy",    label: "Materiały",    icon: Package },
   { id: "analityka",    label: "Analityka",    icon: BarChart2 },
+  { id: "kalkulator",   label: "Kalkulator",   icon: Calculator },
 ];
 
 const NAV_BOTTOM = [
