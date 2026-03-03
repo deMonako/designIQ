@@ -5,7 +5,9 @@ import {
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
-import { isOverdue } from "../mockData";
+import { isOverdue, TODAY } from "../mockData";
+
+const TASK_PRIORITIES = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
 function StatusBadge({ status }) {
   const s = {
@@ -76,12 +78,14 @@ function ProjectCard({ project, client, onClick }) {
   );
 }
 
-function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
-  const [activeTab, setActiveTab] = useState("tasks");
-  const [editingNote, setEditingNote] = useState(false);
-  const [note, setNote] = useState(project.notes);
-  const [showAddDoc, setShowAddDoc] = useState(false);
-  const [newDoc, setNewDoc] = useState({ name: "", type: "pdf", description: "", url: "" });
+function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddTask, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
+  const [activeTab,    setActiveTab]    = useState("tasks");
+  const [editingNote,  setEditingNote]  = useState(false);
+  const [note,         setNote]         = useState(project.notes);
+  const [showAddDoc,   setShowAddDoc]   = useState(false);
+  const [newDoc,       setNewDoc]       = useState({ name: "", type: "pdf", description: "", url: "" });
+  const [showAddTask,  setShowAddTask]  = useState(false);
+  const [newTask,      setNewTask]      = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
 
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
@@ -239,6 +243,73 @@ function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack
 
           {activeTab === "tasks" && (
             <div className="space-y-4">
+              {/* Dodaj zadanie */}
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setShowAddTask(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-xs font-bold hover:shadow-md transition-all"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Dodaj zadanie
+                </button>
+              </div>
+
+              <AnimatePresence>
+                {showAddTask && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-white rounded-xl border border-orange-200 p-4 space-y-3">
+                      <input
+                        autoFocus
+                        value={newTask.title}
+                        onChange={e => setNewTask(t => ({ ...t, title: e.target.value }))}
+                        placeholder="Tytuł zadania…"
+                        className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] text-slate-500 mb-1 font-semibold uppercase tracking-wide">Termin</label>
+                          <input type="date" value={newTask.dueDate}
+                            onChange={e => setNewTask(t => ({ ...t, dueDate: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] text-slate-500 mb-1 font-semibold uppercase tracking-wide">Priorytet</label>
+                          <select value={newTask.priority} onChange={e => setNewTask(t => ({ ...t, priority: e.target.value }))}
+                            className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm outline-none"
+                          >
+                            {TASK_PRIORITIES.map(p => <option key={p}>{p}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowAddTask(false)}
+                          className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 font-medium"
+                        >Anuluj</button>
+                        <button
+                          onClick={() => {
+                            if (!newTask.title.trim()) return;
+                            onAddTask?.({
+                              id: `t-${Date.now()}`, type: "task",
+                              projectId: project.id,
+                              title: newTask.title.trim(), assignee: "Adam",
+                              status: "Niezrobione", priority: newTask.priority,
+                              dueDate: newTask.dueDate, description: "",
+                            });
+                            setNewTask({ title: "", dueDate: TODAY, priority: "Normalny" });
+                            setShowAddTask(false);
+                          }}
+                          disabled={!newTask.title.trim()}
+                          className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >Dodaj</button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Aktywne zadania */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
                 {projectTasks.length === 0 ? (
@@ -478,7 +549,7 @@ function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onAddTask, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -507,6 +578,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         projectDocs={projectDocs}
         onBack={() => setSelectedProject(null)}
         onUpdateProject={(updated) => { onUpdateProject(updated); setSelectedProject(updated); }}
+        onAddTask={onAddTask}
         onAddProjectDoc={onAddProjectDoc}
         onDeleteProjectDoc={onDeleteProjectDoc}
         onToggleDocClientVisible={onToggleDocClientVisible}

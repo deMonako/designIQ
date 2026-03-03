@@ -167,26 +167,28 @@ function DayColumn({ date, tasks, projects, selectedTaskId, onTaskClick }) {
   });
 
   return (
-    <div className={`flex flex-col border-r border-slate-200 last:border-r-0 min-h-[640px] ${
+    <div className={`flex flex-col border-r border-slate-200 last:border-r-0 min-h-[320px] ${
       isWeekend ? "bg-slate-50/60" : "bg-white"
     }`}>
-      {/* Nagłówek dnia */}
-      <div className={`px-1 py-2.5 border-b text-center ${
+      {/* Nagłówek dnia — kompaktowy */}
+      <div className={`px-1 py-1.5 border-b text-center ${
         isToday ? "bg-brand-orange border-brand-orange" : isWeekend ? "bg-slate-100/80 border-slate-200" : "bg-slate-50 border-slate-200"
       }`}>
-        <div className={`text-[10px] font-semibold uppercase tracking-widest ${isToday ? "text-orange-100" : "text-slate-400"}`}>
+        <div className={`text-[9px] font-bold uppercase tracking-widest ${isToday ? "text-orange-100" : "text-slate-400"}`}>
           {DAY_NAMES[normIdx]}
         </div>
-        <div className={`text-2xl font-bold leading-tight tabular-nums ${isToday ? "text-white" : "text-slate-700"}`}>
+        <div className={`text-lg font-bold leading-tight tabular-nums ${isToday ? "text-white" : "text-slate-700"}`}>
           {date.getDate()}
         </div>
-        <div className={`text-[10px] h-4 ${isToday ? "text-orange-200" : "text-slate-300"}`}>
-          {tasks.length > 0 ? tasks.length : ""}
-        </div>
+        {tasks.length > 0 && (
+          <div className={`text-[9px] leading-none ${isToday ? "text-orange-200" : "text-slate-300"}`}>
+            {tasks.length}
+          </div>
+        )}
       </div>
 
       {/* Zadania */}
-      <div className="flex-1 p-1.5 space-y-1.5 overflow-y-auto">
+      <div className="flex-1 p-1 space-y-1 overflow-y-auto">
         {sorted.map(task => (
           <TaskCard
             key={task.id}
