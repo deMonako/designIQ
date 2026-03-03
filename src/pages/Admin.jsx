@@ -47,7 +47,19 @@ export default function Admin() {
 
   // ── State z persystencją (mock → zastąpione przez GAS) ────────────────────
   const [clients,     setClients]     = useState(() => ls("diq_clients",     mockClients));
-  const [projects,    setProjects]    = useState(() => ls("diq_projects",    mockProjects));
+  const [projects,    setProjects]    = useState(() => {
+    // Migracja: uzupełnij pola dodane po zapisaniu do localStorage (code, stageSchedule)
+    const stored = ls("diq_projects", mockProjects);
+    return stored.map(p => {
+      const mock = mockProjects.find(m => m.id === p.id);
+      if (!mock) return p;
+      return {
+        code:          mock.code,
+        stageSchedule: mock.stageSchedule,
+        ...p,  // user-changed fields override (status, progress, notes, etc.)
+      };
+    });
+  });
   const [tasks,       setTasks]       = useState(() => ls("diq_tasks",       mockTasks));
   const [checklists,  setChecklists]  = useState(() => ls("diq_checklists",  mockChecklists));
   const [materials,   setMaterials]   = useState(() => ls("diq_materials",   mockMaterials));
