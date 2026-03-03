@@ -106,6 +106,10 @@ export default function Admin() {
             projects={projects}
             tasks={tasks}
             onUpdateTask={handleUpdateTask}
+            onSelectProject={(project) => {
+              setSelectedProject(project);
+              setCurrentView("projekty");
+            }}
           />
         );
       case "projekty":

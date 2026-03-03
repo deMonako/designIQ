@@ -177,12 +177,12 @@ export const mockChecklists = [
 ];
 
 export const mockMaterials = [
-  { id: "mat-1", title: "Dokumentacja Loxone Config 14", category: "Dokumentacje", description: "Oficjalna dokumentacja oprogramowania Loxone Config v14 – wszystkie bloki funkcyjne", url: "https://www.loxone.com/pol/kb/", date: "2026-01-10" },
-  { id: "mat-2", title: "Skrypt konfiguracji interfejsu KNX", category: "Skrypty", description: "Bash script do automatycznej konfiguracji interfejsu IP/USB KNX na Raspberry Pi", url: "#", date: "2026-01-20" },
-  { id: "mat-3", title: "Instrukcja Satel INTEGRA 128-WRL", category: "Instrukcje", description: "Instrukcja programowania i obsługi centrali alarmowej Satel INTEGRA 128", url: "#", date: "2026-02-01" },
-  { id: "mat-4", title: "Kalkulator długości kabli (Excel)", category: "Skrypty", description: "Arkusz Excel do obliczania długości kabli na podstawie rzutu budynku", url: "#", date: "2026-02-15" },
-  { id: "mat-5", title: "Szablon schematu szafy sterowniczej", category: "Dokumentacje", description: "Szablon schematu elektrycznego szafy sterowniczej – AutoCAD .dwg", url: "#", date: "2026-02-20" },
-  { id: "mat-6", title: "Loxone HTTP API Reference", category: "Linki", description: "API do komunikacji z miniServerem przez HTTP/REST – odczyt i sterowanie punktami", url: "https://www.loxone.com/enen/kb/api/", date: "2026-03-01" },
+  { id: "mat-1", title: "Dokumentacja Loxone Config 14", category: "Dokumentacje", device: "Loxone",       description: "Oficjalna dokumentacja oprogramowania Loxone Config v14 – wszystkie bloki funkcyjne", url: "https://www.loxone.com/pol/kb/", date: "2026-01-10" },
+  { id: "mat-2", title: "Skrypt konfiguracji interfejsu KNX", category: "Skrypty", device: "KNX",          description: "Bash script do automatycznej konfiguracji interfejsu IP/USB KNX na Raspberry Pi", url: "#", date: "2026-01-20" },
+  { id: "mat-3", title: "Instrukcja Satel INTEGRA 128-WRL", category: "Instrukcje", device: "Alarm",       description: "Instrukcja programowania i obsługi centrali alarmowej Satel INTEGRA 128", url: "#", date: "2026-02-01" },
+  { id: "mat-4", title: "Kalkulator długości kabli (Excel)", category: "Skrypty", device: "",              description: "Arkusz Excel do obliczania długości kabli na podstawie rzutu budynku", url: "#", date: "2026-02-15" },
+  { id: "mat-5", title: "Szablon schematu szafy sterowniczej", category: "Dokumentacje", device: "",       description: "Szablon schematu elektrycznego szafy sterowniczej – AutoCAD .dwg", url: "#", date: "2026-02-20" },
+  { id: "mat-6", title: "Loxone HTTP API Reference", category: "Linki", device: "Loxone",                 description: "API do komunikacji z miniServerem przez HTTP/REST – odczyt i sterowanie punktami", url: "https://www.loxone.com/enen/kb/api/", date: "2026-03-01" },
 ];
 
 export const mockProjectDocs = [

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft, Plus, Search, FolderKanban, User, Calendar, Banknote,
+  ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
 } from "lucide-react";
@@ -66,14 +66,10 @@ function ProjectCard({ project, onClick }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs">
+      <div className="flex items-center text-xs">
         <span className={`flex items-center gap-1 ${overdue ? "text-red-500 font-semibold" : "text-slate-400"}`}>
           {overdue ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
           {overdue ? "Opóźniony" : project.deadline}
-        </span>
-        <span className="text-slate-400 flex items-center gap-1">
-          <Banknote className="w-3 h-3" />
-          {project.budget.toLocaleString("pl-PL")} zł
         </span>
       </div>
     </motion.div>
@@ -81,7 +77,7 @@ function ProjectCard({ project, onClick }) {
 }
 
 function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("tasks");
   const [editingNote, setEditingNote] = useState(false);
   const [note, setNote] = useState(project.notes);
   const [showAddDoc, setShowAddDoc] = useState(false);
@@ -93,12 +89,15 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
-    { id: "overview",      label: "Przegląd" },
     { id: "tasks",         label: `Zadania (${projectTasks.length})` },
     { id: "checklists",    label: `Checklisty (${projectChecklists.length})` },
     { id: "dokumentacja",  label: `Dokumentacja (${projectDocList.length})` },
     { id: "notes",         label: "Notatki" },
+    { id: "overview",      label: "Przegląd" },
   ];
+
+  const activeTasks = projectTasks.filter(t => t.status !== "Zrobione");
+  const doneTasks   = projectTasks.filter(t => t.status === "Zrobione");
 
   const priorityColor = { "Niski": "text-slate-400", "Normalny": "text-blue-500", "Wysoki": "text-orange-500", "Krytyczny": "text-red-500" };
   const taskStatusStyle = { "Niezrobione": "bg-slate-100 text-slate-600", "Zrobione": "bg-green-50 text-green-700" };
@@ -143,7 +142,7 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
         </div>
 
         {/* Info grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>
             <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Klient</div>
             <div className="font-medium text-slate-800">{project.client.name}</div>
@@ -155,10 +154,6 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
               {project.deadline}
             </div>
             <div className="text-xs text-slate-500">start: {project.startDate}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Banknote className="w-3 h-3" /> Budżet</div>
-            <div className="font-medium text-slate-800">{project.budget.toLocaleString("pl-PL")} zł</div>
           </div>
           <div>
             <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Adres</div>
@@ -243,21 +238,57 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
           )}
 
           {activeTab === "tasks" && (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-              {projectTasks.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-sm">Brak zadań dla tego projektu</div>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {projectTasks.map(t => (
-                    <div key={t.id} className="px-5 py-3 flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityColor[t.priority].replace("text-", "bg-")}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-slate-800">{t.title}</div>
-                        <div className="text-xs text-slate-400">{t.assignee} · {t.dueDate}</div>
+            <div className="space-y-4">
+              {/* Aktywne zadania */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+                {projectTasks.length === 0 ? (
+                  <div className="p-8 text-center text-slate-400 text-sm">Brak zadań dla tego projektu</div>
+                ) : activeTasks.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                    Wszystkie zadania ukończone
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {activeTasks.map(t => (
+                      <div key={t.id} className="px-5 py-3 flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${priorityColor[t.priority].replace("text-", "bg-")}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-800">{t.title}</div>
+                          <div className="text-xs text-slate-400">{t.assignee} · {t.dueDate}</div>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusStyle[t.status]}`}>{t.status}</span>
                       </div>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${taskStatusStyle[t.status]}`}>{t.status}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Archiwum ukończonych */}
+              {doneTasks.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2 px-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                    <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                      Archiwum ({doneTasks.length})
+                    </span>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm opacity-80">
+                    <div className="divide-y divide-slate-100">
+                      {doneTasks.map(t => (
+                        <div key={t.id} className="px-5 py-3 flex items-center gap-3">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-slate-500 line-through">{t.title}</div>
+                            <div className="text-xs text-slate-400">{t.assignee}</div>
+                          </div>
+                          <span className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">
+                            ukończono: {t.dueDate}
+                          </span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  </div>
                 </div>
               )}
             </div>

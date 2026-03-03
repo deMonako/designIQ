@@ -111,7 +111,7 @@ function OverdueRow({ task, project, onStatusChange }) {
 
 // ─── ProjectCard (karta projektu) ─────────────────────────────────────────────
 
-function ProjectCard({ project }) {
+function ProjectCard({ project, onClick }) {
   const days = daysUntil(project.deadline);
 
   const deadlineClass =
@@ -131,7 +131,10 @@ function ProjectCard({ project }) {
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:shadow-md transition-all">
+    <div
+      className={`bg-white rounded-xl border border-slate-200 shadow-sm p-3 hover:shadow-md transition-all ${onClick ? "cursor-pointer hover:border-orange-200" : ""}`}
+      onClick={onClick}
+    >
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
@@ -292,7 +295,7 @@ function PomodoroTimer() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, onUpdateTask }) {
+export default function Dashboard({ projects, tasks, onUpdateTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -330,6 +333,8 @@ export default function Dashboard({ projects, tasks, onUpdateTask }) {
     acc[t.dueDate].push(t);
     return acc;
   }, {});
+
+  const fewTasksToday = todayItems.length <= 3;
 
   const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find(t => t.id === taskId);
@@ -402,7 +407,7 @@ export default function Dashboard({ projects, tasks, onUpdateTask }) {
       {/* ── Główna siatka (2 kolumny) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-        {/* ─── Lewa: Agenda + Zaległe ─── */}
+        {/* ─── Lewa: Agenda + Zaległe [+ Nadchodzące gdy mało zadań] ─── */}
         <div className="space-y-5">
 
           {/* Agenda dnia */}
@@ -469,9 +474,44 @@ export default function Dashboard({ projects, tasks, onUpdateTask }) {
               </motion.section>
             )}
           </AnimatePresence>
+
+          {/* Nadchodzące – tutaj gdy mało zadań na dziś (≤ 3) */}
+          {fewTasksToday && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1 h-5 rounded-full bg-slate-300 flex-shrink-0" />
+                <span className="text-sm font-bold text-slate-800">Nadchodzące</span>
+              </div>
+              {Object.keys(upcomingByDate).length > 0 ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  {Object.entries(upcomingByDate).map(([date, items], i) => (
+                    <div key={date} className={i > 0 ? "border-t border-slate-100" : ""}>
+                      <div className="px-3 py-1.5 bg-slate-50 flex items-center gap-2">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          {formatDayShort(date)}
+                        </span>
+                        <span className="text-[10px] text-slate-300">{items.length}</span>
+                      </div>
+                      <div className="px-3 divide-y divide-slate-50">
+                        {items.map(t => (
+                          <UpcomingItem
+                            key={t.id}
+                            task={t}
+                            project={projects.find(p => p.id === t.projectId)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-400 text-center py-4">Brak nadchodzących zadań</div>
+              )}
+            </section>
+          )}
         </div>
 
-        {/* ─── Prawa: Projekty + Nadchodzące ─── */}
+        {/* ─── Prawa: Projekty [+ Nadchodzące gdy dużo zadań] ─── */}
         <div className="space-y-5">
 
           {/* Aktywne projekty */}
@@ -482,45 +522,53 @@ export default function Dashboard({ projects, tasks, onUpdateTask }) {
               <span className="ml-auto text-xs text-slate-400">{activeProjects.length}</span>
             </div>
             <div className="space-y-2">
-              {activeProjects.map(p => <ProjectCard key={p.id} project={p} />)}
+              {activeProjects.map(p => (
+                <ProjectCard
+                  key={p.id}
+                  project={p}
+                  onClick={onSelectProject ? () => onSelectProject(p) : undefined}
+                />
+              ))}
               {activeProjects.length === 0 && (
                 <div className="text-sm text-slate-400 text-center py-4">Brak aktywnych projektów</div>
               )}
             </div>
           </section>
 
-          {/* Nadchodzące */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-1 h-5 rounded-full bg-slate-300 flex-shrink-0" />
-              <span className="text-sm font-bold text-slate-800">Nadchodzące</span>
-            </div>
-            {Object.keys(upcomingByDate).length > 0 ? (
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {Object.entries(upcomingByDate).map(([date, items], i) => (
-                  <div key={date} className={i > 0 ? "border-t border-slate-100" : ""}>
-                    <div className="px-3 py-1.5 bg-slate-50 flex items-center gap-2">
-                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
-                        {formatDayShort(date)}
-                      </span>
-                      <span className="text-[10px] text-slate-300">{items.length}</span>
-                    </div>
-                    <div className="px-3 divide-y divide-slate-50">
-                      {items.map(t => (
-                        <UpcomingItem
-                          key={t.id}
-                          task={t}
-                          project={projects.find(p => p.id === t.projectId)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
+          {/* Nadchodzące – tutaj gdy dużo zadań na dziś (> 3) */}
+          {!fewTasksToday && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1 h-5 rounded-full bg-slate-300 flex-shrink-0" />
+                <span className="text-sm font-bold text-slate-800">Nadchodzące</span>
               </div>
-            ) : (
-              <div className="text-sm text-slate-400 text-center py-4">Brak nadchodzących zadań</div>
-            )}
-          </section>
+              {Object.keys(upcomingByDate).length > 0 ? (
+                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  {Object.entries(upcomingByDate).map(([date, items], i) => (
+                    <div key={date} className={i > 0 ? "border-t border-slate-100" : ""}>
+                      <div className="px-3 py-1.5 bg-slate-50 flex items-center gap-2">
+                        <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                          {formatDayShort(date)}
+                        </span>
+                        <span className="text-[10px] text-slate-300">{items.length}</span>
+                      </div>
+                      <div className="px-3 divide-y divide-slate-50">
+                        {items.map(t => (
+                          <UpcomingItem
+                            key={t.id}
+                            task={t}
+                            project={projects.find(p => p.id === t.projectId)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-400 text-center py-4">Brak nadchodzących zadań</div>
+              )}
+            </section>
+          )}
         </div>
       </div>
 

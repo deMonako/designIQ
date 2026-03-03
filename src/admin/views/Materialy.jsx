@@ -2,10 +2,11 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, BookOpen, Terminal, Link2, FolderOpen, Plus, X,
-  Search, ExternalLink, Trash2, Package,
+  Search, ExternalLink, Trash2, Package, Cpu,
 } from "lucide-react";
 
 const CATEGORIES = ["Dokumentacje", "Instrukcje", "Skrypty", "Linki", "Inne"];
+const DEVICES    = ["Fotowoltaika", "Rekuperacja", "Ogrzewanie", "Klimatyzacja", "Alarm", "KNX", "Loxone"];
 
 const CATEGORY_META = {
   "Dokumentacje": { icon: FileText,   color: "bg-blue-50 text-blue-600 border-blue-200",   dot: "bg-blue-500" },
@@ -21,6 +22,16 @@ function CategoryBadge({ category }) {
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${meta.color}`}>
       <meta.icon className="w-3 h-3" />
       {category}
+    </span>
+  );
+}
+
+function DeviceBadge({ device }) {
+  if (!device) return null;
+  return (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-teal-50 text-teal-700 border-teal-200">
+      <Cpu className="w-3 h-3" />
+      {device}
     </span>
   );
 }
@@ -50,6 +61,7 @@ function MaterialCard({ material, onDelete }) {
         </div>
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <CategoryBadge category={material.category} />
+          <DeviceBadge device={material.device} />
           <span className="text-xs text-slate-400">{material.date}</span>
         </div>
       </div>
@@ -79,7 +91,7 @@ function MaterialCard({ material, onDelete }) {
 
 function AddMaterialModal({ onAdd, onClose }) {
   const [form, setForm] = useState({
-    title: "", category: "Dokumentacje", description: "", url: "",
+    title: "", category: "Dokumentacje", device: "", description: "", url: "",
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -124,6 +136,14 @@ function AddMaterialModal({ onAdd, onClose }) {
             </select>
           </div>
           <div>
+            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Urządzenie / technologia</label>
+            <select value={form.device} onChange={e => set("device", e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
+              <option value="">Brak</option>
+              {DEVICES.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
             <label className="block text-xs text-slate-500 mb-1.5 font-medium">Opis</label>
             <textarea
               value={form.description} onChange={e => set("description", e.target.value)}
@@ -152,16 +172,36 @@ function AddMaterialModal({ onAdd, onClose }) {
 export default function Materialy({ materials, onAddMaterial, onDeleteMaterial }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [deviceFilter, setDeviceFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("default");
   const [showAddModal, setShowAddModal] = useState(false);
 
   const filtered = useMemo(() => {
-    return materials.filter(m => {
+    let result = materials.filter(m => {
       const matchSearch   = m.title.toLowerCase().includes(search.toLowerCase()) ||
                             (m.description ?? "").toLowerCase().includes(search.toLowerCase());
       const matchCategory = categoryFilter === "all" || m.category === categoryFilter;
-      return matchSearch && matchCategory;
+      const matchDevice   = deviceFilter === "all"
+        ? true
+        : deviceFilter === "_none"
+        ? !m.device
+        : m.device === deviceFilter;
+      return matchSearch && matchCategory && matchDevice;
     });
-  }, [materials, search, categoryFilter]);
+
+    if (sortBy === "category") {
+      result = [...result].sort((a, b) => a.category.localeCompare(b.category, "pl"));
+    } else if (sortBy === "device") {
+      result = [...result].sort((a, b) => (a.device || "").localeCompare(b.device || "", "pl"));
+    } else if (sortBy === "category-device") {
+      result = [...result].sort((a, b) => {
+        const c = a.category.localeCompare(b.category, "pl");
+        return c !== 0 ? c : (a.device || "").localeCompare(b.device || "", "pl");
+      });
+    }
+
+    return result;
+  }, [materials, search, categoryFilter, deviceFilter, sortBy]);
 
   // Group by category for the stats row
   const counts = CATEGORIES.reduce((acc, c) => ({ ...acc, [c]: materials.filter(m => m.category === c).length }), {});
@@ -183,6 +223,19 @@ export default function Materialy({ materials, onAddMaterial, onDeleteMaterial }
             className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none text-slate-700">
             <option value="all">Wszystkie kategorie</option>
             {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+          </select>
+          <select value={deviceFilter} onChange={e => setDeviceFilter(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none text-slate-700">
+            <option value="all">Wszystkie urządzenia</option>
+            {DEVICES.map(d => <option key={d}>{d}</option>)}
+            <option value="_none">Bez tagu urządzenia</option>
+          </select>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+            className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none text-slate-700">
+            <option value="default">Sortuj: domyślnie</option>
+            <option value="category">Sortuj: kategoria A-Z</option>
+            <option value="device">Sortuj: urządzenie A-Z</option>
+            <option value="category-device">Sortuj: kategoria + urządzenie</option>
           </select>
         </div>
         <button
