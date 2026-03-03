@@ -54,9 +54,9 @@ export default function Admin() {
       const mock = mockProjects.find(m => m.id === p.id);
       if (!mock) return p;
       return {
-        code:          mock.code,
-        stageSchedule: mock.stageSchedule,
-        ...p,  // user-changed fields override (status, progress, notes, etc.)
+        ...p,  // user-changed fields (status, progress, notes, etc.)
+        code:          mock.code,          // zawsze z mockData (może być zaktualizowane)
+        stageSchedule: mock.stageSchedule, // zawsze z mockData (może być zaktualizowane)
       };
     });
   });
