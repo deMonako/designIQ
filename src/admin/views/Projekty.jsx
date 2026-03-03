@@ -486,13 +486,14 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
 
   const filtered = useMemo(() => {
     return projects.filter(p => {
+      const client = (clients ?? []).find(c => c.id === p.clientId);
       const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.client.name.toLowerCase().includes(search.toLowerCase());
+        (client?.name ?? "").toLowerCase().includes(search.toLowerCase());
       const matchStatus = statusFilter === "all" || p.status === statusFilter;
       const matchPackage = packageFilter === "all" || p.package === packageFilter;
       return matchSearch && matchStatus && matchPackage;
     });
-  }, [projects, search, statusFilter, packageFilter]);
+  }, [projects, clients, search, statusFilter, packageFilter]);
 
   const getClient = (clientId) => (clients ?? []).find(c => c.id === clientId);
 
