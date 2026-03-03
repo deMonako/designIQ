@@ -3,12 +3,12 @@ import AdminLogin from "../admin/AdminLogin";
 import AdminLayout from "../admin/AdminLayout";
 import Dashboard from "../admin/views/Dashboard";
 import Projekty from "../admin/views/Projekty";
+import Klienci from "../admin/views/Klienci";
 import Zadania from "../admin/views/Zadania";
 import Checklisty from "../admin/views/Checklisty";
 import Analityka from "../admin/views/Analityka";
 import Materialy from "../admin/views/Materialy";
-import Kalkulator from "../admin/views/Kalkulator";
-import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs } from "../admin/mockData";
+import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs, mockClients } from "../admin/mockData";
 
 function PlaceholderView({ title }) {
   return (
@@ -30,6 +30,7 @@ export default function Admin() {
   const [selectedProject, setSelectedProject] = useState(null);
 
   // ── State (mock – zastąpione przez GAS) ──
+  const [clients,      setClients]      = useState(mockClients);
   const [projects,     setProjects]     = useState(mockProjects);
   const [tasks,        setTasks]        = useState(mockTasks);
   const [checklists,   setChecklists]   = useState(mockChecklists);
@@ -39,6 +40,14 @@ export default function Admin() {
   const handleLogout = () => {
     localStorage.removeItem("designiq_admin_auth");
     setIsAuthenticated(false);
+  };
+
+  // ── Clients ──
+  const handleAddClient = (newClient) => {
+    setClients(prev => [newClient, ...prev]);
+  };
+  const handleUpdateClient = (updated) => {
+    setClients(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
 
   // ── Projects ──
@@ -118,6 +127,7 @@ export default function Admin() {
             projects={projects}
             tasks={tasks}
             checklists={checklists}
+            clients={clients}
             onUpdateProject={handleUpdateProject}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
@@ -125,6 +135,19 @@ export default function Admin() {
             onAddProjectDoc={handleAddProjectDoc}
             onDeleteProjectDoc={handleDeleteProjectDoc}
             onToggleDocClientVisible={handleToggleDocClientVisible}
+          />
+        );
+      case "klienci":
+        return (
+          <Klienci
+            clients={clients}
+            projects={projects}
+            onAddClient={handleAddClient}
+            onUpdateClient={handleUpdateClient}
+            onNavigateToProject={(project) => {
+              setSelectedProject(project);
+              setCurrentView("projekty");
+            }}
           />
         );
       case "zadania":
@@ -161,10 +184,9 @@ export default function Admin() {
             projects={projects}
             tasks={tasks}
             checklists={checklists}
+            clients={clients}
           />
         );
-      case "kalkulator":
-        return <Kalkulator />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:
@@ -182,6 +204,7 @@ export default function Admin() {
       onLogout={handleLogout}
       projects={projects}
       tasks={tasks}
+      clients={clients}
     >
       {renderView()}
     </AdminLayout>

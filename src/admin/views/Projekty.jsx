@@ -26,7 +26,7 @@ function PackageBadge({ pkg }) {
   return <span className={`px-2 py-0.5 rounded text-xs font-medium ${s[pkg] || "bg-slate-100 text-slate-600"}`}>{pkg}</span>;
 }
 
-function ProjectCard({ project, onClick }) {
+function ProjectCard({ project, client, onClick }) {
   const overdue = isOverdue(project.deadline, project.status);
   return (
     <motion.div
@@ -39,7 +39,7 @@ function ProjectCard({ project, onClick }) {
           <h3 className="font-semibold text-slate-900 truncate">{project.name}</h3>
           <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
             <User className="w-3 h-3" />
-            {project.client.name}
+            {client?.name ?? "—"}
           </div>
         </div>
         <StatusBadge status={project.status} />
@@ -76,7 +76,7 @@ function ProjectCard({ project, onClick }) {
   );
 }
 
-function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
+function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack, onUpdateProject, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
   const [activeTab, setActiveTab] = useState("tasks");
   const [editingNote, setEditingNote] = useState(false);
   const [note, setNote] = useState(project.notes);
@@ -145,8 +145,8 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
           <div>
             <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><User className="w-3 h-3" /> Klient</div>
-            <div className="font-medium text-slate-800">{project.client.name}</div>
-            <div className="text-xs text-slate-500">{project.client.phone}</div>
+            <div className="font-medium text-slate-800">{client?.name ?? "—"}</div>
+            <div className="text-xs text-slate-500">{client?.phone ?? ""}</div>
           </div>
           <div>
             <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> Termin</div>
@@ -478,7 +478,7 @@ function ProjectDetail({ project, tasks, checklists, projectDocs, onBack, onUpda
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, onUpdateProject, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -494,10 +494,13 @@ export default function Projekty({ projects, tasks, checklists, onUpdateProject,
     });
   }, [projects, search, statusFilter, packageFilter]);
 
+  const getClient = (clientId) => (clients ?? []).find(c => c.id === clientId);
+
   if (selectedProject) {
     return (
       <ProjectDetail
         project={selectedProject}
+        client={getClient(selectedProject.clientId)}
         tasks={tasks}
         checklists={checklists}
         projectDocs={projectDocs}
@@ -573,7 +576,7 @@ export default function Projekty({ projects, tasks, checklists, onUpdateProject,
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(p => (
-            <ProjectCard key={p.id} project={p} onClick={setSelectedProject} />
+            <ProjectCard key={p.id} project={p} client={getClient(p.clientId)} onClick={setSelectedProject} />
           ))}
         </div>
       )}

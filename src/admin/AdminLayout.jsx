@@ -2,17 +2,17 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
-  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight, Calculator,
+  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, ChevronRight, Users,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { id: "dashboard",    label: "Dashboard",    icon: LayoutDashboard },
   { id: "projekty",     label: "Projekty",     icon: FolderKanban,    badge: "projekty" },
+  { id: "klienci",      label: "Klienci",      icon: Users,           badge: "klienci" },
   { id: "zadania",      label: "Zadania",      icon: CheckSquare,     badge: "zadania" },
   { id: "checklisty",   label: "Checklisty",   icon: ClipboardList },
   { id: "materialy",    label: "Materiały",    icon: Package },
   { id: "analityka",    label: "Analityka",    icon: BarChart2 },
-  { id: "kalkulator",   label: "Kalkulator",   icon: Calculator },
 ];
 
 const NAV_BOTTOM = [
@@ -42,21 +42,24 @@ function SidebarLink({ item, active, onClick, badge }) {
   );
 }
 
-export default function AdminLayout({ currentView, setCurrentView, onLogout, projects, tasks, children }) {
+export default function AdminLayout({ currentView, setCurrentView, onLogout, projects, tasks, clients, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const activeProjCount  = projects.filter(p => p.status !== "Ukończony").length;
-  const openTaskCount    = tasks.filter(t => t.status !== "Zrobione").length;
+  const activeProjCount    = projects.filter(p => p.status !== "Ukończony").length;
+  const openTaskCount      = tasks.filter(t => t.status !== "Zrobione").length;
+  const activeClientsCount = (clients ?? []).filter(c => !c.isArchived).length;
 
   const getBadge = (id) => {
     if (id === "projekty") return activeProjCount;
     if (id === "zadania")  return openTaskCount;
+    if (id === "klienci")  return activeClientsCount;
     return undefined;
   };
 
   const viewTitles = {
     dashboard:  "Dashboard",
     projekty:   "Projekty",
+    klienci:    "Klienci",
     zadania:    "Zadania",
     checklisty: "Checklisty",
     materialy:  "Materiały",
