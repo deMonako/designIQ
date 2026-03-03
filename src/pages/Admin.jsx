@@ -7,6 +7,7 @@ import Zadania from "../admin/views/Zadania";
 import Checklisty from "../admin/views/Checklisty";
 import Analityka from "../admin/views/Analityka";
 import Materialy from "../admin/views/Materialy";
+import Kalkulator from "../admin/views/Kalkulator";
 import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs } from "../admin/mockData";
 
 function PlaceholderView({ title }) {
@@ -158,6 +159,8 @@ export default function Admin() {
             checklists={checklists}
           />
         );
+      case "kalkulator":
+        return <Kalkulator />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:
