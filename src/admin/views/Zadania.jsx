@@ -86,21 +86,13 @@ function formatDayLabel(dateStr) {
 // ─── Stałe ────────────────────────────────────────────────────────────────────
 
 const PRIORITY_ORDER  = { "Krytyczny": 0, "Wysoki": 1, "Normalny": 2, "Niski": 3 };
-const PRIORITY_BADGE  = {
-  "Niski":     { bg: "bg-slate-100",   text: "text-slate-500",  dot: "bg-slate-300",  border: "border-slate-200" },
-  "Normalny":  { bg: "bg-blue-50",     text: "text-blue-600",   dot: "bg-blue-400",   border: "border-blue-100"  },
-  "Wysoki":    { bg: "bg-orange-50",   text: "text-orange-600", dot: "bg-orange-400", border: "border-orange-100"},
-  "Krytyczny": { bg: "bg-red-50",      text: "text-red-600",    dot: "bg-red-500",    border: "border-red-200"   },
-};
 const PRIORITY_OPTIONS = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
-// ─── PriorityBadge ────────────────────────────────────────────────────────────
+// ─── PriorityBadge — neutralny szary, priorytet nie zmienia koloru ────────────
 
 function PriorityBadge({ priority }) {
-  const s = PRIORITY_BADGE[priority] ?? PRIORITY_BADGE["Normalny"];
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${s.bg} ${s.text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${s.dot}`} />
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500">
       {priority}
     </span>
   );
@@ -112,14 +104,24 @@ function TaskCard({ task, project, isSelected, onClick }) {
   const overdue = isOverdue(task.dueDate, task.status);
   const isDone  = task.status === "Zrobione";
   const isEvent = task.type === "event";
-  const pStyle  = PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE["Normalny"];
 
-  let bg     = "bg-white border-slate-200 hover:border-slate-300";
-  let accent = `border-l-2 ${pStyle.border}`;
-  if (isEvent)             { bg = "bg-indigo-50 border-indigo-200 hover:border-indigo-300"; accent = "border-l-2 border-l-indigo-400"; }
-  if (isDone)              { bg = "bg-slate-50 border-slate-200 hover:border-slate-300"; }
-  if (overdue && !isDone)  { bg = "bg-red-50/70 border-red-200 hover:border-red-300"; accent = "border-l-2 border-l-red-400"; }
-  if (isSelected)          { bg = "bg-orange-50 border-orange-300 ring-1 ring-orange-200"; accent = "border-l-2 border-l-orange-500"; }
+  // Kolor bazuje TYLKO na typie (zadanie=pomarańczowy, wydarzenie=fioletowy)
+  // Priorytet nie wpływa na kolor — tylko na kolejność sortowania
+  const bg = isSelected
+    ? "bg-orange-50 border-orange-300 ring-1 ring-orange-200"
+    : isDone
+      ? "bg-slate-50 border-slate-200 hover:border-slate-300"
+      : isEvent
+        ? "bg-violet-50 border-violet-200 hover:border-violet-300"
+        : "bg-white border-slate-200 hover:border-orange-200";
+
+  const accent = isSelected
+    ? "border-l-2 border-l-orange-500"
+    : isDone
+      ? "border-l-2 border-l-slate-200"
+      : isEvent
+        ? "border-l-2 border-l-violet-500"
+        : "border-l-2 border-l-orange-300";
 
   return (
     <motion.div
@@ -131,12 +133,12 @@ function TaskCard({ task, project, isSelected, onClick }) {
     >
       <div className="flex items-start gap-1.5 min-w-0">
         {isEvent
-          ? <Calendar className="w-3 h-3 text-indigo-500 flex-shrink-0 mt-px" />
-          : <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${pStyle.dot}`} />
+          ? <Calendar className="w-3 h-3 text-violet-500 flex-shrink-0 mt-px" />
+          : <span className="w-2 h-2 rounded-full flex-shrink-0 mt-1 bg-orange-400" />
         }
         <div className="min-w-0 flex-1">
           <div className={`font-medium leading-snug line-clamp-2 ${
-            isDone ? "line-through text-slate-400" : isEvent ? "text-indigo-800" : "text-slate-700"
+            isDone ? "line-through text-slate-400" : isEvent ? "text-violet-800" : "text-slate-700"
           }`}>{task.title}</div>
           {project && <div className="text-slate-400 truncate mt-0.5 leading-none">{project.name}</div>}
         </div>
@@ -241,37 +243,30 @@ function MonthDayCell({ date, tasks, isSelected, isCurrentMonth, onDayClick }) {
         {date.getDate()}
       </span>
 
-      {/* Kropki priorytetów zadań */}
+      {/* Kropki zadań — zawsze pomarańczowe (priorytet nie zmienia koloru) */}
       {dotsToShow.length > 0 && (
         <div className="flex flex-wrap gap-0.5 mb-0.5">
-          {dotsToShow.map(task => {
-            const ps = PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE["Normalny"];
-            return (
-              <span
-                key={task.id}
-                className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                  task.status === "Zrobione"
-                    ? "bg-green-400 opacity-50"
-                    : isOverdue(task.dueDate, task.status)
-                      ? "bg-red-500"
-                      : ps.dot
-                }`}
-                title={task.title}
-              />
-            );
-          })}
+          {dotsToShow.map(task => (
+            <span
+              key={task.id}
+              className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                task.status === "Zrobione" ? "bg-slate-300" : "bg-orange-400"
+              }`}
+              title={task.title}
+            />
+          ))}
           {extraCount > 0 && (
             <span className="text-[9px] text-slate-400 font-semibold leading-tight">+{extraCount}</span>
           )}
         </div>
       )}
 
-      {/* Chip wydarzeń */}
+      {/* Kropka/licznik wydarzeń — zawsze fioletowa */}
       {events.length > 0 && (
         <div className="flex items-center gap-0.5 mt-auto">
-          <span className="w-2 h-2 rounded-full bg-indigo-400 flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-violet-500 flex-shrink-0" />
           {events.length > 1 && (
-            <span className="text-[9px] text-indigo-500 font-semibold leading-none">{events.length}</span>
+            <span className="text-[9px] text-violet-500 font-semibold leading-none">{events.length}</span>
           )}
         </div>
       )}
@@ -337,7 +332,7 @@ function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd 
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-slate-800">{formatDayLabel(dateStr)}</span>
           {events.length > 0 && (
-            <span className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-600 font-medium px-2 py-0.5 rounded-full">
+            <span className="inline-flex items-center gap-1 text-xs bg-violet-50 text-violet-600 font-medium px-2 py-0.5 rounded-full">
               <Calendar className="w-3 h-3" />{events.length} {events.length === 1 ? "wydarzenie" : "wydarzenia"}
             </span>
           )}
@@ -366,7 +361,6 @@ function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd 
       ) : (
         <div className="px-3 py-2.5 flex flex-wrap gap-2">
           {all.map(task => {
-            const pStyle  = PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE["Normalny"];
             const isEvent = task.type === "event";
             const overdue = isOverdue(task.dueDate, task.status);
             const isDone  = task.status === "Zrobione";
@@ -376,20 +370,18 @@ function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd 
                 onClick={() => onTaskClick(task)}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs transition-all hover:shadow-sm ${
                   isEvent
-                    ? "bg-indigo-50 border-indigo-200 hover:border-indigo-400"
-                    : overdue && !isDone
-                      ? "bg-red-50/70 border-red-200 hover:border-red-400"
-                      : isDone
-                        ? "bg-slate-50 border-slate-200 hover:border-slate-300"
-                        : `${pStyle.bg} border-slate-200 hover:border-slate-300`
+                    ? "bg-violet-50 border-violet-200 hover:border-violet-400"
+                    : isDone
+                      ? "bg-slate-50 border-slate-200 hover:border-slate-300"
+                      : "bg-white border-slate-200 hover:border-orange-300"
                 }`}
               >
                 {isEvent
-                  ? <Calendar className="w-3 h-3 text-indigo-500 flex-shrink-0" />
-                  : <span className={`w-2 h-2 rounded-full flex-shrink-0 ${pStyle.dot}`} />
+                  ? <Calendar className="w-3 h-3 text-violet-500 flex-shrink-0" />
+                  : <span className="w-2 h-2 rounded-full flex-shrink-0 bg-orange-400" />
                 }
                 <span className={`font-medium max-w-[200px] truncate ${
-                  isDone ? "line-through text-slate-400" : isEvent ? "text-indigo-800" : "text-slate-700"
+                  isDone ? "line-through text-slate-400" : isEvent ? "text-violet-800" : "text-slate-700"
                 }`}>
                   {task.title}
                 </span>
@@ -411,8 +403,6 @@ function TaskDetailPanel({ task, project, onClose, onStatusChange, onEdit }) {
   const overdue = isOverdue(task.dueDate, task.status);
   const isDone  = task.status === "Zrobione";
   const isEvent = task.type === "event";
-  const pStyle  = PRIORITY_BADGE[task.priority] ?? PRIORITY_BADGE["Normalny"];
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -422,11 +412,11 @@ function TaskDetailPanel({ task, project, onClose, onStatusChange, onEdit }) {
       className="bg-white rounded-xl border border-slate-200 shadow-md overflow-hidden"
     >
       {/* Pasek nagłówka */}
-      <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 ${isEvent ? "bg-indigo-50/60" : ""}`}>
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isEvent ? "bg-indigo-100" : pStyle.bg}`}>
+      <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-slate-100 ${isEvent ? "bg-violet-50/60" : ""}`}>
+        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isEvent ? "bg-violet-100" : "bg-orange-100"}`}>
           {isEvent
-            ? <Calendar className="w-3.5 h-3.5 text-indigo-600" />
-            : <Flag className={`w-3.5 h-3.5 ${pStyle.text}`} />
+            ? <Calendar className="w-3.5 h-3.5 text-violet-600" />
+            : <Flag className="w-3.5 h-3.5 text-orange-600" />
           }
         </div>
         <div className="flex-1 min-w-0">
@@ -560,7 +550,7 @@ function TaskModal({ projects, task, defaultDate, onSave, onClose }) {
                 className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-sm font-medium transition-all ${
                   form.type === opt.value
                     ? opt.value === "event"
-                      ? "bg-indigo-50 border-indigo-400 text-indigo-700"
+                      ? "bg-violet-50 border-violet-400 text-violet-700"
                       : "bg-orange-50 border-orange-400 text-orange-700"
                     : "border-slate-200 text-slate-500 hover:bg-slate-50"
                 }`}
@@ -844,7 +834,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask }) {
         {["Krytyczny","Wysoki","Normalny","Niski"].map(p => (
           <PriorityBadge key={p} priority={p} />
         ))}
-        <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 font-medium">
+        <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium">
           <Calendar className="w-3 h-3" /> Wydarzenie
         </span>
       </div>
