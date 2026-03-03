@@ -173,7 +173,27 @@ function ProjectHealthCard({ project, tasks }) {
   );
 }
 
-// ── Gantt timeline (keep + improve) ──────────────────────────────────────────
+// ── Gantt timeline ────────────────────────────────────────────────────────────
+const STAGE_PALETTE = [
+  { key: "wycen",      color: "bg-blue-400",    label: "Wycena" },
+  { key: "projekt a",  color: "bg-indigo-500",   label: "Projekt automatyki" },
+  { key: "projekt sz", color: "bg-violet-500",   label: "Projekt szafy" },
+  { key: "projekt",    color: "bg-indigo-400",   label: "Projekt" },
+  { key: "prefabr",    color: "bg-purple-400",   label: "Prefabrykacja" },
+  { key: "monta",      color: "bg-orange-500",   label: "Montaż" },
+  { key: "uruchom",    color: "bg-teal-500",     label: "Uruchomienie" },
+  { key: "szkolen",    color: "bg-green-400",    label: "Szkolenie" },
+  { key: "odbió",      color: "bg-emerald-500",  label: "Odbiór" },
+];
+
+function stageColor(name) {
+  const n = name.toLowerCase();
+  for (const { key, color } of STAGE_PALETTE) {
+    if (n.includes(key)) return color;
+  }
+  return "bg-slate-400";
+}
+
 function GanttTimeline({ projects }) {
   const winStart = useMemo(() => { const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() - 14); return d; }, []);
   const winEnd   = useMemo(() => { const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() + 70); return d; }, []);
@@ -197,43 +217,87 @@ function GanttTimeline({ projects }) {
     return e >= winStart && s <= winEnd;
   });
 
+  // Build unique stage legend from visible projects
+  const legendStages = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    visible.forEach(p => (p.stageSchedule ?? []).forEach(st => {
+      const c = stageColor(st.name);
+      if (!seen.has(c)) { seen.add(c); result.push({ color: c, label: st.name }); }
+    }));
+    return result;
+  }, [visible]);
+
   return (
     <div>
+      {/* Month labels */}
       <div className="relative h-5 mb-1 ml-36">
         {months.map((m, i) => (
           <span key={i} style={{ left: `${m.pct}%` }} className="absolute text-[10px] text-slate-400 -translate-x-1/2 font-medium">{m.label}</span>
         ))}
       </div>
-      <div className="space-y-2">
+
+      {/* Rows */}
+      <div className="space-y-2.5">
         {visible.map(p => {
-          const s   = new Date(p.startDate + "T00:00:00");
-          const e   = new Date(p.deadline + "T00:00:00");
-          const ls  = Math.max(s.getTime(), winStart.getTime());
-          const le  = Math.min(e.getTime(), winEnd.getTime());
-          const lft = Math.max(0, ((ls - winStart.getTime()) / winMs) * 100);
-          const wid = Math.max(1, ((le - ls) / winMs) * 100);
-          const barColor = p.status === "Ukończony" ? "bg-green-400" : p.status === "Wstrzymany" ? "bg-amber-400"
+          const schedule = p.stageSchedule ?? [];
+          // Fallback: single bar if no stageSchedule
+          const hasSched = schedule.length > 0;
+          const fallbackColor = p.status === "Ukończony" ? "bg-green-400" : p.status === "Wstrzymany" ? "bg-amber-400"
             : isOverdue(p.deadline, p.status) ? "bg-red-400" : "bg-orange-400";
+
           return (
-            <div key={p.id} className="flex items-center gap-2 h-7">
-              <div className="text-xs text-slate-600 truncate text-right flex-shrink-0 pr-2" style={{ width: "9rem" }}>{p.name}</div>
-              <div className="flex-1 relative h-5 bg-slate-100 rounded-full overflow-hidden">
-                <div style={{ left: `${lft}%`, width: `${wid}%` }}
-                  className={`absolute h-full rounded-full ${barColor} opacity-80`}
-                  title={`${p.startDate} → ${p.deadline}`}
-                />
-                <div style={{ left: `${todayPct}%` }} className="absolute top-0 bottom-0 w-0.5 bg-red-400 z-10" />
+            <div key={p.id} className="flex items-center gap-2">
+              <div className="text-xs text-slate-600 truncate text-right flex-shrink-0 pr-2 leading-tight" style={{ width: "9rem" }}>
+                <div className="font-medium">{p.name}</div>
+                {p.code && <div className="text-[10px] text-slate-400">{p.code}</div>}
+              </div>
+              <div className="flex-1 relative h-5 bg-slate-100 rounded-sm overflow-hidden">
+                {hasSched ? schedule.map((st, si) => {
+                  const ss = new Date(st.start + "T00:00:00").getTime();
+                  const se = new Date(st.end   + "T00:00:00").getTime();
+                  const ls = Math.max(ss, winStart.getTime());
+                  const le = Math.min(se, winEnd.getTime());
+                  if (le <= ls) return null;
+                  const lft = ((ls - winStart.getTime()) / winMs) * 100;
+                  const wid = Math.max(0.5, ((le - ls) / winMs) * 100);
+                  return (
+                    <div
+                      key={si}
+                      style={{ left: `${lft}%`, width: `${wid}%` }}
+                      title={`${st.name}: ${st.start} → ${st.end}`}
+                      className={`absolute h-full ${stageColor(st.name)} opacity-85`}
+                    />
+                  );
+                }) : (
+                  // Fallback bar
+                  (() => {
+                    const s  = new Date(p.startDate + "T00:00:00").getTime();
+                    const e  = new Date(p.deadline  + "T00:00:00").getTime();
+                    const ls = Math.max(s, winStart.getTime());
+                    const le = Math.min(e, winEnd.getTime());
+                    const lft = ((ls - winStart.getTime()) / winMs) * 100;
+                    const wid = Math.max(1, ((le - ls) / winMs) * 100);
+                    return <div style={{ left: `${lft}%`, width: `${wid}%` }} className={`absolute h-full ${fallbackColor} opacity-80`} />;
+                  })()
+                )}
+                {/* Today marker */}
+                <div style={{ left: `${todayPct}%` }} className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" />
               </div>
             </div>
           );
         })}
         {!visible.length && <p className="text-sm text-slate-400 text-center py-3">Brak projektów w tym oknie</p>}
       </div>
+
+      {/* Legend */}
       <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-slate-400">
-        {[["bg-orange-400","W trakcie"],["bg-amber-400","Wstrzymany"],["bg-green-400","Ukończony"],["bg-red-400","Po terminie"]].map(([c,l]) => (
-          <span key={l} className="flex items-center gap-1"><span className={`w-2 h-2 rounded-full ${c}`} />{l}</span>
+        {legendStages.map(({ color, label }) => (
+          <span key={color} className="flex items-center gap-1">
+            <span className={`w-2.5 h-2.5 rounded-sm ${color}`} />{label}
+          </span>
         ))}
-        <span className="flex items-center gap-1"><span className="w-0.5 h-3 bg-red-400 rounded-full inline-block" /> Dziś</span>
+        <span className="flex items-center gap-1"><span className="w-0.5 h-3 bg-red-500 rounded-full inline-block" /> Dziś</span>
       </div>
     </div>
   );

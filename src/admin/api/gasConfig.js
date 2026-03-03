@@ -15,6 +15,21 @@ export const GAS_CONFIG = {
   /** ID arkusza Google Sheets (z adresu URL) */
   sheetId: "",
 
+  /**
+   * ID folderu głównego na Google Drive.
+   * Struktura folderów:
+   *   DesignIQ/           ← driveFolderId wskazuje tutaj
+   *     KOW-2026-001/     ← każdy projekt dostaje podfolder o nazwie = code
+   *       projekt.pdf
+   *       schemat_szafy_v2.dwg
+   *       ...
+   *     NOW-2026-001/
+   *       ...
+   * Pliki pobierane przez: getProjectFiles(projectCode)
+   * GAS: Drive.getFoldersByName(projectCode, parentFolderId)
+   */
+  driveFolderId: "",
+
   /** Limit czasu żądania w ms */
   requestTimeout: 8000,
 

@@ -146,3 +146,20 @@ export async function deleteProjectDoc(id) {
 export async function toggleDocClientVisible(id) {
   return gasPost("toggleDocClientVisible", { id });
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// PLIKI Z GOOGLE DRIVE
+// ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pobiera listę plików z podfolderu projektu na Google Drive.
+ * Folder projektu identyfikowany jest po kodzie projektu (np. "KOW-2026-001").
+ *
+ * GAS zwraca tablicę obiektów:
+ *   { id, name, mimeType, size, modifiedTime, webViewLink, webContentLink }
+ *
+ * @param {string} projectCode - kod projektu, np. "KOW-2026-001"
+ */
+export async function getProjectFiles(projectCode) {
+  return gasGet("getProjectFiles", { code: projectCode });
+}

@@ -39,9 +39,16 @@ function ProjectCard({ project, client, onClick }) {
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 truncate">{project.name}</h3>
-          <div className="flex items-center gap-1 text-xs text-slate-500 mt-0.5">
-            <User className="w-3 h-3" />
-            {client?.name ?? "—"}
+          <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-1 text-xs text-slate-500">
+              <User className="w-3 h-3" />
+              {client?.name ?? "—"}
+            </div>
+            {project.code && (
+              <span className="text-[10px] font-mono font-semibold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                {project.code}
+              </span>
+            )}
           </div>
         </div>
         <StatusBadge status={project.status} />
@@ -121,7 +128,14 @@ function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
         <div className="flex flex-wrap items-start gap-3 justify-between mb-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900">{project.name}</h2>
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <h2 className="text-xl font-bold text-slate-900">{project.name}</h2>
+              {project.code && (
+                <span className="text-xs font-mono font-bold text-orange-600 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded">
+                  {project.code}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-2 mt-1">
               <PackageBadge pkg={project.package} />
               <StatusBadge status={project.status} />
