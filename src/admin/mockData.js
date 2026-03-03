@@ -180,7 +180,7 @@ export const mockProjects = [
     stages: ["Wycena", "Projekt", "Prefabrykacja", "Montaż", "Uruchomienie", "Odbiór"],
     stageSchedule: [
       { name: "Wycena",              start: "2025-12-01", end: "2025-12-10" },
-      { name: "Projekt",             start: "2025-12-10", end: "2026-01-05" },
+      { name: "Projekt automatyki",  start: "2025-12-10", end: "2026-01-05" },
       { name: "Prefabrykacja",       start: "2026-01-05", end: "2026-01-25" },
       { name: "Montaż",              start: "2026-01-25", end: "2026-02-18" },
       { name: "Uruchomienie",        start: "2026-02-18", end: "2026-03-10" },

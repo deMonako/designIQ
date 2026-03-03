@@ -178,7 +178,6 @@ const STAGE_PALETTE = [
   { key: "wycen",      color: "bg-blue-400",    label: "Wycena" },
   { key: "projekt a",  color: "bg-indigo-500",   label: "Projekt automatyki" },
   { key: "projekt sz", color: "bg-violet-500",   label: "Projekt szafy" },
-  { key: "projekt",    color: "bg-indigo-400",   label: "Projekt" },
   { key: "prefabr",    color: "bg-purple-400",   label: "Prefabrykacja" },
   { key: "monta",      color: "bg-orange-500",   label: "Montaż" },
   { key: "uruchom",    color: "bg-teal-500",     label: "Uruchomienie" },
