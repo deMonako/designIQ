@@ -111,7 +111,7 @@ function OverdueRow({ task, project, onStatusChange }) {
 
 // ─── ProjectCard (karta projektu) ─────────────────────────────────────────────
 
-function ProjectCard({ project, onClick }) {
+function ProjectCard({ project, client, onClick }) {
   const days = daysUntil(project.deadline);
 
   const deadlineClass =
@@ -138,7 +138,7 @@ function ProjectCard({ project, onClick }) {
       <div className="flex items-start justify-between gap-2 mb-2.5">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
-          <div className="text-xs text-slate-400 truncate mt-0.5">{project.client.name}</div>
+          <div className="text-xs text-slate-400 truncate mt-0.5">{client?.name ?? "—"}</div>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${statusColors[project.status] ?? "bg-slate-100 text-slate-400"}`}>
           {project.status}
@@ -295,7 +295,7 @@ function PomodoroTimer() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, onUpdateTask, onSelectProject }) {
+export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -526,6 +526,7 @@ export default function Dashboard({ projects, tasks, onUpdateTask, onSelectProje
                 <ProjectCard
                   key={p.id}
                   project={p}
+                  client={(clients ?? []).find(c => c.id === p.clientId)}
                   onClick={onSelectProject ? () => onSelectProject(p) : undefined}
                 />
               ))}

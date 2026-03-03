@@ -114,6 +114,7 @@ export default function Admin() {
           <Dashboard
             projects={projects}
             tasks={tasks}
+            clients={clients}
             onUpdateTask={handleUpdateTask}
             onSelectProject={(project) => {
               setSelectedProject(project);
