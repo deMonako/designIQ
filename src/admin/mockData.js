@@ -1,4 +1,4 @@
-export const TODAY = "2026-03-02";
+export const TODAY = "2026-03-03";
 
 export function isOverdue(dueDate, status) {
   if (status === "Zrobione" || status === "Ukończony") return false;
