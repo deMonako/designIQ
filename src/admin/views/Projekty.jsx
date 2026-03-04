@@ -4,11 +4,18 @@ import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
-  DollarSign, Save, List, Key, Layers,
+  DollarSign, Save, List, Key, Layers, Receipt,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
 
 const TASK_PRIORITIES = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
+
+const FINANCE_STAGES = [
+  { key: "projekt",       label: "Projekt",       profitKey: "profitProjekt",       paidKey: "paidProjekt" },
+  { key: "prefabrykacja", label: "Prefabrykacja",  profitKey: "profitPrefabrykacja", paidKey: "paidPrefabrykacja" },
+  { key: "uruchomienie",  label: "Uruchomienie",   profitKey: "profitUruchomienie",  paidKey: "paidUruchomienie" },
+];
+const fmtPLN = (v) => (v || 0).toLocaleString("pl-PL") + " PLN";
 
 function StatusBadge({ status }) {
   const s = {
@@ -148,6 +155,53 @@ function ProjectDetail({
     setShowAddCL(false);
   };
 
+  // ── Finance state ──
+  const [editingPaid,    setEditingPaid]    = useState(false);
+  const [paidForm,       setPaidForm]       = useState({
+    paidProjekt:       project.paidProjekt       ?? 0,
+    paidPrefabrykacja: project.paidPrefabrykacja ?? 0,
+    paidUruchomienie:  project.paidUruchomienie  ?? 0,
+  });
+  useEffect(() => {
+    if (!editingPaid) setPaidForm({
+      paidProjekt:       project.paidProjekt       ?? 0,
+      paidPrefabrykacja: project.paidPrefabrykacja ?? 0,
+      paidUruchomienie:  project.paidUruchomienie  ?? 0,
+    });
+  }, [project]); // eslint-disable-line
+  const handleSavePaid = () => {
+    onUpdateProject({
+      ...project,
+      paidProjekt:       parseFloat(paidForm.paidProjekt)       || 0,
+      paidPrefabrykacja: parseFloat(paidForm.paidPrefabrykacja) || 0,
+      paidUruchomienie:  parseFloat(paidForm.paidUruchomienie)  || 0,
+    });
+    setEditingPaid(false);
+  };
+  const [showAddInvoice, setShowAddInvoice] = useState(false);
+  const [newInvoice,     setNewInvoice]     = useState({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" });
+  const submitInvoice = () => {
+    if (!newInvoice.name.trim() || !newInvoice.amount) return;
+    const inv = {
+      id: `inv-${Date.now()}`,
+      name:     newInvoice.name.trim(),
+      amount:   parseFloat(newInvoice.amount) || 0,
+      stageKey: newInvoice.stageKey,
+      date:     newInvoice.date,
+      url:      newInvoice.url.trim(),
+    };
+    onUpdateProject({ ...project, invoices: [...(project.invoices || []), inv] });
+    setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" });
+    setShowAddInvoice(false);
+  };
+  const deleteInvoice = (invId) =>
+    onUpdateProject({ ...project, invoices: (project.invoices || []).filter(i => i.id !== invId) });
+  const invoiceList    = project.invoices || [];
+  const totalExpected  = FINANCE_STAGES.reduce((s, st) => s + (project[st.profitKey] || 0), 0);
+  const totalPaid      = FINANCE_STAGES.reduce((s, st) => s + (project[st.paidKey]   || 0), 0);
+  const totalRemaining = Math.max(0, totalExpected - totalPaid);
+  const paidPct        = totalExpected > 0 ? Math.min(100, Math.round((totalPaid / totalExpected) * 100)) : 0;
+
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
   const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
@@ -157,6 +211,7 @@ function ProjectDetail({
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
     { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
+    { id: "finanse",      label: "Finanse" },
     { id: "notes",        label: "Notatki" },
     { id: "overview",     label: "Przegląd" },
   ];
@@ -837,6 +892,243 @@ function ProjectDetail({
               )}
             </div>
           )}
+
+          {/* ══ FINANSE ══ */}
+          {activeTab === "finanse" && (
+            <div className="space-y-4">
+
+              {/* Summary */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <h3 className="font-semibold text-slate-900 text-sm mb-4 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-orange-500" /> Podsumowanie finansowe
+                </h3>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Budżet łącznie</div>
+                    <div className="text-lg font-bold text-slate-900">{fmtPLN(totalExpected)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Wpłacono</div>
+                    <div className="text-lg font-bold text-green-600">{fmtPLN(totalPaid)}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-400 mb-1">Pozostało</div>
+                    <div className={`text-lg font-bold ${totalRemaining > 0 ? "text-orange-600" : "text-green-600"}`}>
+                      {fmtPLN(totalRemaining)}
+                    </div>
+                  </div>
+                </div>
+                {totalExpected > 0 && (
+                  <div className="mt-4">
+                    <div className="flex justify-between text-xs text-slate-400 mb-1">
+                      <span>Całkowite wpłaty</span>
+                      <span>{paidPct}%</span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all"
+                        style={{ width: `${paidPct}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Stage cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {FINANCE_STAGES.map(st => {
+                  const budget    = project[st.profitKey] || 0;
+                  const paid      = project[st.paidKey]   || 0;
+                  const remaining = Math.max(0, budget - paid);
+                  const pct       = budget > 0 ? Math.min(100, Math.round((paid / budget) * 100)) : 0;
+                  return (
+                    <div key={st.key} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                      <div className="font-semibold text-slate-800 text-sm mb-3">{st.label}</div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400 text-xs">Budżet</span>
+                          <span className="font-medium text-slate-700">{fmtPLN(budget)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm items-center">
+                          <span className="text-slate-400 text-xs">Wpłacono</span>
+                          {editingPaid ? (
+                            <div className="relative w-32">
+                              <input
+                                type="number" min="0" step="100"
+                                value={paidForm[st.paidKey]}
+                                onChange={e => setPaidForm(f => ({ ...f, [st.paidKey]: e.target.value }))}
+                                className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 pr-8"
+                              />
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">PLN</span>
+                            </div>
+                          ) : (
+                            <span className="font-semibold text-green-600 text-sm">{fmtPLN(paid)}</span>
+                          )}
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-400 text-xs">Pozostało</span>
+                          <span className={`font-medium text-xs ${remaining > 0 ? "text-orange-600" : "text-green-600"}`}>
+                            {fmtPLN(remaining)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-3">
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-green-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                        </div>
+                        <div className="text-[11px] text-slate-400 mt-1 text-right">{pct}% wpłacono</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Edit paid amounts button */}
+              <div className="flex justify-end gap-2">
+                {editingPaid ? (
+                  <>
+                    <button onClick={() => setEditingPaid(false)}
+                      className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 font-medium">
+                      Anuluj
+                    </button>
+                    <button onClick={handleSavePaid}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-bold hover:bg-orange-600 transition-all">
+                      <Save className="w-3 h-3" /> Zapisz wpłaty
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setEditingPaid(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-colors">
+                    <Edit3 className="w-3.5 h-3.5" /> Edytuj wpłaty
+                  </button>
+                )}
+              </div>
+
+              {/* Invoices */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                  <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-orange-500" /> Faktury ({invoiceList.length})
+                  </h3>
+                  <button
+                    onClick={() => setShowAddInvoice(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-xs font-bold hover:shadow-md transition-all"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Dodaj fakturę
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {showAddInvoice && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                      <div className="p-4 bg-orange-50/50 border-b border-orange-100 space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className={lCls}>Numer / nazwa faktury *</label>
+                            <input
+                              autoFocus
+                              value={newInvoice.name}
+                              onChange={e => setNewInvoice(f => ({ ...f, name: e.target.value }))}
+                              placeholder="np. FV 2026/03/001"
+                              className={iCls}
+                            />
+                          </div>
+                          <div>
+                            <label className={lCls}>Kwota *</label>
+                            <div className="relative">
+                              <input
+                                type="number" min="0" step="100"
+                                value={newInvoice.amount}
+                                onChange={e => setNewInvoice(f => ({ ...f, amount: e.target.value }))}
+                                placeholder="0"
+                                className={iCls + " pr-10"}
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">PLN</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className={lCls}>Etap</label>
+                            <select value={newInvoice.stageKey} onChange={e => setNewInvoice(f => ({ ...f, stageKey: e.target.value }))} className={iCls}>
+                              <option value="projekt">Projekt</option>
+                              <option value="prefabrykacja">Prefabrykacja</option>
+                              <option value="uruchomienie">Uruchomienie</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className={lCls}>Data wystawienia</label>
+                            <input type="date" value={newInvoice.date} onChange={e => setNewInvoice(f => ({ ...f, date: e.target.value }))} className={iCls} />
+                          </div>
+                          <div>
+                            <label className={lCls}>Link do pliku (opcjonalnie)</label>
+                            <input
+                              value={newInvoice.url}
+                              onChange={e => setNewInvoice(f => ({ ...f, url: e.target.value }))}
+                              placeholder="https://..."
+                              className={iCls}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setShowAddInvoice(false); setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" }); }}
+                            className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 font-medium"
+                          >Anuluj</button>
+                          <button
+                            onClick={submitInvoice}
+                            disabled={!newInvoice.name.trim() || !newInvoice.amount}
+                            className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-orange-600 disabled:opacity-40"
+                          >Dodaj fakturę</button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {invoiceList.length === 0 && !showAddInvoice ? (
+                  <div className="p-8 text-center text-slate-400 text-sm">
+                    <Receipt className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                    Brak faktur dla tego projektu
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {invoiceList.map(inv => {
+                      const stageLabel = inv.stageKey === "projekt" ? "Projekt" : inv.stageKey === "prefabrykacja" ? "Prefabrykacja" : "Uruchomienie";
+                      return (
+                        <div key={inv.id} className="px-5 py-3 flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center flex-shrink-0">
+                            <Receipt className="w-4 h-4 text-orange-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-800 text-sm">{inv.name}</div>
+                            <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                              <span>{inv.date}</span>
+                              <span>·</span>
+                              <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{stageLabel}</span>
+                            </div>
+                          </div>
+                          <div className="text-sm font-bold text-slate-800 flex-shrink-0">{fmtPLN(inv.amount)}</div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {inv.url && inv.url !== "#" && (
+                              <a href={inv.url} target="_blank" rel="noopener noreferrer"
+                                className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            )}
+                            <button onClick={() => deleteInvoice(inv.id)}
+                              className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
+
         </motion.div>
       </AnimatePresence>
     </div>
