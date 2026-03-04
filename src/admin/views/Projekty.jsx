@@ -563,11 +563,10 @@ function ProjectDetail({ project, client, tasks, checklists, projectDocs, onBack
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onAddTask, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onAddTask, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
-  const [showAddModal, setShowAddModal] = useState(false);
 
   const filtered = useMemo(() => {
     return projects.filter(p => {
@@ -637,7 +636,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
           </select>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => onOpenAddProject?.()}
           className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all whitespace-nowrap"
         >
           <Plus className="w-4 h-4" /> Nowy projekt
@@ -668,38 +667,6 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         </div>
       )}
 
-      {/* Add project modal (basic) */}
-      <AnimatePresence>
-        {showAddModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-            onClick={() => setShowAddModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold text-slate-900">Nowy projekt</h2>
-                <button onClick={() => setShowAddModal(false)} className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="p-6 text-center text-slate-400">
-                <Plus className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">Formularz tworzenia projektu będzie połączony z backendem GAS.</p>
-                <p className="text-xs mt-1 text-slate-300">Placeholder — do implementacji w kolejnej iteracji.</p>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { AnimatePresence } from "framer-motion";
 import AdminLogin from "../admin/AdminLogin";
 import AdminLayout from "../admin/AdminLayout";
 import Dashboard from "../admin/views/Dashboard";
@@ -8,7 +9,8 @@ import Zadania from "../admin/views/Zadania";
 import Checklisty from "../admin/views/Checklisty";
 import Analityka from "../admin/views/Analityka";
 import Materialy from "../admin/views/Materialy";
-import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs, mockClients } from "../admin/mockData";
+import AddProjectModal from "../admin/AddProjectModal";
+import { mockProjects, mockTasks, mockChecklists, mockMaterials, mockProjectDocs, mockClients, TODAY } from "../admin/mockData";
 
 // ── Przełączenie na GAS ────────────────────────────────────────────────────────
 // Gdy backend GAS będzie gotowy:
@@ -42,8 +44,10 @@ export default function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => localStorage.getItem("designiq_admin_auth") === "1"
   );
-  const [currentView,    setCurrentView]    = useState("dashboard");
-  const [selectedProject, setSelectedProject] = useState(null);
+  const [currentView,       setCurrentView]       = useState("dashboard");
+  const [selectedProject,   setSelectedProject]   = useState(null);
+  const [addProjectOpen,    setAddProjectOpen]    = useState(false);
+  const [addProjectClientId, setAddProjectClientId] = useState(null);
 
   // ── State z persystencją (mock → zastąpione przez GAS) ────────────────────
   const [clients,     setClients]     = useState(() => ls("diq_clients",     mockClients));
@@ -84,6 +88,25 @@ export default function Admin() {
 
   // ── Projects ──────────────────────────────────────────────────────────────
   const handleUpdateProject = (p) => setProjects(prev => prev.map(x => x.id === p.id ? p : x));
+
+  const handleAddProject = (project, newClientData) => {
+    let finalProject = project;
+    if (newClientData) {
+      const newClient = { ...newClientData, id: `cl-${Date.now()}`, createdDate: TODAY, isArchived: false };
+      setClients(prev => [newClient, ...prev]);
+      finalProject = { ...project, clientId: newClient.id };
+    }
+    setProjects(prev => [finalProject, ...prev]);
+    setAddProjectOpen(false);
+    setAddProjectClientId(null);
+    setSelectedProject(finalProject);
+    setCurrentView("projekty");
+  };
+
+  const openAddProject = (clientId = null) => {
+    setAddProjectClientId(clientId ?? null);
+    setAddProjectOpen(true);
+  };
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   const handleAddTask    = (t) => setTasks(prev => [t, ...prev]);
@@ -143,6 +166,7 @@ export default function Admin() {
             onAddProjectDoc={handleAddProjectDoc}
             onDeleteProjectDoc={handleDeleteProjectDoc}
             onToggleDocClientVisible={handleToggleDocClientVisible}
+            onOpenAddProject={openAddProject}
           />
         );
       case "klienci":
@@ -151,6 +175,7 @@ export default function Admin() {
             clients={clients} projects={projects}
             onAddClient={handleAddClient} onUpdateClient={handleUpdateClient}
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
+            onOpenAddProject={openAddProject}
           />
         );
       case "zadania":
@@ -175,16 +200,30 @@ export default function Admin() {
   };
 
   return (
-    <AdminLayout
-      currentView={currentView}
-      setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); }}
-      onLogout={handleLogout}
-      projects={projects} tasks={tasks} clients={clients}
-      onAddTask={handleAddTask}
-      onOpenProject={openProject}
-      onNavigateToClient={navigateToClient}
-    >
-      {renderView()}
-    </AdminLayout>
+    <>
+      <AdminLayout
+        currentView={currentView}
+        setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); }}
+        onLogout={handleLogout}
+        projects={projects} tasks={tasks} clients={clients}
+        onAddTask={handleAddTask}
+        onOpenProject={openProject}
+        onNavigateToClient={navigateToClient}
+      >
+        {renderView()}
+      </AdminLayout>
+
+      <AnimatePresence>
+        {addProjectOpen && (
+          <AddProjectModal
+            clients={clients}
+            projects={projects}
+            initialClientId={addProjectClientId}
+            onAdd={handleAddProject}
+            onClose={() => { setAddProjectOpen(false); setAddProjectClientId(null); }}
+          />
+        )}
+      </AnimatePresence>
+    </>
   );
 }

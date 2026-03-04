@@ -146,7 +146,7 @@ function PipelineColumn({ stage, clients, projects, onDrop, onDragOver, onDragLe
 }
 
 // ── ClientDetail ───────────────────────────────────────────────────────────
-function ClientDetail({ client, projects, onBack, onUpdateClient, onNavigateToProject }) {
+function ClientDetail({ client, projects, onBack, onUpdateClient, onNavigateToProject, onOpenAddProject }) {
   const [editing, setEditing]  = useState(false);
   const [form, setForm]        = useState({ ...client });
   const clientProjects         = projects.filter(p => p.clientId === client.id);
@@ -285,10 +285,18 @@ function ClientDetail({ client, projects, onBack, onUpdateClient, onNavigateToPr
 
       {/* Projects */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-        <h3 className="font-semibold text-slate-900 text-sm mb-3 flex items-center gap-2">
-          <FolderKanban className="w-4 h-4 text-orange-500" />
-          Projekty klienta ({clientProjects.length})
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+            <FolderKanban className="w-4 h-4 text-orange-500" />
+            Projekty klienta ({clientProjects.length})
+          </h3>
+          <button
+            onClick={() => onOpenAddProject?.(client.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" /> Dodaj projekt
+          </button>
+        </div>
         {clientProjects.length === 0 ? (
           <div className="text-sm text-slate-400 text-center py-6">Brak projektów dla tego klienta</div>
         ) : (
@@ -422,7 +430,7 @@ function AddClientModal({ onAdd, onClose }) {
 }
 
 // ── Main Klienci component ─────────────────────────────────────────────────
-export default function Klienci({ clients, projects, onUpdateClient, onAddClient, onNavigateToProject }) {
+export default function Klienci({ clients, projects, onUpdateClient, onAddClient, onNavigateToProject, onOpenAddProject }) {
   const [viewMode,       setViewMode]       = useState("pipeline");
   const [selectedClient, setSelectedClient] = useState(null);
   const [draggedId,      setDraggedId]      = useState(null);
@@ -466,6 +474,7 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
         onBack={() => setSelectedClient(null)}
         onUpdateClient={(updated) => { onUpdateClient(updated); setSelectedClient(updated); }}
         onNavigateToProject={onNavigateToProject}
+        onOpenAddProject={onOpenAddProject}
       />
     );
   }
