@@ -36,15 +36,56 @@ function PackageBadge({ pkg }) {
   return <span className={`px-2 py-0.5 rounded text-xs font-medium ${s[pkg] || "bg-slate-100 text-slate-600"}`}>{pkg}</span>;
 }
 
-function ProjectCard({ project, client, onClick }) {
+function ProjectCard({ project, client, onClick, onDelete }) {
   const overdue = isOverdue(project.deadline, project.status);
+  const [delConfirm, setDelConfirm] = useState(false);
+
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      onClick={() => onClick(project)}
-      className="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200 transition-all cursor-pointer p-5"
+      className="relative group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200 transition-all p-5"
     >
-      <div className="flex items-start justify-between gap-2 mb-3">
+      {/* Delete confirm overlay */}
+      <AnimatePresence>
+        {delConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl z-10 flex flex-col items-center justify-center gap-3 p-5"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <Trash2 className="w-5 h-5 text-red-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-slate-900 text-sm">Usunąć projekt?</p>
+              <p className="text-xs text-slate-400 mt-1">Zostaną usunięte też zadania i dokumenty</p>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button onClick={() => setDelConfirm(false)}
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">
+                Anuluj
+              </button>
+              <button onClick={() => onDelete?.(project.id)}
+                className="flex-1 px-3 py-2 bg-red-500 text-white rounded-xl text-sm font-bold hover:bg-red-600 transition-colors">
+                Usuń
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Trash button (hover) */}
+      {!delConfirm && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setDelConfirm(true); }}
+          className="absolute top-3 right-3 p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
+          title="Usuń projekt"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+
+      <div className="flex items-start justify-between gap-2 mb-3 cursor-pointer" onClick={() => onClick(project)}>
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 truncate">{project.name}</h3>
           <div className="flex items-center gap-2 mt-0.5">
@@ -62,7 +103,7 @@ function ProjectCard({ project, client, onClick }) {
         <StatusBadge status={project.status} />
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap cursor-pointer" onClick={() => onClick(project)}>
         <PackageBadge pkg={project.package} />
         <span className="text-xs text-slate-500 flex items-center gap-1">
           <MapPin className="w-3 h-3" />
@@ -70,7 +111,7 @@ function ProjectCard({ project, client, onClick }) {
         </span>
       </div>
 
-      <div className="mb-3">
+      <div className="mb-3 cursor-pointer" onClick={() => onClick(project)}>
         <div className="flex justify-between text-xs text-slate-500 mb-1">
           <span>Postęp</span>
           <span className="font-semibold text-slate-700">{project.progress}%</span>
@@ -83,7 +124,7 @@ function ProjectCard({ project, client, onClick }) {
         </div>
       </div>
 
-      <div className="flex items-center text-xs">
+      <div className="flex items-center text-xs cursor-pointer" onClick={() => onClick(project)}>
         <span className={`flex items-center gap-1 ${overdue ? "text-red-500 font-semibold" : "text-slate-400"}`}>
           {overdue ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
           {overdue ? "Opóźniony" : project.deadline}
@@ -1154,7 +1195,7 @@ function ProjectDetail({
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onAddTask, onUpdateTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1256,7 +1297,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(p => (
-            <ProjectCard key={p.id} project={p} client={getClient(p.clientId)} onClick={setSelectedProject} />
+            <ProjectCard key={p.id} project={p} client={getClient(p.clientId)} onClick={setSelectedProject} onDelete={onDeleteProject} />
           ))}
         </div>
       )}

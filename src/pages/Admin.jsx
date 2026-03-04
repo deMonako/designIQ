@@ -85,9 +85,17 @@ export default function Admin() {
   // ── Clients ───────────────────────────────────────────────────────────────
   const handleAddClient    = (c) => setClients(prev => [c, ...prev]);
   const handleUpdateClient = (c) => setClients(prev => prev.map(x => x.id === c.id ? c : x));
+  const handleDeleteClient = (id) => setClients(prev => prev.filter(c => c.id !== id));
 
   // ── Projects ──────────────────────────────────────────────────────────────
   const handleUpdateProject = (p) => setProjects(prev => prev.map(x => x.id === p.id ? p : x));
+  const handleDeleteProject = (id) => {
+    setProjects(prev    => prev.filter(p  => p.id        !== id));
+    setProjectDocs(prev => prev.filter(d  => d.projectId !== id));
+    setTasks(prev       => prev.filter(t  => t.projectId !== id));
+    setChecklists(prev  => prev.filter(cl => cl.projectId !== id));
+    if (selectedProject?.id === id) setSelectedProject(null);
+  };
 
   const handleAddProject = (project, newClientData) => {
     let finalProject = project;
@@ -159,6 +167,7 @@ export default function Admin() {
             projects={projects} tasks={tasks} checklists={checklists}
             clients={clients}
             onUpdateProject={handleUpdateProject}
+            onDeleteProject={handleDeleteProject}
             onAddTask={handleAddTask}
             onUpdateTask={handleUpdateTask}
             onAddChecklist={handleAddChecklist}
@@ -177,6 +186,7 @@ export default function Admin() {
           <Klienci
             clients={clients} projects={projects}
             onAddClient={handleAddClient} onUpdateClient={handleUpdateClient}
+            onDeleteClient={handleDeleteClient}
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
             onOpenAddProject={openAddProject}
           />

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Users, Plus, X, ArrowLeft, Phone, Mail, Building2,
   FolderKanban, ChevronRight, Archive, Search, UserPlus,
-  Edit3, CheckCircle2, Calendar, Tag,
+  Edit3, CheckCircle2, Calendar, Tag, Trash2, AlertTriangle,
 } from "lucide-react";
 import { TODAY } from "../mockData";
 
@@ -144,10 +144,11 @@ function PipelineColumn({ stage, clients, projects, onDrop, onDragOver, onDragLe
 }
 
 // ── ClientDetail ───────────────────────────────────────────────────────────
-function ClientDetail({ client, projects, onBack, onUpdateClient, onNavigateToProject, onOpenAddProject }) {
-  const [editing, setEditing]  = useState(false);
-  const [form, setForm]        = useState({ ...client });
-  const clientProjects         = projects.filter(p => p.clientId === client.id);
+function ClientDetail({ client, projects, onBack, onUpdateClient, onDeleteClient, onNavigateToProject, onOpenAddProject }) {
+  const [editing, setEditing]      = useState(false);
+  const [delConfirm, setDelConfirm] = useState(false);
+  const [form, setForm]            = useState({ ...client });
+  const clientProjects             = projects.filter(p => p.clientId === client.id);
 
   const handleSave = () => {
     onUpdateClient(form);
@@ -197,21 +198,44 @@ function ClientDetail({ client, projects, onBack, onUpdateClient, onNavigateToPr
                 <div className="font-medium text-slate-800">{client.createdDate}</div>
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                onClick={() => setEditing(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-sm hover:bg-orange-100 transition-colors"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Edytuj
-              </button>
-              <button
-                onClick={() => { onUpdateClient({ ...client, isArchived: !client.isArchived }); onBack(); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-sm hover:bg-slate-100 transition-colors"
-              >
-                <Archive className="w-3.5 h-3.5" />
-                {client.isArchived ? "Przywróć do pipeline" : "Archiwizuj"}
-              </button>
-            </div>
+            {!delConfirm ? (
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-sm hover:bg-orange-100 transition-colors"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Edytuj
+                </button>
+                <button
+                  onClick={() => { onUpdateClient({ ...client, isArchived: !client.isArchived }); onBack(); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-sm hover:bg-slate-100 transition-colors"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  {client.isArchived ? "Przywróć do pipeline" : "Archiwizuj"}
+                </button>
+                <button
+                  onClick={() => setDelConfirm(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm hover:bg-red-100 transition-colors ml-auto"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Usuń klienta
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-sm text-red-700 flex-1">Usunąć klienta <strong>{client.name}</strong>? Tej operacji nie można cofnąć.</p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => setDelConfirm(false)}
+                    className="px-3 py-1.5 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-white transition-colors font-medium">
+                    Anuluj
+                  </button>
+                  <button onClick={() => { onDeleteClient?.(client.id); onBack(); }}
+                    className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600 transition-colors">
+                    Usuń
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div className="space-y-3">
@@ -428,7 +452,7 @@ function AddClientModal({ onAdd, onClose }) {
 }
 
 // ── Main Klienci component ─────────────────────────────────────────────────
-export default function Klienci({ clients, projects, onUpdateClient, onAddClient, onNavigateToProject, onOpenAddProject }) {
+export default function Klienci({ clients, projects, onUpdateClient, onAddClient, onDeleteClient, onNavigateToProject, onOpenAddProject }) {
   const [viewMode,       setViewMode]       = useState("pipeline");
   const [selectedClient, setSelectedClient] = useState(null);
   const [draggedId,      setDraggedId]      = useState(null);
@@ -445,7 +469,7 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
     return archivedClients.filter(c =>
       c.name.toLowerCase().includes(q) ||
       (c.company ?? "").toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q)
+      (c.email ?? "").toLowerCase().includes(q)
     );
   }, [archivedClients, search]);
 
@@ -471,6 +495,7 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
         projects={projects}
         onBack={() => setSelectedClient(null)}
         onUpdateClient={(updated) => { onUpdateClient(updated); setSelectedClient(updated); }}
+        onDeleteClient={onDeleteClient}
         onNavigateToProject={onNavigateToProject}
         onOpenAddProject={onOpenAddProject}
       />
