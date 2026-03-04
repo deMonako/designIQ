@@ -13,13 +13,17 @@ import { TODAY, isOverdue } from "../mockData";
 const PRIORITY_ORDER = { "Krytyczny": 0, "Wysoki": 1, "Normalny": 2, "Niski": 3 };
 
 function daysUntil(dateStr) {
+  const s = dateStr ? String(dateStr).substring(0, 10) : "";
+  if (!s) return Infinity;
   return Math.ceil(
-    (new Date(dateStr + "T00:00:00") - new Date(TODAY + "T00:00:00")) / 86_400_000
+    (new Date(s + "T00:00:00") - new Date(TODAY + "T00:00:00")) / 86_400_000
   );
 }
 
 function formatDayShort(dateStr) {
-  return format(new Date(dateStr + "T00:00:00"), "EEE d MMM", { locale: pl });
+  const s = dateStr ? String(dateStr).substring(0, 10) : "";
+  if (!s) return "";
+  return format(new Date(s + "T00:00:00"), "EEE d MMM", { locale: pl });
 }
 
 // ─── AgendaRow (zadanie lub wydarzenie na dziś) ───────────────────────────────
@@ -322,7 +326,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
 
   const todayItems = tasks
-    .filter(t => t.dueDate === TODAY && t.status !== "Zrobione")
+    .filter(t => String(t.dueDate || "").substring(0, 10) === TODAY && t.status !== "Zrobione")
     .sort((a, b) => {
       if (a.type === "event" && b.type !== "event") return -1;
       if (a.type !== "event" && b.type === "event") return 1;
@@ -330,19 +334,21 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
     });
 
   const overdueTasks = tasks
-    .filter(t => t.type !== "event" && isOverdue(t.dueDate, t.status))
+    .filter(t => t.type !== "event" && isOverdue(String(t.dueDate || "").substring(0, 10), t.status))
     .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
 
   const totalDone     = tasks.filter(t => t.status === "Zrobione").length;
-  const todayDone     = tasks.filter(t => t.dueDate === TODAY && t.status === "Zrobione").length;
+  const todayDone     = tasks.filter(t => String(t.dueDate || "").substring(0, 10) === TODAY && t.status === "Zrobione").length;
   const activeProjects = projects
     .filter(p => p.status !== "Ukończony")
     .sort((a, b) => daysUntil(a.deadline) - daysUntil(b.deadline));
 
   const upcoming = tasks
-    .filter(t => t.dueDate > TODAY && t.status !== "Zrobione")
+    .filter(t => String(t.dueDate || "").substring(0, 10) > TODAY && t.status !== "Zrobione")
     .sort((a, b) => {
-      if (a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
+      const ad = String(a.dueDate || "").substring(0, 10);
+      const bd = String(b.dueDate || "").substring(0, 10);
+      if (ad !== bd) return ad < bd ? -1 : 1;
       if (a.type === "event" && b.type !== "event") return -1;
       if (a.type !== "event" && b.type === "event") return 1;
       return (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9);
@@ -350,8 +356,9 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
     .slice(0, 9);
 
   const upcomingByDate = upcoming.reduce((acc, t) => {
-    if (!acc[t.dueDate]) acc[t.dueDate] = [];
-    acc[t.dueDate].push(t);
+    const key = String(t.dueDate || "").substring(0, 10);
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(t);
     return acc;
   }, {});
 

@@ -110,6 +110,10 @@ function ss_() {
 function parseCell(key, val) {
   if (typeof val === "boolean") return val;
   if (val === "" || val === null || val === undefined) return val;
+  // Arkusz Google zwraca daty jako obiekty Date – konwertuj na "YYYY-MM-DD"
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
   if (typeof val === "number") return val;
   if (JSON_FIELDS.indexOf(key) >= 0 && typeof val === "string" && val.trim().length > 0) {
     try { return JSON.parse(val); } catch(e) { return val; }
