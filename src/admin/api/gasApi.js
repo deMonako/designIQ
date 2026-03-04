@@ -168,13 +168,13 @@ export async function toggleDocClientVisible(id) {
 
 /**
  * Pobiera listę plików z podfolderu projektu na Google Drive.
- * Folder projektu identyfikowany jest po kodzie projektu (np. "KOW-2026-001").
+ * Folder identyfikowany jest po project.id (tworzony automatycznie przy createProject).
  *
- * GAS zwraca tablicę obiektów:
+ * GAS zwraca tablicę:
  *   { id, name, mimeType, size, modifiedTime, webViewLink, webContentLink }
  *
- * @param {string} projectCode - kod projektu, np. "KOW-2026-001"
+ * @param {string} projectId - id projektu, np. "proj-1749123456789"
  */
-export async function getProjectFiles(projectCode) {
-  return gasGet("getProjectFiles", { code: projectCode });
+export async function getProjectFiles(projectId) {
+  return gasGet("getProjectFiles", { projectId });
 }

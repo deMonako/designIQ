@@ -1,39 +1,32 @@
 // ── GAS Configuration ──────────────────────────────────────────────────────────
-// Konfiguracja połączenia z Google Apps Script.
-// Gdy backend będzie gotowy:
-//   1. Wdróż skrypt GAS jako Web App (Execute as: Me, Who has access: Anyone)
-//   2. Skopiuj URL deployment do SCRIPT_URL poniżej
-//   3. Ustaw enabled: true
 
 export const GAS_CONFIG = {
   /** Przełącznik: false = mockData lokalnie, true = dane z GAS */
-  enabled: false,
+  enabled: true,
 
-  /** URL deployment Google Apps Script (doGet/doPost) */
-  scriptUrl: "",
+  /** URL deployment Google Apps Script */
+  scriptUrl: "https://script.google.com/macros/s/AKfycbzPV9ncr4JCIk1doE4HJV4tp-tlD077vwkPYYbS29w5iFGThjEmn-EL3DaPZS7kEafjDA/exec",
 
-  /** ID arkusza Google Sheets (z adresu URL) */
-  sheetId: "",
+  /** ID arkusza Google Sheets */
+  sheetId: "1aq3kmpw5mOGcy7JHB29C0s6OiR3evdEWY1gS08EE2FU",
 
   /**
-   * ID folderu głównego na Google Drive.
-   * Struktura folderów:
-   *   DesignIQ/           ← driveFolderId wskazuje tutaj
-   *     KOW-2026-001/     ← każdy projekt dostaje podfolder o nazwie = code
-   *       projekt.pdf
-   *       schemat_szafy_v2.dwg
+   * ID głównego folderu DesignIQ na Google Drive.
+   * Każdy projekt dostaje podfolder o nazwie = project.id, tworzony automatycznie.
+   * Struktura:
+   *   DesignIQ/              ← driveFolderId wskazuje tutaj
+   *     proj-1749123456789/  ← folder projektu (id)
+   *       schemat.pdf
+   *       projekt_v2.dwg
+   *     proj-1749234567890/
    *       ...
-   *     NOW-2026-001/
-   *       ...
-   * Pliki pobierane przez: getProjectFiles(projectCode)
-   * GAS: Drive.getFoldersByName(projectCode, parentFolderId)
    */
-  driveFolderId: "",
+  driveFolderId: "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6",
 
   /** Limit czasu żądania w ms */
-  requestTimeout: 8000,
+  requestTimeout: 10000,
 
-  /** Wersja API – do nagłówka X-Version */
+  /** Wersja API */
   apiVersion: "1",
 };
 

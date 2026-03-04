@@ -190,16 +190,35 @@ function err(msg) {
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────────
-// Listuje pliki z podfolderu projektu (nazwa folderu = kod projektu, np. KOW-2026-001)
-function getDriveFiles(projectCode) {
-  if (!DRIVE_FOLDER_ID || !projectCode) return [];
+
+// Zwraca folder projektu (lub null jeśli nie istnieje)
+function getProjectFolder(projectId) {
+  if (!DRIVE_FOLDER_ID || !projectId) return null;
   try {
     var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-    var folders = root.getFoldersByName(projectCode);
-    if (!folders.hasNext()) return [];
-    var folder  = folders.next();
-    var files   = folder.getFiles();
-    var result  = [];
+    var folders = root.getFoldersByName(String(projectId));
+    return folders.hasNext() ? folders.next() : null;
+  } catch(e) { return null; }
+}
+
+// Tworzy folder projektu (jeśli nie istnieje) i zwraca go
+function getOrCreateProjectFolder(projectId) {
+  if (!DRIVE_FOLDER_ID || !projectId) return null;
+  try {
+    var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var folders = root.getFoldersByName(String(projectId));
+    if (folders.hasNext()) return folders.next();
+    return root.createFolder(String(projectId));
+  } catch(e) { return null; }
+}
+
+// Listuje pliki z podfolderu projektu (nazwa folderu = project.id)
+function getDriveFiles(projectId) {
+  var folder = getProjectFolder(projectId);
+  if (!folder) return [];
+  try {
+    var files  = folder.getFiles();
+    var result = [];
     while (files.hasNext()) {
       var f = files.next();
       result.push({
@@ -253,7 +272,7 @@ function doGet(e) {
         return ok(all);
 
       case "getProjectFiles":
-        return ok(getDriveFiles(e.parameter.code));
+        return ok(getDriveFiles(e.parameter.projectId));
 
       default:
         return err("Nieznana akcja GET: " + action);
@@ -292,6 +311,8 @@ function doPost(e) {
 
       // ── Projekty ──────────────────────────────────────────────────────────────
       case "createProject":
+        // Automatycznie tworzy podfolder projektu na Drive (nazwa = project.id)
+        getOrCreateProjectFolder(body.project.id);
         return ok(insertRow("Projekty", body.project));
 
       case "updateProject":
