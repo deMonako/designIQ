@@ -136,7 +136,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
 
 function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
-  onBack, onUpdateProject, onAddTask, onUpdateTask,
+  onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask,
   onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible,
   onAddChecklist, onToggleChecklistItem,
 }) {
@@ -147,6 +147,7 @@ function ProjectDetail({
   const [newDoc,        setNewDoc]        = useState({ name: "", type: "pdf", description: "", url: "" });
   const [showAddTask,   setShowAddTask]   = useState(false);
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
+  const [delConfirmProject, setDelConfirmProject] = useState(false);
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -249,6 +250,50 @@ function ProjectDetail({
   const deleteInvoice = (invId) =>
     onUpdateProject({ ...project, invoices: (project.invoices || []).filter(i => i.id !== invId) });
   const invoiceList    = project.invoices || [];
+
+  // ── Schedule (Harmonogram) state ──
+  const buildScheduleForm = () =>
+    project.stageSchedule?.length
+      ? project.stageSchedule.map(s => ({ ...s }))
+      : project.stages.map(s => ({ name: s, start: project.startDate || TODAY, end: project.deadline || TODAY }));
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [scheduleForm,    setScheduleForm]    = useState(buildScheduleForm);
+  useEffect(() => { if (!editingSchedule) setScheduleForm(buildScheduleForm()); }, [project]); // eslint-disable-line
+  const setStageDate = (i, key, val) =>
+    setScheduleForm(f => f.map((s, j) => j === i ? { ...s, [key]: val } : s));
+  const saveSchedule = () => {
+    onUpdateProject({ ...project, stageSchedule: scheduleForm });
+    setEditingSchedule(false);
+  };
+
+  // ── Gantt helpers ──
+  const gantt = useMemo(() => {
+    if (!scheduleForm.length) return null;
+    const minMs = Math.min(...scheduleForm.map(s => +new Date(s.start)));
+    const maxMs = Math.max(...scheduleForm.map(s => +new Date(s.end)));
+    const totalMs = maxMs - minMs;
+    if (totalMs <= 0) return null;
+    const pct = (ms) => ((ms - minMs) / totalMs) * 100;
+    // month labels
+    const months = [];
+    let d = new Date(minMs);
+    d.setDate(1);
+    while (d <= new Date(maxMs)) {
+      const next   = new Date(d); next.setMonth(next.getMonth() + 1);
+      const mStart = Math.max(+new Date(d), minMs);
+      const mEnd   = Math.min(+next, maxMs);
+      months.push({ label: d.toLocaleDateString("pl-PL", { month: "short", year: "2-digit" }), left: pct(mStart), width: pct(mEnd) - pct(mStart) });
+      d = next;
+    }
+    const bars = scheduleForm.map((s, i) => ({
+      left:  Math.max(0, pct(+new Date(s.start))),
+      width: Math.max(1, pct(+new Date(s.end)) - pct(+new Date(s.start))),
+      days:  Math.round((+new Date(s.end) - +new Date(s.start)) / 86400000),
+      done:    i < project.stageIndex,
+      current: i === project.stageIndex,
+    }));
+    return { months, bars };
+  }, [scheduleForm, project.stageIndex]); // eslint-disable-line
   const totalExpected  = FINANCE_STAGES.reduce((s, st) => s + (project[st.profitKey] || 0), 0);
   const totalPaid      = FINANCE_STAGES.reduce((s, st) => s + (project[st.paidKey]   || 0), 0);
   const totalRemaining = Math.max(0, totalExpected - totalPaid);
@@ -264,6 +309,7 @@ function ProjectDetail({
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
     { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
     { id: "finanse",      label: "Finanse" },
+    { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
     { id: "overview",     label: "Przegląd" },
   ];
@@ -317,6 +363,19 @@ function ProjectDetail({
               <Edit3 className="w-3.5 h-3.5" />
               {editingProject ? "Anuluj" : "Edytuj"}
             </button>
+            {!editingProject && (
+              <button
+                onClick={() => setDelConfirmProject(v => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  delConfirmProject
+                    ? "bg-red-500 text-white border-red-500"
+                    : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {delConfirmProject ? "Anuluj" : "Usuń"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -329,6 +388,31 @@ function ProjectDetail({
             />
           </div>
         </div>
+
+        {/* Delete confirmation banner */}
+        <AnimatePresence>
+          {delConfirmProject && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden mb-4">
+              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl">
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-sm text-red-700 flex-1">
+                  Usunąć projekt <strong>{project.name}</strong>? Zostaną usunięte też zadania, checklisty i dokumenty. Operacji nie można cofnąć.
+                </p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button onClick={() => setDelConfirmProject(false)}
+                    className="px-3 py-1.5 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-white transition-colors font-medium">
+                    Anuluj
+                  </button>
+                  <button onClick={() => { onDeleteProject?.(project.id); onBack(); }}
+                    className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600 transition-colors">
+                    Usuń projekt
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Info grid (read-only) */}
         {!editingProject && (
@@ -497,6 +581,203 @@ function ProjectDetail({
       {/* ── Tab content ── */}
       <AnimatePresence mode="wait">
         <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+
+          {/* ══ HARMONOGRAM ══ */}
+          {activeTab === "harmonogram" && (
+            <div className="space-y-4">
+              {/* Gantt card */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-5">
+                  <div>
+                    <h3 className="font-semibold text-slate-900 text-sm">Harmonogram etapów</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {project.startDate} → {project.deadline}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setEditingSchedule(v => !v); if (editingSchedule) setScheduleForm(buildScheduleForm()); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      editingSchedule
+                        ? "bg-orange-500 text-white border-orange-500"
+                        : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    {editingSchedule ? "Anuluj" : "Edytuj daty"}
+                  </button>
+                </div>
+
+                {gantt ? (
+                  <div className="overflow-x-auto">
+                    <div style={{ minWidth: "480px" }}>
+                      {/* Month header */}
+                      <div className="flex mb-2 pl-36">
+                        {gantt.months.map((m, mi) => (
+                          <div key={mi} style={{ width: `${m.width}%` }}
+                            className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide px-1 border-l border-slate-100 first:border-l-0 truncate">
+                            {m.label}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Stage rows */}
+                      {scheduleForm.map((stage, i) => {
+                        const bar = gantt.bars[i];
+                        return (
+                          <div key={i} className="flex items-center mb-2 group">
+                            {/* Stage name */}
+                            <div className="w-36 flex-shrink-0 pr-3 flex items-center gap-1.5">
+                              <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
+                                bar.done    ? "bg-green-100 text-green-700"
+                                : bar.current ? "bg-orange-100 text-orange-700"
+                                : "bg-slate-100 text-slate-400"
+                              }`}>{bar.done ? "✓" : i + 1}</span>
+                              <span className={`text-xs font-medium truncate ${
+                                bar.done ? "text-slate-400 line-through" : bar.current ? "text-slate-900" : "text-slate-500"
+                              }`}>{stage.name}</span>
+                            </div>
+
+                            {/* Gantt bar area */}
+                            <div className="flex-1 relative h-7 bg-slate-50 rounded-lg overflow-hidden">
+                              {/* Month grid lines */}
+                              {gantt.months.map((m, mi) => mi > 0 && (
+                                <div key={mi} style={{ left: `${m.left}%` }}
+                                  className="absolute top-0 bottom-0 border-l border-slate-200/70" />
+                              ))}
+                              {/* Today line */}
+                              {(() => {
+                                const minMs = Math.min(...scheduleForm.map(s => +new Date(s.start)));
+                                const maxMs = Math.max(...scheduleForm.map(s => +new Date(s.end)));
+                                const todayPct = ((+new Date(TODAY) - minMs) / (maxMs - minMs)) * 100;
+                                return todayPct > 0 && todayPct < 100 ? (
+                                  <div style={{ left: `${todayPct}%` }}
+                                    className="absolute top-0 bottom-0 border-l-2 border-orange-400/60 z-10" />
+                                ) : null;
+                              })()}
+                              {/* Bar */}
+                              <div
+                                style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
+                                className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-semibold transition-all ${
+                                  bar.done    ? "bg-green-200 text-green-800 border border-green-300"
+                                  : bar.current ? "bg-orange-200 text-orange-900 border border-orange-300 shadow-sm"
+                                  : "bg-slate-200 text-slate-600 border border-slate-300"
+                                }`}
+                              >
+                                {bar.width > 8 ? `${bar.days}d` : ""}
+                              </div>
+                            </div>
+
+                            {/* Dates */}
+                            <div className="w-32 flex-shrink-0 pl-3 text-[10px] text-slate-400 text-right hidden sm:block">
+                              {stage.start} → {stage.end}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Legend */}
+                      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 pl-36">
+                        {[
+                          { cls: "bg-green-200 border-green-300", label: "Ukończony" },
+                          { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
+                          { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
+                          { cls: "border-l-2 border-orange-400/60 h-4 w-0", label: "Dziś", noBox: true },
+                        ].map(({ cls, label, noBox }) => (
+                          <div key={label} className="flex items-center gap-1.5">
+                            {noBox
+                              ? <div className={cls} />
+                              : <div className={`w-3 h-3 rounded border ${cls}`} />
+                            }
+                            <span className="text-[10px] text-slate-400">{label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-400 text-sm">
+                    Brak danych harmonogramu. Kliknij <strong>Edytuj daty</strong> aby dodać.
+                  </div>
+                )}
+              </div>
+
+              {/* Editable schedule form */}
+              <AnimatePresence>
+                {editingSchedule && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="bg-white rounded-2xl border border-orange-200 shadow-sm p-5">
+                      <h3 className="font-semibold text-slate-900 text-sm mb-4 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-orange-500" />
+                        Edycja dat etapów
+                      </h3>
+
+                      <div className="space-y-2 mb-5">
+                        {/* Header row */}
+                        <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-1 mb-1">
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Etap</span>
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Rozpoczęcie</span>
+                          <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Zakończenie</span>
+                        </div>
+
+                        {scheduleForm.map((stage, i) => {
+                          const isDone    = i < project.stageIndex;
+                          const isCurrent = i === project.stageIndex;
+                          const durDays = Math.round((+new Date(stage.end) - +new Date(stage.start)) / 86400000);
+                          return (
+                            <div key={i} className={`grid grid-cols-[1fr_140px_140px] items-center gap-3 p-2 rounded-xl transition-colors ${
+                              isCurrent ? "bg-orange-50" : isDone ? "bg-green-50/50" : "hover:bg-slate-50"
+                            }`}>
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
+                                  isDone    ? "bg-green-100 text-green-700"
+                                  : isCurrent ? "bg-orange-100 text-orange-700"
+                                  : "bg-slate-100 text-slate-500"
+                                }`}>{isDone ? "✓" : i + 1}</span>
+                                <span className="text-sm font-medium text-slate-700 truncate">{stage.name}</span>
+                                {durDays > 0 && (
+                                  <span className="text-[10px] text-slate-400 ml-auto flex-shrink-0">{durDays}d</span>
+                                )}
+                              </div>
+                              <input
+                                type="date"
+                                value={stage.start}
+                                onChange={e => setStageDate(i, "start", e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                              />
+                              <input
+                                type="date"
+                                value={stage.end}
+                                onChange={e => setStageDate(i, "end", e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex gap-2 pt-1 border-t border-slate-100">
+                        <button
+                          onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); }}
+                          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors"
+                        >
+                          Anuluj
+                        </button>
+                        <button
+                          onClick={saveSchedule}
+                          className="flex-1 px-3 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Save className="w-3.5 h-3.5" /> Zapisz harmonogram
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* ══ OVERVIEW ══ */}
           {activeTab === "overview" && (
@@ -1223,6 +1504,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         projectDocs={projectDocs}
         onBack={() => setSelectedProject(null)}
         onUpdateProject={(updated) => { onUpdateProject(updated); setSelectedProject(updated); }}
+        onDeleteProject={onDeleteProject}
         onAddTask={onAddTask}
         onUpdateTask={onUpdateTask}
         onAddChecklist={onAddChecklist}
