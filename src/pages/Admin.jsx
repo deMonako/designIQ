@@ -91,6 +91,7 @@ export default function Admin() {
   const [checklists,  setChecklists]  = useState(() => GAS_ON ? [] : ls("diq_checklists",  mockChecklists));
   const [materials,   setMaterials]   = useState(() => GAS_ON ? [] : ls("diq_materials",   mockMaterials));
   const [projectDocs, setProjectDocs] = useState(() => GAS_ON ? [] : ls("diq_projectDocs", mockProjectDocs));
+  const [leads,       setLeads]       = useState([]);
 
   // ── Ładowanie danych z GAS (jednorazowo po zalogowaniu) ───────────────────
   useEffect(() => {
@@ -102,13 +103,15 @@ export default function Admin() {
       GAS.getChecklists(),
       GAS.getMaterials(),
       GAS.getProjectDocs(),
-    ]).then(([c, p, t, cl, m, d]) => {
+      GAS.getLeads(),
+    ]).then(([c, p, t, cl, m, d, l]) => {
       setClients(c);
       setProjects(p);
       setTasks(t);
       setChecklists(cl);
       setMaterials(m);
       setProjectDocs(d);
+      setLeads(l);
     }).catch(e => {
       setSyncError("Błąd ładowania danych z GAS: " + e.message);
     }).finally(() => setLoading(false));
@@ -298,6 +301,31 @@ export default function Admin() {
     }
   };
 
+  // ── Leads ─────────────────────────────────────────────────────────────────
+  const handleUpdateLead = async (lead) => {
+    const snap = leads.find(x => x.id === lead.id);
+    setLeads(prev => prev.map(x => x.id === lead.id ? lead : x));
+    if (GAS_ON) {
+      try { await GAS.updateLead(lead); }
+      catch {
+        if (snap) setLeads(prev => prev.map(x => x.id === lead.id ? snap : x));
+        syncErr("Błąd aktualizacji leada");
+      }
+    }
+  };
+
+  const handleDeleteLead = async (id) => {
+    const snap = leads.find(x => x.id === id);
+    setLeads(prev => prev.filter(l => l.id !== id));
+    if (GAS_ON) {
+      try { await GAS.deleteLead(id); }
+      catch {
+        if (snap) setLeads(prev => [snap, ...prev]);
+        syncErr("Błąd usuwania leada");
+      }
+    }
+  };
+
   // ── Project docs ──────────────────────────────────────────────────────────
   const handleAddProjectDoc = async (d) => {
     setProjectDocs(prev => [...prev, d]);
@@ -369,8 +397,10 @@ export default function Admin() {
         return (
           <Klienci
             clients={clients} projects={projects}
+            leads={leads}
             onAddClient={handleAddClient} onUpdateClient={handleUpdateClient}
             onDeleteClient={handleDeleteClient}
+            onUpdateLead={handleUpdateLead} onDeleteLead={handleDeleteLead}
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
             onOpenAddProject={openAddProject}
           />

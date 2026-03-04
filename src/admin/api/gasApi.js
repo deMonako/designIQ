@@ -197,3 +197,36 @@ export async function uploadFile(file, projectId = null) {
     projectId,
   });
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// LEADY (konfigurator)
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera wszystkie leady z konfiguratora */
+export async function getLeads() {
+  return gasGet("getLeads");
+}
+
+/** Aktualizuje lead (status, notatki) */
+export async function updateLead(lead) {
+  return gasPost("updateLead", { lead });
+}
+
+/** Usuwa lead */
+export async function deleteLead(id) {
+  return gasPost("deleteLead", { id });
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+// WIADOMOŚCI (panel klienta ↔ admin)
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera wiadomości dla projektu */
+export async function getWiadomosci(projectId) {
+  return gasGet("getWiadomosci", { projectId });
+}
+
+/** Dodaje wiadomość od admina do klienta */
+export async function addAdminMessage(projectId, content, author = "Admin") {
+  return gasPost("addAdminMessage", { projectId, content, author });
+}

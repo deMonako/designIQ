@@ -4,6 +4,7 @@ import {
   Users, Plus, X, ArrowLeft, Phone, Mail, Building2,
   FolderKanban, ChevronRight, Archive, Search, UserPlus,
   Edit3, CheckCircle2, Calendar, Tag, Trash2, AlertTriangle,
+  Inbox, UserCheck, ExternalLink,
 } from "lucide-react";
 import { TODAY } from "../mockData";
 
@@ -451,10 +452,279 @@ function AddClientModal({ onAdd, onClose }) {
   );
 }
 
+// ── Lead status options ─────────────────────────────────────────────────────
+const LEAD_STATUSES = ["Nowy", "W trakcie", "Wyceniony", "Wygrany", "Odrzucony"];
+
+const LEAD_STATUS_META = {
+  "Nowy":      { bg: "bg-blue-50",   text: "text-blue-700",   border: "border-blue-200"   },
+  "W trakcie": { bg: "bg-amber-50",  text: "text-amber-700",  border: "border-amber-200"  },
+  "Wyceniony": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  "Wygrany":   { bg: "bg-green-50",  text: "text-green-700",  border: "border-green-200"  },
+  "Odrzucony": { bg: "bg-slate-100", text: "text-slate-500",  border: "border-slate-200"  },
+};
+
+function LeadStatusBadge({ status }) {
+  const meta = LEAD_STATUS_META[status] ?? LEAD_STATUS_META["Nowy"];
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${meta.bg} ${meta.border} ${meta.text}`}>
+      {status}
+    </span>
+  );
+}
+
+// ── LeadDetail ──────────────────────────────────────────────────────────────
+function LeadDetail({ lead, onBack, onUpdateLead, onDeleteLead, onConvertToClient }) {
+  const [editing,    setEditing]    = useState(false);
+  const [delConfirm, setDelConfirm] = useState(false);
+  const [form,       setForm]       = useState({ status: lead.status, notes: lead.notes || "" });
+
+  const configData = lead.configData || {};
+  const hasConfig  = Object.keys(configData).length > 0;
+
+  const handleSave = () => {
+    onUpdateLead({ ...lead, status: form.status, notes: form.notes });
+    setEditing(false);
+  };
+
+  return (
+    <div className="p-4 lg:p-6">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-800 mb-4 transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" /> Powrót do leadów
+      </button>
+
+      {/* Header */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">{lead.name}</h2>
+            <div className="text-xs text-slate-400 mt-0.5">Lead z konfiguratora · {lead.date?.substring(0, 10)}</div>
+          </div>
+          <LeadStatusBadge status={lead.status} />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm mb-4">
+          <div>
+            <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Phone className="w-3 h-3" /> Telefon</div>
+            <div className="font-medium text-slate-800">{lead.phone || "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Mail className="w-3 h-3" /> Email</div>
+            <div className="font-medium text-slate-800">{lead.email || "—"}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Tag className="w-3 h-3" /> Wycena</div>
+            <div className="font-medium text-green-700">
+              {lead.quoteValue ? Number(lead.quoteValue).toLocaleString("pl-PL") + " zł" : "—"}
+            </div>
+          </div>
+        </div>
+
+        {!editing ? (
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => setEditing(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-sm hover:bg-orange-100 transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edytuj status
+            </button>
+            <button
+              onClick={() => onConvertToClient(lead)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm hover:bg-green-100 transition-colors"
+            >
+              <UserCheck className="w-3.5 h-3.5" /> Konwertuj na klienta
+            </button>
+            {!delConfirm ? (
+              <button
+                onClick={() => setDelConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 rounded-lg text-sm hover:bg-red-100 transition-colors ml-auto"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Usuń
+              </button>
+            ) : (
+              <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-xl w-full">
+                <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <p className="text-sm text-red-700 flex-1">Usunąć lead <strong>{lead.name}</strong>?</p>
+                <button onClick={() => setDelConfirm(false)} className="px-3 py-1.5 border border-red-200 rounded-lg text-sm text-red-600 hover:bg-white">Anuluj</button>
+                <button onClick={() => { onDeleteLead(lead.id); onBack(); }} className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-bold hover:bg-red-600">Usuń</button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1 font-medium">Status</label>
+                <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
+                  {LEAD_STATUSES.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1 font-medium">Notatki</label>
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none resize-none h-20 focus:ring-2 focus:ring-orange-500/20"
+                placeholder="Notatki wewnętrzne..." />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleSave} className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Zapisz
+              </button>
+              <button onClick={() => setEditing(false)} className="px-4 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Anuluj</button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Notatki */}
+      {!editing && lead.notes && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-4">
+          <h3 className="font-semibold text-slate-900 text-sm mb-2 flex items-center gap-2">
+            <Tag className="w-4 h-4 text-orange-500" /> Notatki
+          </h3>
+          <p className="text-sm text-slate-600 whitespace-pre-wrap">{lead.notes}</p>
+        </div>
+      )}
+
+      {/* Config data z konfiguratora */}
+      {hasConfig && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+          <h3 className="font-semibold text-slate-900 text-sm mb-3 flex items-center gap-2">
+            <ExternalLink className="w-4 h-4 text-orange-500" /> Dane z konfiguratora
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {Object.entries(configData).map(([key, value]) => (
+              <div key={key} className="flex gap-2 text-sm">
+                <span className="text-slate-400 min-w-0 truncate">{key}:</span>
+                <span className="font-medium text-slate-800 truncate">{String(value)}</span>
+              </div>
+            ))}
+          </div>
+          {lead.quoteValue > 0 && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-sm text-slate-500">Szacowana wycena</span>
+              <span className="text-lg font-bold text-green-700">{Number(lead.quoteValue).toLocaleString("pl-PL")} zł</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── LeadsList ───────────────────────────────────────────────────────────────
+function LeadsList({ leads, onSelectLead, onUpdateLead }) {
+  const [search,        setSearch]        = useState("");
+  const [statusFilter,  setStatusFilter]  = useState("Wszystkie");
+
+  const filtered = useMemo(() => {
+    let list = leads;
+    if (statusFilter !== "Wszystkie") list = list.filter(l => l.status === statusFilter);
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(l =>
+        l.name.toLowerCase().includes(q) ||
+        (l.email ?? "").toLowerCase().includes(q) ||
+        (l.phone ?? "").includes(q)
+      );
+    }
+    return [...list].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  }, [leads, search, statusFilter]);
+
+  const counts = useMemo(() => {
+    const c = {};
+    LEAD_STATUSES.forEach(s => { c[s] = leads.filter(l => l.status === s).length; });
+    return c;
+  }, [leads]);
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Szukaj lead..."
+            className="pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 w-52"
+          />
+        </div>
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 shadow-sm flex-wrap">
+          {["Wszystkie", ...LEAD_STATUSES].map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
+                statusFilter === s ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
+              }`}
+            >
+              {s}{s !== "Wszystkie" && counts[s] > 0 ? ` (${counts[s]})` : ""}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-xs text-slate-400">{leads.length} leadów łącznie</span>
+      </div>
+
+      {/* Stats */}
+      <div className="flex gap-2 flex-wrap">
+        {LEAD_STATUSES.map(s => {
+          const meta = LEAD_STATUS_META[s];
+          return counts[s] > 0 ? (
+            <span key={s} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${meta.bg} ${meta.border} ${meta.text}`}>
+              {s}: <strong>{counts[s]}</strong>
+            </span>
+          ) : null;
+        })}
+      </div>
+
+      {/* List */}
+      {filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center text-slate-400">
+          <Inbox className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">{search || statusFilter !== "Wszystkie" ? "Brak wyników" : "Brak leadów z konfiguratora"}</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+          {filtered.map(lead => (
+            <div
+              key={lead.id}
+              className="px-5 py-3 flex items-center gap-3 hover:bg-slate-50 cursor-pointer transition-colors group"
+              onClick={() => onSelectLead(lead)}
+            >
+              <div className="w-9 h-9 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                <Inbox className="w-4 h-4 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-slate-800 text-sm">{lead.name}</div>
+                <div className="text-xs text-slate-400">{lead.phone} · {lead.email}</div>
+              </div>
+              <div className="text-right flex-shrink-0 space-y-1">
+                <div><LeadStatusBadge status={lead.status} /></div>
+                {lead.quoteValue > 0 && (
+                  <div className="text-xs font-semibold text-green-700">{Number(lead.quoteValue).toLocaleString("pl-PL")} zł</div>
+                )}
+              </div>
+              <div className="text-right flex-shrink-0 hidden sm:block">
+                <div className="text-xs text-slate-400">{lead.date?.substring(0, 10)}</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-orange-400 flex-shrink-0" />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Klienci component ─────────────────────────────────────────────────
-export default function Klienci({ clients, projects, onUpdateClient, onAddClient, onDeleteClient, onNavigateToProject, onOpenAddProject }) {
+export default function Klienci({ clients, projects, leads = [], onUpdateClient, onAddClient, onDeleteClient, onUpdateLead, onDeleteLead, onNavigateToProject, onOpenAddProject }) {
   const [viewMode,       setViewMode]       = useState("pipeline");
   const [selectedClient, setSelectedClient] = useState(null);
+  const [selectedLead,   setSelectedLead]   = useState(null);
   const [draggedId,      setDraggedId]      = useState(null);
   const [dragOverStage,  setDragOverStage]  = useState(null);
   const [search,         setSearch]         = useState("");
@@ -488,6 +758,26 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
     ? (clients.find(c => c.id === selectedClient.id) ?? selectedClient)
     : null;
 
+  // Convert lead to client – pre-fill from lead data
+  const handleConvertToClient = (lead) => {
+    onAddClient({
+      id:             `cl-${Date.now()}`,
+      name:           lead.name,
+      company:        null,
+      email:          lead.email || "",
+      phone:          lead.phone || "",
+      source:         "Konfigurator",
+      pipelineStatus: "Lead",
+      createdDate:    TODAY,
+      notes:          lead.notes || "",
+      isArchived:     false,
+    });
+    // Mark lead as won
+    onUpdateLead?.({ ...lead, status: "Wygrany" });
+    setSelectedLead(null);
+    setViewMode("pipeline");
+  };
+
   if (resolvedSelected) {
     return (
       <ClientDetail
@@ -498,6 +788,18 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
         onDeleteClient={onDeleteClient}
         onNavigateToProject={onNavigateToProject}
         onOpenAddProject={onOpenAddProject}
+      />
+    );
+  }
+
+  if (selectedLead) {
+    return (
+      <LeadDetail
+        lead={selectedLead}
+        onBack={() => setSelectedLead(null)}
+        onUpdateLead={(updated) => { onUpdateLead?.(updated); setSelectedLead(updated); }}
+        onDeleteLead={onDeleteLead}
+        onConvertToClient={handleConvertToClient}
       />
     );
   }
@@ -513,6 +815,17 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${viewMode === "pipeline" ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
           >
             Pipeline
+          </button>
+          <button
+            onClick={() => setViewMode("leads")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-all ${viewMode === "leads" ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"}`}
+          >
+            <Inbox className="w-3.5 h-3.5" />
+            Leady{leads.filter(l => l.status === "Nowy").length > 0 && (
+              <span className="bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {leads.filter(l => l.status === "Nowy").length}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setViewMode("archive")}
@@ -531,20 +844,31 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
         </button>
       </div>
 
-      {/* Stage stats chips */}
-      <div className="flex gap-2 flex-wrap">
-        {STAGES.map(stage => {
-          const count = activeClients.filter(c => c.pipelineStatus === stage).length;
-          const meta  = STAGE_META[stage];
-          return (
-            <span key={stage} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${meta.bg} ${meta.border} ${meta.text}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-              {stage}: <strong>{count}</strong>
-            </span>
-          );
-        })}
-        <span className="ml-auto text-xs text-slate-400 self-center">{activeClients.length} aktywnych</span>
-      </div>
+      {/* Stage stats chips – only for pipeline/archive views */}
+      {viewMode !== "leads" && (
+        <div className="flex gap-2 flex-wrap">
+          {STAGES.map(stage => {
+            const count = activeClients.filter(c => c.pipelineStatus === stage).length;
+            const meta  = STAGE_META[stage];
+            return (
+              <span key={stage} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${meta.bg} ${meta.border} ${meta.text}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                {stage}: <strong>{count}</strong>
+              </span>
+            );
+          })}
+          <span className="ml-auto text-xs text-slate-400 self-center">{activeClients.length} aktywnych</span>
+        </div>
+      )}
+
+      {/* ── Leads view ── */}
+      {viewMode === "leads" && (
+        <LeadsList
+          leads={leads}
+          onSelectLead={setSelectedLead}
+          onUpdateLead={onUpdateLead}
+        />
+      )}
 
       {/* ── Pipeline view ── */}
       {viewMode === "pipeline" && (
@@ -616,7 +940,7 @@ export default function Klienci({ clients, projects, onUpdateClient, onAddClient
         </div>
       )}
 
-      {/* ── Instrukcja (widoczna gdy brak klientów) ── */}
+      {/* ── Instrukcja (widoczna gdy brak klientów w pipeline) ── */}
       {viewMode === "pipeline" && activeClients.length === 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 text-sm text-blue-700">
           <strong>Jak korzystać z modułu Klienci?</strong>
