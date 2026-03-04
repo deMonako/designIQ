@@ -160,6 +160,9 @@ export default function Admin() {
             clients={clients}
             onUpdateProject={handleUpdateProject}
             onAddTask={handleAddTask}
+            onUpdateTask={handleUpdateTask}
+            onAddChecklist={handleAddChecklist}
+            onToggleChecklistItem={handleToggleChecklistItem}
             selectedProject={selectedProject}
             setSelectedProject={setSelectedProject}
             projectDocs={projectDocs}
