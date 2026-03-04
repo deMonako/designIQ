@@ -110,7 +110,7 @@ function HBar({ label, value, max, color, count }) {
 }
 
 // ── Project health card ───────────────────────────────────────────────────────
-function ProjectHealthCard({ project, tasks }) {
+function ProjectHealthCard({ project, tasks, onNavigate }) {
   const projTasks  = tasks.filter(t => t.projectId === project.id && t.type === "task");
   const doneTasks  = projTasks.filter(t => t.status === "Zrobione").length;
   const lateTasks  = projTasks.filter(t => isOverdue(t.dueDate, t.status)).length;
@@ -130,9 +130,12 @@ function ProjectHealthCard({ project, tasks }) {
   };
 
   return (
-    <div className={`bg-white rounded-xl border p-4 shadow-sm hover:shadow-md transition-shadow ${
-      isLate ? "border-red-200" : isUrgent ? "border-orange-200" : "border-slate-200"
-    }`}>
+    <div
+      onClick={() => onNavigate?.(project)}
+      className={`bg-white rounded-xl border p-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${
+        isLate ? "border-red-200 hover:border-red-300" : isUrgent ? "border-orange-200 hover:border-orange-300" : "border-slate-200 hover:border-slate-300"
+      }`}
+    >
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <p className="font-bold text-slate-900 text-sm truncate">{project.name}</p>
@@ -407,7 +410,7 @@ function UpcomingTask({ task, project }) {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-export default function Analityka({ projects, tasks, checklists, clients = [] }) {
+export default function Analityka({ projects, tasks, checklists, clients = [], onNavigateToProject }) {
   const onlyTasks    = tasks.filter(t => t.type === "task");
   const activeProj   = projects.filter(p => p.status === "W trakcie");
   const overdueCount = onlyTasks.filter(t => isOverdue(t.dueDate, t.status)).length;
@@ -484,7 +487,7 @@ export default function Analityka({ projects, tasks, checklists, clients = [] })
         <SectionHeader icon={Target} title="Projekty pod lupą" sub="Zdrowie i terminowość aktywnych projektów" />
         {activeProj.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeProj.map(p => <ProjectHealthCard key={p.id} project={p} tasks={tasks} />)}
+            {activeProj.map(p => <ProjectHealthCard key={p.id} project={p} tasks={tasks} onNavigate={onNavigateToProject} />)}
           </div>
         ) : (
           <p className="text-sm text-slate-400 text-center py-6">Brak aktywnych projektów</p>

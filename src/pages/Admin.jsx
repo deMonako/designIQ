@@ -204,7 +204,8 @@ export default function Admin() {
       case "materialy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
       case "analityka":
-        return <Analityka projects={projects} tasks={tasks} checklists={checklists} clients={clients} />;
+        return <Analityka projects={projects} tasks={tasks} checklists={checklists} clients={clients}
+          onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }} />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:
