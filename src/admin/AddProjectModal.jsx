@@ -1,9 +1,55 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  X, FolderKanban, User, MapPin, DollarSign, Calendar, Key,
+  X, Plus, ChevronUp, ChevronDown, FolderKanban, User, MapPin, DollarSign, Calendar, Key, Layers,
 } from "lucide-react";
 import { TODAY } from "./mockData";
+
+const DEFAULT_STAGES = ["Wycena", "Projekt automatyki", "Projekt szafy", "Prefabrykacja", "Montaż", "Uruchomienie", "Szkolenie", "Odbiór"];
+
+function StagesEditor({ stages, onChange }) {
+  const add    = () => onChange([...stages, ""]);
+  const remove = (i) => stages.length > 1 && onChange(stages.filter((_, j) => j !== i));
+  const update = (i, v) => onChange(stages.map((x, j) => j === i ? v : x));
+  const move   = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= stages.length) return;
+    const a = [...stages]; [a[i], a[j]] = [a[j], a[i]]; onChange(a);
+  };
+  return (
+    <div>
+      <div className="space-y-1.5 mb-3">
+        {stages.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 select-none">{i + 1}</span>
+            <input
+              value={s}
+              onChange={e => update(i, e.target.value)}
+              placeholder={`Etap ${i + 1}`}
+              className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+            />
+            <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+              className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors">
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => move(i, 1)} disabled={i === stages.length - 1}
+              className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors">
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => remove(i)} disabled={stages.length <= 1}
+              className="p-1 text-slate-300 hover:text-red-500 disabled:opacity-20 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={add}
+        className="flex items-center gap-1.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors">
+        <Plus className="w-3.5 h-3.5" /> Dodaj etap
+      </button>
+    </div>
+  );
+}
 
 const NEW_CLIENT_ID = "__new__";
 const PACKAGES = ["Smart design", "Smart design+", "Full house"];
@@ -31,6 +77,8 @@ export default function AddProjectModal({ clients, projects, initialClientId, on
 
   const initClient   = activeClients.find(c => c.id === defaultClientId);
   const defaultCode  = initClient ? generateCode(initClient.name, projects) : "";
+
+  const [stages, setStages] = useState([...DEFAULT_STAGES]);
 
   const [form, setForm] = useState({
     clientId:            defaultClientId,
@@ -104,7 +152,7 @@ export default function AddProjectModal({ clients, projects, initialClientId, on
       package:             form.package,
       status:              form.status,
       stageIndex:          0,
-      stages:              ["Wycena", "Projekt automatyki", "Projekt szafy", "Prefabrykacja", "Montaż", "Uruchomienie", "Szkolenie", "Odbiór"],
+      stages:              stages.filter(s => s.trim()),
       stageSchedule:       [],
       progress:            0,
       startDate:           form.startDate,
@@ -238,6 +286,12 @@ export default function AddProjectModal({ clients, projects, initialClientId, on
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* ── Etapy ── */}
+          <div className={sCls}>
+            <div className={tCls}><Layers className="w-3.5 h-3.5" /> Etapy projektu</div>
+            <StagesEditor stages={stages} onChange={setStages} />
           </div>
 
           {/* ── Szczegóły ── */}

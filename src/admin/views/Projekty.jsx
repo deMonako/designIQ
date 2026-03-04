@@ -5,8 +5,53 @@ import {
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
   DollarSign, Save, List, Key, Layers, Receipt, Download,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
+
+function StagesEditor({ stages, onChange }) {
+  const add    = () => onChange([...stages, ""]);
+  const remove = (i) => stages.length > 1 && onChange(stages.filter((_, j) => j !== i));
+  const update = (i, v) => onChange(stages.map((x, j) => j === i ? v : x));
+  const move   = (i, dir) => {
+    const j = i + dir;
+    if (j < 0 || j >= stages.length) return;
+    const a = [...stages]; [a[i], a[j]] = [a[j], a[i]]; onChange(a);
+  };
+  return (
+    <div>
+      <div className="space-y-1.5 mb-3">
+        {stages.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <span className="w-5 h-5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0 select-none">{i + 1}</span>
+            <input
+              value={s}
+              onChange={e => update(i, e.target.value)}
+              placeholder={`Etap ${i + 1}`}
+              className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
+            />
+            <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+              className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors">
+              <ChevronUp className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => move(i, 1)} disabled={i === stages.length - 1}
+              className="p-1 text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors">
+              <ChevronDown className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => remove(i)} disabled={stages.length <= 1}
+              className="p-1 text-slate-300 hover:text-red-500 disabled:opacity-20 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" onClick={add}
+        className="flex items-center gap-1.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors">
+        <Plus className="w-3.5 h-3.5" /> Dodaj etap
+      </button>
+    </div>
+  );
+}
 
 const TASK_PRIORITIES = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
@@ -155,8 +200,17 @@ function ProjectDetail({
   useEffect(() => { if (!editingProject) setEditForm({ ...project }); }, [project]); // eslint-disable-line
   const setEF = (k, v) => setEditForm(f => ({ ...f, [k]: v }));
   const handleSaveProject = () => {
+    const newStages = (editForm.stages || project.stages).filter(s => s.trim());
+    const oldSched  = project.stageSchedule || [];
+    const newSched  = newStages.map(name => {
+      const existing = oldSched.find(s => s.name === name);
+      return existing || { name, start: editForm.startDate || project.startDate || TODAY, end: editForm.deadline || project.deadline || TODAY };
+    });
     onUpdateProject({
       ...editForm,
+      stages:    newStages,
+      stageIndex: Math.min(editForm.stageIndex ?? 0, newStages.length - 1),
+      stageSchedule: newSched,
       profitProjekt:       parseFloat(editForm.profitProjekt)       || 0,
       profitPrefabrykacja: parseFloat(editForm.profitPrefabrykacja) || 0,
       profitUruchomienie:  parseFloat(editForm.profitUruchomienie)  || 0,
@@ -311,7 +365,6 @@ function ProjectDetail({
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
-    { id: "overview",     label: "Przegląd" },
   ];
 
   const activeTasks = projectTasks.filter(t => t.status !== "Zrobione");
@@ -547,6 +600,15 @@ function ProjectDetail({
                   </div>
                 </div>
 
+                {/* Row 5: stages */}
+                <div>
+                  <label className={lCls + " flex items-center gap-1 mb-2"}><Layers className="w-3 h-3" /> Etapy projektu</label>
+                  <StagesEditor
+                    stages={editForm.stages || project.stages}
+                    onChange={v => setEF("stages", v)}
+                  />
+                </div>
+
                 {/* Save / cancel */}
                 <div className="flex gap-2 pt-1">
                   <button onClick={() => setEditingProject(false)}
@@ -582,17 +644,16 @@ function ProjectDetail({
       <AnimatePresence mode="wait">
         <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
 
-          {/* ══ HARMONOGRAM ══ */}
+          {/* ══ HARMONOGRAM (scalony z Przeglądem) ══ */}
           {activeTab === "harmonogram" && (
             <div className="space-y-4">
-              {/* Gantt card */}
+
+              {/* ── Etapy + Gantt ── */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="font-semibold text-slate-900 text-sm">Harmonogram etapów</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {project.startDate} → {project.deadline}
-                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">{project.startDate} → {project.deadline}</p>
                   </div>
                   <button
                     onClick={() => { setEditingSchedule(v => !v); if (editingSchedule) setScheduleForm(buildScheduleForm()); }}
@@ -607,101 +668,114 @@ function ProjectDetail({
                   </button>
                 </div>
 
-                {gantt ? (
-                  <div className="overflow-x-auto">
-                    <div style={{ minWidth: "480px" }}>
-                      {/* Month header */}
-                      <div className="flex mb-2 pl-36">
-                        {gantt.months.map((m, mi) => (
-                          <div key={mi} style={{ width: `${m.width}%` }}
-                            className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide px-1 border-l border-slate-100 first:border-l-0 truncate">
-                            {m.label}
-                          </div>
-                        ))}
-                      </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
 
-                      {/* Stage rows */}
-                      {scheduleForm.map((stage, i) => {
-                        const bar = gantt.bars[i];
+                  {/* Lewa kolumna: lista etapów (klikalna) */}
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">
+                      Kliknij aby ustawić bieżący etap
+                    </p>
+                    <div className="space-y-1">
+                      {project.stages.map((stage, idx) => {
+                        const done    = idx < project.stageIndex;
+                        const current = idx === project.stageIndex;
+                        const sched   = scheduleForm[idx];
                         return (
-                          <div key={i} className="flex items-center mb-2 group">
-                            {/* Stage name */}
-                            <div className="w-36 flex-shrink-0 pr-3 flex items-center gap-1.5">
-                              <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
-                                bar.done    ? "bg-green-100 text-green-700"
-                                : bar.current ? "bg-orange-100 text-orange-700"
-                                : "bg-slate-100 text-slate-400"
-                              }`}>{bar.done ? "✓" : i + 1}</span>
-                              <span className={`text-xs font-medium truncate ${
-                                bar.done ? "text-slate-400 line-through" : bar.current ? "text-slate-900" : "text-slate-500"
-                              }`}>{stage.name}</span>
+                          <button
+                            key={idx}
+                            onClick={() => onUpdateProject({ ...project, stageIndex: idx })}
+                            className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-all group ${
+                              current ? "bg-orange-50 border border-orange-200" : "hover:bg-slate-50 border border-transparent"
+                            }`}
+                          >
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-colors ${
+                              done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                            }`}>{done ? "✓" : idx + 1}</div>
+                            <div className="flex-1 min-w-0">
+                              <span className={`text-sm block truncate ${done ? "line-through text-slate-400" : current ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
+                                {stage}
+                              </span>
+                              {sched?.start && sched?.end && (
+                                <span className="text-[10px] text-slate-400">{sched.start} – {sched.end}</span>
+                              )}
                             </div>
-
-                            {/* Gantt bar area */}
-                            <div className="flex-1 relative h-7 bg-slate-50 rounded-lg overflow-hidden">
-                              {/* Month grid lines */}
-                              {gantt.months.map((m, mi) => mi > 0 && (
-                                <div key={mi} style={{ left: `${m.left}%` }}
-                                  className="absolute top-0 bottom-0 border-l border-slate-200/70" />
-                              ))}
-                              {/* Today line */}
-                              {(() => {
-                                const minMs = Math.min(...scheduleForm.map(s => +new Date(s.start)));
-                                const maxMs = Math.max(...scheduleForm.map(s => +new Date(s.end)));
-                                const todayPct = ((+new Date(TODAY) - minMs) / (maxMs - minMs)) * 100;
-                                return todayPct > 0 && todayPct < 100 ? (
-                                  <div style={{ left: `${todayPct}%` }}
-                                    className="absolute top-0 bottom-0 border-l-2 border-orange-400/60 z-10" />
-                                ) : null;
-                              })()}
-                              {/* Bar */}
-                              <div
-                                style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
-                                className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-semibold transition-all ${
-                                  bar.done    ? "bg-green-200 text-green-800 border border-green-300"
-                                  : bar.current ? "bg-orange-200 text-orange-900 border border-orange-300 shadow-sm"
-                                  : "bg-slate-200 text-slate-600 border border-slate-300"
-                                }`}
-                              >
-                                {bar.width > 8 ? `${bar.days}d` : ""}
-                              </div>
-                            </div>
-
-                            {/* Dates */}
-                            <div className="w-32 flex-shrink-0 pl-3 text-[10px] text-slate-400 text-right hidden sm:block">
-                              {stage.start} → {stage.end}
-                            </div>
-                          </div>
+                            {current && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">Aktualny</span>}
+                          </button>
                         );
                       })}
-
-                      {/* Legend */}
-                      <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 pl-36">
-                        {[
-                          { cls: "bg-green-200 border-green-300", label: "Ukończony" },
-                          { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
-                          { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
-                          { cls: "border-l-2 border-orange-400/60 h-4 w-0", label: "Dziś", noBox: true },
-                        ].map(({ cls, label, noBox }) => (
-                          <div key={label} className="flex items-center gap-1.5">
-                            {noBox
-                              ? <div className={cls} />
-                              : <div className={`w-3 h-3 rounded border ${cls}`} />
-                            }
-                            <span className="text-[10px] text-slate-400">{label}</span>
-                          </div>
-                        ))}
-                      </div>
                     </div>
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-400 text-sm">
-                    Brak danych harmonogramu. Kliknij <strong>Edytuj daty</strong> aby dodać.
+
+                  {/* Prawa kolumna: Gantt */}
+                  <div>
+                    {gantt ? (
+                      <div className="overflow-x-auto">
+                        <div style={{ minWidth: "300px" }}>
+                          {/* Month header */}
+                          <div className="flex mb-2">
+                            {gantt.months.map((m, mi) => (
+                              <div key={mi} style={{ width: `${m.width}%` }}
+                                className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide px-1 border-l border-slate-100 first:border-l-0 truncate">
+                                {m.label}
+                              </div>
+                            ))}
+                          </div>
+                          {/* Gantt bars */}
+                          {(() => {
+                            const minMs    = Math.min(...scheduleForm.map(s => +new Date(s.start)));
+                            const maxMs    = Math.max(...scheduleForm.map(s => +new Date(s.end)));
+                            const todayPct = ((+new Date(TODAY) - minMs) / (maxMs - minMs)) * 100;
+                            return scheduleForm.map((stage, i) => {
+                              const bar = gantt.bars[i];
+                              return (
+                                <div key={i} className="relative h-7 bg-slate-50 rounded-lg mb-1.5 overflow-hidden">
+                                  {gantt.months.map((m, mi) => mi > 0 && (
+                                    <div key={mi} style={{ left: `${m.left}%` }}
+                                      className="absolute top-0 bottom-0 border-l border-slate-200/70" />
+                                  ))}
+                                  {todayPct > 0 && todayPct < 100 && (
+                                    <div style={{ left: `${todayPct}%` }}
+                                      className="absolute top-0 bottom-0 border-l-2 border-orange-400/70 z-10 pointer-events-none" />
+                                  )}
+                                  <div
+                                    style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
+                                    className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-semibold ${
+                                      bar.done    ? "bg-green-200 text-green-800 border border-green-300"
+                                      : bar.current ? "bg-orange-200 text-orange-900 border border-orange-300 shadow-sm"
+                                      : "bg-slate-200 text-slate-600 border border-slate-300"
+                                    }`}
+                                  >
+                                    {bar.width > 12 ? `${bar.days}d` : ""}
+                                  </div>
+                                </div>
+                              );
+                            });
+                          })()}
+                          {/* Legend */}
+                          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-100">
+                            {[
+                              { cls: "bg-green-200 border-green-300", label: "Ukończony" },
+                              { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
+                              { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
+                            ].map(({ cls, label }) => (
+                              <div key={label} className="flex items-center gap-1">
+                                <div className={`w-3 h-3 rounded border ${cls}`} />
+                                <span className="text-[10px] text-slate-400">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full min-h-[100px] text-sm text-slate-400 text-center px-4">
+                        Brak harmonogramu. Kliknij <strong className="mx-1 text-orange-600">Edytuj daty</strong> aby dodać daty etapów.
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
-              {/* Editable schedule form */}
+              {/* ── Edycja dat (rozwijana) ── */}
               <AnimatePresence>
                 {editingSchedule && (
                   <motion.div
@@ -710,65 +784,44 @@ function ProjectDetail({
                   >
                     <div className="bg-white rounded-2xl border border-orange-200 shadow-sm p-5">
                       <h3 className="font-semibold text-slate-900 text-sm mb-4 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-orange-500" />
-                        Edycja dat etapów
+                        <Calendar className="w-4 h-4 text-orange-500" /> Edycja dat etapów
                       </h3>
-
                       <div className="space-y-2 mb-5">
-                        {/* Header row */}
                         <div className="grid grid-cols-[1fr_140px_140px] gap-3 px-1 mb-1">
                           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Etap</span>
                           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Rozpoczęcie</span>
                           <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Zakończenie</span>
                         </div>
-
                         {scheduleForm.map((stage, i) => {
                           const isDone    = i < project.stageIndex;
                           const isCurrent = i === project.stageIndex;
-                          const durDays = Math.round((+new Date(stage.end) - +new Date(stage.start)) / 86400000);
+                          const durDays   = Math.round((+new Date(stage.end) - +new Date(stage.start)) / 86400000);
                           return (
-                            <div key={i} className={`grid grid-cols-[1fr_140px_140px] items-center gap-3 p-2 rounded-xl transition-colors ${
+                            <div key={i} className={`grid grid-cols-[1fr_140px_140px] items-center gap-3 p-2 rounded-xl ${
                               isCurrent ? "bg-orange-50" : isDone ? "bg-green-50/50" : "hover:bg-slate-50"
                             }`}>
                               <div className="flex items-center gap-2 min-w-0">
                                 <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center flex-shrink-0 ${
-                                  isDone    ? "bg-green-100 text-green-700"
-                                  : isCurrent ? "bg-orange-100 text-orange-700"
-                                  : "bg-slate-100 text-slate-500"
+                                  isDone ? "bg-green-100 text-green-700" : isCurrent ? "bg-orange-100 text-orange-700" : "bg-slate-100 text-slate-500"
                                 }`}>{isDone ? "✓" : i + 1}</span>
                                 <span className="text-sm font-medium text-slate-700 truncate">{stage.name}</span>
-                                {durDays > 0 && (
-                                  <span className="text-[10px] text-slate-400 ml-auto flex-shrink-0">{durDays}d</span>
-                                )}
+                                {durDays > 0 && <span className="text-[10px] text-slate-400 ml-auto flex-shrink-0">{durDays}d</span>}
                               </div>
-                              <input
-                                type="date"
-                                value={stage.start}
-                                onChange={e => setStageDate(i, "start", e.target.value)}
-                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-                              />
-                              <input
-                                type="date"
-                                value={stage.end}
-                                onChange={e => setStageDate(i, "end", e.target.value)}
-                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
-                              />
+                              <input type="date" value={stage.start} onChange={e => setStageDate(i, "start", e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all" />
+                              <input type="date" value={stage.end} onChange={e => setStageDate(i, "end", e.target.value)}
+                                className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all" />
                             </div>
                           );
                         })}
                       </div>
-
                       <div className="flex gap-2 pt-1 border-t border-slate-100">
-                        <button
-                          onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); }}
-                          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors"
-                        >
+                        <button onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); }}
+                          className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">
                           Anuluj
                         </button>
-                        <button
-                          onClick={saveSchedule}
-                          className="flex-1 px-3 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-1.5"
-                        >
+                        <button onClick={saveSchedule}
+                          className="flex-1 px-3 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold hover:shadow-md transition-all flex items-center justify-center gap-1.5">
                           <Save className="w-3.5 h-3.5" /> Zapisz harmonogram
                         </button>
                       </div>
@@ -776,41 +829,8 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
-          )}
 
-          {/* ══ OVERVIEW ══ */}
-          {activeTab === "overview" && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <h3 className="font-semibold text-slate-900 text-sm mb-1">Etapy realizacji</h3>
-                <p className="text-xs text-slate-400 mb-4">Kliknij etap, aby ustawić go jako bieżący</p>
-                <div className="space-y-1.5">
-                  {project.stages.map((stage, idx) => {
-                    const done    = idx < project.stageIndex;
-                    const current = idx === project.stageIndex;
-                    return (
-                      <button
-                        key={idx}
-                        onClick={() => onUpdateProject({ ...project, stageIndex: idx })}
-                        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 transition-all text-left group ${
-                          current ? "bg-orange-50 border border-orange-200" : "hover:bg-slate-50 border border-transparent"
-                        }`}
-                      >
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-colors ${
-                          done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
-                        }`}>
-                          {done ? "✓" : idx + 1}
-                        </div>
-                        <span className={`text-sm flex-1 ${done ? "line-through text-slate-400" : current ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
-                          {stage}
-                        </span>
-                        {current && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium flex-shrink-0">Aktualny</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              {/* ── Statystyki ── */}
               <div className="grid grid-cols-3 gap-3">
                 {[
                   { label: "Zadania", value: `${tasksDone}/${projectTasks.length}`, icon: CheckCircle2, color: "text-blue-500" },
@@ -824,6 +844,7 @@ function ProjectDetail({
                   </div>
                 ))}
               </div>
+
               {project.tags?.length > 0 && (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
                   <div className="text-xs text-slate-400 mb-2 flex items-center gap-1"><Tag className="w-3 h-3" /> Tagi</div>
