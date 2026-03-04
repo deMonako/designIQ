@@ -1,22 +1,23 @@
-// ── GAS HTTP Client ────────────────────────────────────────────────────────────
+// ── GAS HTTP Client ─────────────────────────────────────────────────────────────
 // Niskopoziomowy wrapper do komunikacji z Google Apps Script.
-// GAS Web App obsługuje GET (odczyt) i POST (zapis).
-// Odpowiedź zawsze ma format: { ok: true, data: [...] } lub { ok: false, error: "..." }
+//
+// CORS: GAS Web App obsługuje CORS automatycznie dla "simple requests".
+// Aby uniknąć CORS preflight (OPTIONS), POST wysyłamy BEZ Content-Type: application/json
+// – przeglądarka domyślnie ustawia text/plain dla string body, co jest "simple request".
+// W GAS doPost() body odczytujemy przez e.postData.contents (JSON string).
 
 import { GAS_CONFIG } from "./gasConfig";
 
 /**
  * GET – pobieranie danych z GAS
- * @param {string} action  - nazwa akcji zdefiniowanej w doGet() GAS
+ * @param {string} action  - nazwa akcji w doGet() GAS
  * @param {object} params  - dodatkowe query params (np. { projectId: "proj-1" })
- * @returns {Promise<any>}
  */
 export async function gasGet(action, params = {}) {
-  if (!GAS_CONFIG.scriptUrl) throw new Error("GAS: scriptUrl nie jest skonfigurowany");
+  if (!GAS_CONFIG.scriptUrl) throw new Error("GAS: scriptUrl nie jest skonfigurowany w gasConfig.js");
 
   const url = new URL(GAS_CONFIG.scriptUrl);
   url.searchParams.set("action", action);
-  url.searchParams.set("v", GAS_CONFIG.apiVersion);
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
 
   const res = await fetch(url.toString(), {
@@ -25,31 +26,30 @@ export async function gasGet(action, params = {}) {
 
   if (!res.ok) throw new Error(`GAS HTTP ${res.status}: ${res.statusText}`);
   const json = await res.json();
-  if (!json.ok) throw new Error(`GAS error: ${json.error ?? "Nieznany błąd"}`);
+  if (!json.ok) throw new Error(`GAS: ${json.error ?? "Nieznany błąd"}`);
   return json.data;
 }
 
 /**
- * POST – zapis/mutacja danych w GAS
- * @param {string} action  - nazwa akcji zdefiniowanej w doPost() GAS
+ * POST – zapis / mutacja danych w GAS
+ * @param {string} action  - nazwa akcji w doPost() GAS
  * @param {object} payload - dane do zapisu
- * @returns {Promise<any>}
+ *
+ * Celowo NIE ustawiamy Content-Type – przeglądarka użyje text/plain dla string body,
+ * co omija CORS preflight i pozwala GAS na odczyt przez e.postData.contents.
  */
 export async function gasPost(action, payload = {}) {
-  if (!GAS_CONFIG.scriptUrl) throw new Error("GAS: scriptUrl nie jest skonfigurowany");
+  if (!GAS_CONFIG.scriptUrl) throw new Error("GAS: scriptUrl nie jest skonfigurowany w gasConfig.js");
 
   const res = await fetch(GAS_CONFIG.scriptUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Version": GAS_CONFIG.apiVersion,
-    },
-    body: JSON.stringify({ action, ...payload }),
-    signal: AbortSignal.timeout(GAS_CONFIG.requestTimeout),
+    method:  "POST",
+    body:    JSON.stringify({ action, ...payload }),
+    signal:  AbortSignal.timeout(GAS_CONFIG.requestTimeout),
+    // Bez nagłówków – Content-Type defaultuje do text/plain → brak CORS preflight
   });
 
   if (!res.ok) throw new Error(`GAS HTTP ${res.status}: ${res.statusText}`);
   const json = await res.json();
-  if (!json.ok) throw new Error(`GAS error: ${json.error ?? "Nieznany błąd"}`);
+  if (!json.ok) throw new Error(`GAS: ${json.error ?? "Nieznany błąd"}`);
   return json.data;
 }

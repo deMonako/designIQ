@@ -37,6 +37,11 @@ export async function setClientArchived(id, isArchived) {
   return gasPost("setClientArchived", { id, isArchived });
 }
 
+/** Usuwa klienta */
+export async function deleteClient(id) {
+  return gasPost("deleteClient", { id });
+}
+
 // ────────────────────────────────────────────────────────────────────────────────
 // PROJEKTY
 // ────────────────────────────────────────────────────────────────────────────────
@@ -46,9 +51,19 @@ export async function getProjects() {
   return gasGet("getProjects");
 }
 
+/** Tworzy nowy projekt */
+export async function createProject(project) {
+  return gasPost("createProject", { project });
+}
+
 /** Aktualizuje projekt (status, postęp, notatki, etap itd.) */
 export async function updateProject(project) {
   return gasPost("updateProject", { project });
+}
+
+/** Usuwa projekt */
+export async function deleteProject(id) {
+  return gasPost("deleteProject", { id });
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
