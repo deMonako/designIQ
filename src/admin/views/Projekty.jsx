@@ -4,10 +4,22 @@ import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
-  DollarSign, Save, List, Key, Layers, Receipt, Download,
+  DollarSign, Save, List, Key, Layers, Receipt, Download, Upload,
   ChevronUp, ChevronDown,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
+import { uploadFile } from "../api/gasApi";
+import { GAS_CONFIG } from "../api/gasConfig";
+
+const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
+
+// rozszerzenie → typ dokumentu
+const EXT_TYPE = {
+  pdf: "pdf", xlsx: "xlsx", xls: "xlsx",
+  dwg: "dwg", dxf: "dwg",
+  docx: "docx", doc: "docx",
+  png: "image", jpg: "image", jpeg: "image", gif: "image", webp: "image", svg: "image",
+};
 
 function StagesEditor({ stages, onChange }) {
   const add    = () => onChange([...stages, ""]);
@@ -189,7 +201,10 @@ function ProjectDetail({
   const [editingNote,   setEditingNote]   = useState(false);
   const [note,          setNote]          = useState(project.notes);
   const [showAddDoc,    setShowAddDoc]    = useState(false);
-  const [newDoc,        setNewDoc]        = useState({ name: "", type: "pdf", description: "", url: "" });
+  const [newDoc,        setNewDoc]        = useState({ name: "", type: "pdf", description: "" });
+  const [docFile,       setDocFile]       = useState(null);
+  const [uploading,     setUploading]     = useState(false);
+  const [uploadError,   setUploadError]   = useState(null);
   const [showAddTask,   setShowAddTask]   = useState(false);
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
@@ -1130,40 +1145,100 @@ function ProjectDetail({
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
                     className="bg-white rounded-xl border border-orange-200 p-4 space-y-3"
                   >
+                    {/* File picker */}
+                    {!docFile ? (
+                      <label className="flex items-center gap-3 cursor-pointer border-2 border-dashed border-slate-200 rounded-xl px-4 py-4 hover:border-orange-300 hover:bg-orange-50/40 transition-all">
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Upload className="w-5 h-5 text-slate-400" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-700">Kliknij aby wybrać plik</div>
+                          <div className="text-xs text-slate-400 mt-0.5">PDF, DWG, XLSX, DOCX, obraz…</div>
+                        </div>
+                        <input type="file" className="hidden" onChange={e => {
+                          const f = e.target.files[0];
+                          if (!f) return;
+                          setDocFile(f);
+                          setUploadError(null);
+                          const ext = f.name.split(".").pop().toLowerCase();
+                          setNewDoc(d => ({ ...d, name: f.name, type: EXT_TYPE[ext] || "inne" }));
+                        }} />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-3 border border-slate-200 rounded-xl px-4 py-3 bg-slate-50">
+                        <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-semibold text-slate-800 truncate">{docFile.name}</div>
+                          <div className="text-xs text-slate-400">{(docFile.size / 1024).toFixed(0)} KB</div>
+                        </div>
+                        <button type="button" onClick={() => { setDocFile(null); setUploadError(null); }}
+                          className="p-1 text-slate-300 hover:text-red-500 transition-colors">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-3">
                       <div className="col-span-2">
-                        <label className={lCls}>Nazwa pliku / dokumentu *</label>
+                        <label className={lCls}>Nazwa wyświetlana</label>
                         <input value={newDoc.name} onChange={e => setNewDoc(d => ({ ...d, name: e.target.value }))}
-                          placeholder="np. Schemat szafy v2.pdf" className={iCls} />
+                          placeholder="np. Schemat szafy v2" className={iCls} />
                       </div>
                       <div>
                         <label className={lCls}>Typ</label>
                         <select value={newDoc.type} onChange={e => setNewDoc(d => ({ ...d, type: e.target.value }))} className={iCls}>
-                          {["pdf","xlsx","dwg","docx","image","link","inne"].map(t => <option key={t}>{t}</option>)}
+                          {["pdf","xlsx","dwg","docx","image","inne"].map(t => <option key={t}>{t}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className={lCls}>URL / link</label>
-                        <input value={newDoc.url} onChange={e => setNewDoc(d => ({ ...d, url: e.target.value }))}
-                          placeholder="https://..." className={iCls} />
-                      </div>
-                      <div className="col-span-2">
                         <label className={lCls}>Opis</label>
                         <input value={newDoc.description} onChange={e => setNewDoc(d => ({ ...d, description: e.target.value }))}
-                          placeholder="Krótki opis dokumentu..." className={iCls} />
+                          placeholder="Krótki opis…" className={iCls} />
                       </div>
                     </div>
+
+                    {uploadError && (
+                      <p className="text-xs text-red-500 font-medium">{uploadError}</p>
+                    )}
+
                     <div className="flex gap-2">
-                      <button onClick={() => setShowAddDoc(false)} className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">Anuluj</button>
+                      <button onClick={() => { setShowAddDoc(false); setDocFile(null); setUploadError(null); }}
+                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">
+                        Anuluj
+                      </button>
                       <button
-                        onClick={() => {
-                          if (!newDoc.name.trim()) return;
-                          onAddProjectDoc({ ...newDoc, id: `pd-${Date.now()}`, projectId: project.id, date: TODAY, clientVisible: false });
-                          setNewDoc({ name: "", type: "pdf", description: "", url: "" });
-                          setShowAddDoc(false);
+                        disabled={!docFile || uploading}
+                        onClick={async () => {
+                          if (!docFile) return;
+                          setUploading(true);
+                          setUploadError(null);
+                          try {
+                            const uploaded = await uploadFile(docFile, project.id);
+                            onAddProjectDoc({
+                              id: `pd-${Date.now()}`, projectId: project.id,
+                              name: newDoc.name || docFile.name,
+                              type: newDoc.type, description: newDoc.description,
+                              url: uploaded.url, driveId: uploaded.driveId,
+                              date: TODAY, clientVisible: false,
+                            });
+                            setNewDoc({ name: "", type: "pdf", description: "" });
+                            setDocFile(null);
+                            setShowAddDoc(false);
+                          } catch(err) {
+                            setUploadError("Błąd przesyłania: " + err.message);
+                          } finally {
+                            setUploading(false);
+                          }
                         }}
-                        className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600"
-                      >Dodaj</button>
+                        className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                      >
+                        {uploading
+                          ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Przesyłanie…</>
+                          : "Dodaj dokument"
+                        }
+                      </button>
                     </div>
                   </motion.div>
                 )}

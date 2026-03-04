@@ -168,13 +168,32 @@ export async function toggleDocClientVisible(id) {
 
 /**
  * Pobiera listę plików z podfolderu projektu na Google Drive.
- * Folder identyfikowany jest po project.id (tworzony automatycznie przy createProject).
- *
- * GAS zwraca tablicę:
- *   { id, name, mimeType, size, modifiedTime, webViewLink, webContentLink }
- *
  * @param {string} projectId - id projektu, np. "proj-1749123456789"
  */
 export async function getProjectFiles(projectId) {
   return gasGet("getProjectFiles", { projectId });
+}
+
+/**
+ * Przesyła plik na Google Drive.
+ * - projectId podany → folder projektu (DesignIQ/<projectId>/)
+ * - projectId null   → folder Materiały (DesignIQ/Materiały/)
+ *
+ * @param {File}    file       - obiekt File z input[type=file]
+ * @param {string?} projectId  - opcjonalne id projektu
+ * @returns {{ driveId, name, url, downloadUrl }}
+ */
+export async function uploadFile(file, projectId = null) {
+  const base64 = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = (e) => resolve(e.target.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+  return gasPost("uploadFile", {
+    base64,
+    name:      file.name,
+    mimeType:  file.type || "application/octet-stream",
+    projectId,
+  });
 }

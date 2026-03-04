@@ -212,6 +212,17 @@ function getOrCreateProjectFolder(projectId) {
   } catch(e) { return null; }
 }
 
+// Zwraca folder "Materiały" (tworzy jeśli nie istnieje)
+function getOrCreateMaterialsFolder() {
+  if (!DRIVE_FOLDER_ID) return null;
+  try {
+    var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var folders = root.getFoldersByName("Materiały");
+    if (folders.hasNext()) return folders.next();
+    return root.createFolder("Materiały");
+  } catch(e) { return null; }
+}
+
 // Listuje pliki z podfolderu projektu (nazwa folderu = project.id)
 function getDriveFiles(projectId) {
   var folder = getProjectFolder(projectId);
@@ -355,6 +366,30 @@ function doPost(e) {
         return ok(upsertRow("Checklists", Object.assign({}, obj, {
           items: (obj.items || []).concat([newItem])
         })));
+
+      // ── Upload pliku na Drive ─────────────────────────────────────────────────
+      case "uploadFile": {
+        // body: { base64, name, mimeType, projectId? }
+        // projectId → folder projektu; brak → folder Materiały
+        if (!body.base64 || !body.name) return err("Brak danych pliku");
+        var blob = Utilities.newBlob(
+          Utilities.base64Decode(body.base64),
+          body.mimeType || "application/octet-stream",
+          body.name
+        );
+        var uploadFolder = body.projectId
+          ? getOrCreateProjectFolder(body.projectId)
+          : getOrCreateMaterialsFolder();
+        if (!uploadFolder) return err("Nie można uzyskać dostępu do folderu Drive (sprawdź DRIVE_FOLDER_ID)");
+        var newFile = uploadFolder.createFile(blob);
+        newFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        return ok({
+          driveId:     newFile.getId(),
+          name:        newFile.getName(),
+          url:         newFile.getUrl(),
+          downloadUrl: "https://drive.google.com/uc?id=" + newFile.getId() + "&export=download"
+        });
+      }
 
       // ── Materiały ─────────────────────────────────────────────────────────────
       case "createMaterial":
