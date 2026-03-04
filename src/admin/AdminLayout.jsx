@@ -4,6 +4,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
   BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
   ChevronRight, Users, Search, Plus, User, Calendar,
+  CheckCircle2, AlertCircle, RefreshCw,
 } from "lucide-react";
 import { TODAY } from "./mockData";
 
@@ -50,6 +51,7 @@ export default function AdminLayout({
   currentView, setCurrentView, onLogout,
   projects = [], tasks = [], clients = [],
   onAddTask, onOpenProject, onNavigateToClient,
+  syncStatus = "synced",
   children,
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -213,18 +215,25 @@ export default function AdminLayout({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setShowSearch(true); setShowQuickAdd(false); }}
-              className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-slate-400 text-xs transition-colors"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Szukaj…</span>
-              <kbd className="font-mono bg-white border border-slate-200 rounded px-1 py-px text-[10px] text-slate-400">⌘K</kbd>
-            </button>
-            <button className="relative p-2 rounded-xl hover:bg-slate-100 text-slate-400 transition-colors">
-              <Bell className="w-[18px] h-[18px]" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-orange-500 rounded-full ring-2 ring-white" />
-            </button>
+            {/* Sync status chip */}
+            {syncStatus === "syncing" && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium">
+                <RefreshCw className="w-3 h-3 animate-spin" />
+                <span>Synchronizuję…</span>
+              </div>
+            )}
+            {syncStatus === "synced" && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 text-xs font-medium">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Zsynchronizowano</span>
+              </div>
+            )}
+            {syncStatus === "error" && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs font-medium">
+                <AlertCircle className="w-3 h-3" />
+                <span>Niezsynchronizowano</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-xl bg-slate-100/80 hover:bg-slate-100 transition-colors cursor-default">
               <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center text-white text-[11px] font-bold shadow-sm">A</div>
               <span className="hidden sm:block text-sm font-semibold text-slate-700">Adam</span>

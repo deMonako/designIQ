@@ -56,7 +56,7 @@ var HEADERS = {
     "id", "title", "category", "device", "description", "url", "date"
   ],
   "Dokumenty": [
-    "id", "projectId", "name", "type", "description", "url", "date", "clientVisible"
+    "id", "projectId", "name", "type", "description", "url", "driveId", "date", "clientVisible"
   ],
   // ── Konfigurator – zapytania z wyceny ────────────────────────────────────────
   "Leady": [
@@ -211,6 +211,11 @@ function err(msg) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+// Zwraca aktualną datę jako "YYYY-MM-DD" w lokalnej strefie czasowej
+function todayStr() {
+  return Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
 }
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────────
@@ -652,9 +657,12 @@ function doPost(e) {
               : "";
             var configStr = "";
             if (lead.configData && typeof lead.configData === "object") {
-              configStr = "\nKonfiguracja:\n" + Object.entries(lead.configData)
-                .map(function(kv) { return "  " + kv[0] + ": " + kv[1]; })
-                .join("\n");
+              var configLines = [];
+              var configKeys = Object.keys(lead.configData);
+              for (var ci = 0; ci < configKeys.length; ci++) {
+                configLines.push("  " + configKeys[ci] + ": " + lead.configData[configKeys[ci]]);
+              }
+              if (configLines.length > 0) configStr = "\nKonfiguracja:\n" + configLines.join("\n");
             }
             GmailApp.sendEmail(
               ADMIN_EMAIL,

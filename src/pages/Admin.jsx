@@ -70,6 +70,7 @@ export default function Admin() {
   const [addProjectClientId, setAddProjectClientId] = useState(null);
   const [loading,            setLoading]            = useState(GAS_ON);
   const [syncError,          setSyncError]          = useState(null);
+  const [syncStatus,         setSyncStatus]         = useState("synced"); // "synced" | "syncing" | "error"
 
   // ── State (inicjalizacja zależy od trybu) ──────────────────────────────────
   const [clients, setClients] = useState(() =>
@@ -130,39 +131,49 @@ export default function Admin() {
     setIsAuthenticated(false);
   };
 
-  const syncErr = (msg) => setSyncError(msg);
+  const syncErr = (msg) => {
+    setSyncError(msg);
+    setSyncStatus("error");
+  };
+
+  // Wrap a GAS call: sets syncing → synced/error, handles errors
+  const gasSync = async (fn, onError) => {
+    if (!GAS_ON) return;
+    setSyncStatus("syncing");
+    try {
+      await fn();
+      setSyncStatus("synced");
+    } catch (e) {
+      onError?.();
+      setSyncStatus("error");
+    }
+  };
 
   // ── Clients ───────────────────────────────────────────────────────────────
   const handleAddClient = async (c) => {
     setClients(prev => [c, ...prev]);
-    if (GAS_ON) {
-      try { await GAS.createClient(c); }
-      catch { setClients(prev => prev.filter(x => x.id !== c.id)); syncErr("Błąd dodawania klienta"); }
-    }
+    await gasSync(() => GAS.createClient(c), () => {
+      setClients(prev => prev.filter(x => x.id !== c.id));
+      syncErr("Błąd dodawania klienta");
+    });
   };
 
   const handleUpdateClient = async (c) => {
     const snap = clients.find(x => x.id === c.id);
     setClients(prev => prev.map(x => x.id === c.id ? c : x));
-    if (GAS_ON) {
-      try { await GAS.updateClient(c); }
-      catch {
-        if (snap) setClients(prev => prev.map(x => x.id === c.id ? snap : x));
-        syncErr("Błąd aktualizacji klienta");
-      }
-    }
+    await gasSync(() => GAS.updateClient(c), () => {
+      if (snap) setClients(prev => prev.map(x => x.id === c.id ? snap : x));
+      syncErr("Błąd aktualizacji klienta");
+    });
   };
 
   const handleDeleteClient = async (id) => {
     const snap = clients.find(x => x.id === id);
     setClients(prev => prev.filter(c => c.id !== id));
-    if (GAS_ON) {
-      try { await GAS.deleteClient(id); }
-      catch {
-        if (snap) setClients(prev => [snap, ...prev]);
-        syncErr("Błąd usuwania klienta");
-      }
-    }
+    await gasSync(() => GAS.deleteClient(id), () => {
+      if (snap) setClients(prev => [snap, ...prev]);
+      syncErr("Błąd usuwania klienta");
+    });
   };
 
   // ── Projects ──────────────────────────────────────────────────────────────
@@ -170,13 +181,10 @@ export default function Admin() {
     const snap = projects.find(x => x.id === p.id);
     setProjects(prev => prev.map(x => x.id === p.id ? p : x));
     if (selectedProject?.id === p.id) setSelectedProject(p);
-    if (GAS_ON) {
-      try { await GAS.updateProject(p); }
-      catch {
-        if (snap) setProjects(prev => prev.map(x => x.id === p.id ? snap : x));
-        syncErr("Błąd aktualizacji projektu");
-      }
-    }
+    await gasSync(() => GAS.updateProject(p), () => {
+      if (snap) setProjects(prev => prev.map(x => x.id === p.id ? snap : x));
+      syncErr("Błąd aktualizacji projektu");
+    });
   };
 
   const handleDeleteProject = async (id) => {
@@ -185,10 +193,9 @@ export default function Admin() {
     setTasks(prev       => prev.filter(t  => t.projectId !== id));
     setChecklists(prev  => prev.filter(cl => cl.projectId !== id));
     if (selectedProject?.id === id) setSelectedProject(null);
-    if (GAS_ON) {
-      try { await GAS.deleteProject(id); }
-      catch { syncErr("Błąd usuwania projektu – odśwież stronę aby zsynchronizować"); }
-    }
+    await gasSync(() => GAS.deleteProject(id), () =>
+      syncErr("Błąd usuwania projektu – odśwież stronę aby zsynchronizować")
+    );
   };
 
   const handleAddProject = async (project, newClientData) => {
@@ -204,12 +211,10 @@ export default function Admin() {
     setAddProjectClientId(null);
     setSelectedProject(finalProject);
     setCurrentView("projekty");
-    if (GAS_ON) {
-      try {
-        if (newClient) await GAS.createClient(newClient);
-        await GAS.createProject(finalProject);
-      } catch { syncErr("Błąd tworzenia projektu"); }
-    }
+    await gasSync(async () => {
+      if (newClient) await GAS.createClient(newClient);
+      await GAS.createProject(finalProject);
+    }, () => syncErr("Błąd tworzenia projektu"));
   };
 
   const openAddProject = (clientId = null) => {
@@ -220,22 +225,19 @@ export default function Admin() {
   // ── Tasks ─────────────────────────────────────────────────────────────────
   const handleAddTask = async (t) => {
     setTasks(prev => [t, ...prev]);
-    if (GAS_ON) {
-      try { await GAS.createTask(t); }
-      catch { setTasks(prev => prev.filter(x => x.id !== t.id)); syncErr("Błąd dodawania zadania"); }
-    }
+    await gasSync(() => GAS.createTask(t), () => {
+      setTasks(prev => prev.filter(x => x.id !== t.id));
+      syncErr("Błąd dodawania zadania");
+    });
   };
 
   const handleUpdateTask = async (t) => {
     const snap = tasks.find(x => x.id === t.id);
     setTasks(prev => prev.map(x => x.id === t.id ? t : x));
-    if (GAS_ON) {
-      try { await GAS.updateTask(t); }
-      catch {
-        if (snap) setTasks(prev => prev.map(x => x.id === t.id ? snap : x));
-        syncErr("Błąd aktualizacji zadania");
-      }
-    }
+    await gasSync(() => GAS.updateTask(t), () => {
+      if (snap) setTasks(prev => prev.map(x => x.id === t.id ? snap : x));
+      syncErr("Błąd aktualizacji zadania");
+    });
   };
 
   // ── Checklists ────────────────────────────────────────────────────────────
@@ -243,10 +245,9 @@ export default function Admin() {
     setChecklists(prev => prev.map(cl => cl.id !== clId ? cl : {
       ...cl, items: cl.items.map(i => i.id === itemId ? { ...i, done: !i.done } : i),
     }));
-    if (GAS_ON) {
-      try { await GAS.toggleChecklistItem(clId, itemId); }
-      catch { syncErr("Błąd aktualizacji checklisty"); }
-    }
+    await gasSync(() => GAS.toggleChecklistItem(clId, itemId), () =>
+      syncErr("Błąd aktualizacji checklisty")
+    );
   };
 
   const handleAddChecklistItem = async (clId, text) => {
@@ -283,76 +284,63 @@ export default function Admin() {
   // ── Materials ─────────────────────────────────────────────────────────────
   const handleAddMaterial = async (m) => {
     setMaterials(prev => [m, ...prev]);
-    if (GAS_ON) {
-      try { await GAS.createMaterial(m); }
-      catch { setMaterials(prev => prev.filter(x => x.id !== m.id)); syncErr("Błąd dodawania materiału"); }
-    }
+    await gasSync(() => GAS.createMaterial(m), () => {
+      setMaterials(prev => prev.filter(x => x.id !== m.id));
+      syncErr("Błąd dodawania materiału");
+    });
   };
 
   const handleDeleteMaterial = async (id) => {
     const snap = materials.find(x => x.id === id);
     setMaterials(prev => prev.filter(m => m.id !== id));
-    if (GAS_ON) {
-      try { await GAS.deleteMaterial(id); }
-      catch {
-        if (snap) setMaterials(prev => [snap, ...prev]);
-        syncErr("Błąd usuwania materiału");
-      }
-    }
+    await gasSync(() => GAS.deleteMaterial(id), () => {
+      if (snap) setMaterials(prev => [snap, ...prev]);
+      syncErr("Błąd usuwania materiału");
+    });
   };
 
   // ── Leads ─────────────────────────────────────────────────────────────────
   const handleUpdateLead = async (lead) => {
     const snap = leads.find(x => x.id === lead.id);
     setLeads(prev => prev.map(x => x.id === lead.id ? lead : x));
-    if (GAS_ON) {
-      try { await GAS.updateLead(lead); }
-      catch {
-        if (snap) setLeads(prev => prev.map(x => x.id === lead.id ? snap : x));
-        syncErr("Błąd aktualizacji leada");
-      }
-    }
+    await gasSync(() => GAS.updateLead(lead), () => {
+      if (snap) setLeads(prev => prev.map(x => x.id === lead.id ? snap : x));
+      syncErr("Błąd aktualizacji leada");
+    });
   };
 
   const handleDeleteLead = async (id) => {
     const snap = leads.find(x => x.id === id);
     setLeads(prev => prev.filter(l => l.id !== id));
-    if (GAS_ON) {
-      try { await GAS.deleteLead(id); }
-      catch {
-        if (snap) setLeads(prev => [snap, ...prev]);
-        syncErr("Błąd usuwania leada");
-      }
-    }
+    await gasSync(() => GAS.deleteLead(id), () => {
+      if (snap) setLeads(prev => [snap, ...prev]);
+      syncErr("Błąd usuwania leada");
+    });
   };
 
   // ── Project docs ──────────────────────────────────────────────────────────
   const handleAddProjectDoc = async (d) => {
+    // Optimistic add – nie wycofuj nawet gdy GAS zawiedzie (plik jest już na Drive)
     setProjectDocs(prev => [...prev, d]);
-    if (GAS_ON) {
-      try { await GAS.createProjectDoc(d); }
-      catch { setProjectDocs(prev => prev.filter(x => x.id !== d.id)); syncErr("Błąd dodawania dokumentu"); }
-    }
+    await gasSync(() => GAS.createProjectDoc(d), () =>
+      syncErr("Plik przesłano na Drive, ale zapis do arkusza nie powiódł się")
+    );
   };
 
   const handleDeleteProjectDoc = async (id) => {
     const snap = projectDocs.find(x => x.id === id);
     setProjectDocs(prev => prev.filter(d => d.id !== id));
-    if (GAS_ON) {
-      try { await GAS.deleteProjectDoc(id); }
-      catch {
-        if (snap) setProjectDocs(prev => [...prev, snap]);
-        syncErr("Błąd usuwania dokumentu");
-      }
-    }
+    await gasSync(() => GAS.deleteProjectDoc(id), () => {
+      if (snap) setProjectDocs(prev => [...prev, snap]);
+      syncErr("Błąd usuwania dokumentu");
+    });
   };
 
   const handleToggleDocClientVisible = async (id) => {
     setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !d.clientVisible } : d));
-    if (GAS_ON) {
-      try { await GAS.toggleDocClientVisible(id); }
-      catch { syncErr("Błąd zmiany widoczności dokumentu"); }
-    }
+    await gasSync(() => GAS.toggleDocClientVisible(id), () =>
+      syncErr("Błąd zmiany widoczności dokumentu")
+    );
   };
 
   // ── Nawigacja ─────────────────────────────────────────────────────────────
@@ -444,6 +432,7 @@ export default function Admin() {
         onAddTask={handleAddTask}
         onOpenProject={openProject}
         onNavigateToClient={navigateToClient}
+        syncStatus={syncStatus}
       >
         {renderView()}
       </AdminLayout>
