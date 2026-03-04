@@ -4,7 +4,7 @@ import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
-  DollarSign, Save, List, Key, Layers, Receipt,
+  DollarSign, Save, List, Key, Layers, Receipt, Download,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
 
@@ -179,20 +179,31 @@ function ProjectDetail({
     setEditingPaid(false);
   };
   const [showAddInvoice, setShowAddInvoice] = useState(false);
-  const [newInvoice,     setNewInvoice]     = useState({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" });
+  const [newInvoice,     setNewInvoice]     = useState({ name: "", amount: "", stageKey: "projekt", date: TODAY, file: null });
   const submitInvoice = () => {
     if (!newInvoice.name.trim() || !newInvoice.amount) return;
-    const inv = {
-      id: `inv-${Date.now()}`,
-      name:     newInvoice.name.trim(),
-      amount:   parseFloat(newInvoice.amount) || 0,
-      stageKey: newInvoice.stageKey,
-      date:     newInvoice.date,
-      url:      newInvoice.url.trim(),
+    const doSave = (fileData, fileName, fileType) => {
+      const inv = {
+        id:       `inv-${Date.now()}`,
+        name:     newInvoice.name.trim(),
+        amount:   parseFloat(newInvoice.amount) || 0,
+        stageKey: newInvoice.stageKey,
+        date:     newInvoice.date,
+        fileData: fileData || null,
+        fileName: fileName || null,
+        fileType: fileType || null,
+      };
+      onUpdateProject({ ...project, invoices: [...(project.invoices || []), inv] });
+      setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, file: null });
+      setShowAddInvoice(false);
     };
-    onUpdateProject({ ...project, invoices: [...(project.invoices || []), inv] });
-    setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" });
-    setShowAddInvoice(false);
+    if (newInvoice.file) {
+      const reader = new FileReader();
+      reader.onload = (e) => doSave(e.target.result, newInvoice.file.name, newInvoice.file.type);
+      reader.readAsDataURL(newInvoice.file);
+    } else {
+      doSave(null, null, null);
+    }
   };
   const deleteInvoice = (invId) =>
     onUpdateProject({ ...project, invoices: (project.invoices || []).filter(i => i.id !== invId) });
@@ -1058,19 +1069,22 @@ function ProjectDetail({
                             <label className={lCls}>Data wystawienia</label>
                             <input type="date" value={newInvoice.date} onChange={e => setNewInvoice(f => ({ ...f, date: e.target.value }))} className={iCls} />
                           </div>
-                          <div>
-                            <label className={lCls}>Link do pliku (opcjonalnie)</label>
+                          <div className="sm:col-span-2">
+                            <label className={lCls}>Plik faktury</label>
                             <input
-                              value={newInvoice.url}
-                              onChange={e => setNewInvoice(f => ({ ...f, url: e.target.value }))}
-                              placeholder="https://..."
-                              className={iCls}
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.xlsx,.docx"
+                              onChange={e => setNewInvoice(f => ({ ...f, file: e.target.files[0] || null }))}
+                              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer"
                             />
+                            {newInvoice.file && (
+                              <p className="text-[11px] text-slate-400 mt-1 truncate">{newInvoice.file.name} ({(newInvoice.file.size / 1024).toFixed(0)} KB)</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex gap-2">
                           <button
-                            onClick={() => { setShowAddInvoice(false); setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, url: "" }); }}
+                            onClick={() => { setShowAddInvoice(false); setNewInvoice({ name: "", amount: "", stageKey: "projekt", date: TODAY, file: null }); }}
                             className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 font-medium"
                           >Anuluj</button>
                           <button
@@ -1100,18 +1114,23 @@ function ProjectDetail({
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-slate-800 text-sm">{inv.name}</div>
-                            <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+                            <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5 flex-wrap">
                               <span>{inv.date}</span>
                               <span>·</span>
                               <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{stageLabel}</span>
+                              {inv.fileName && <span className="text-slate-300">· {inv.fileName}</span>}
                             </div>
                           </div>
                           <div className="text-sm font-bold text-slate-800 flex-shrink-0">{fmtPLN(inv.amount)}</div>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {inv.url && inv.url !== "#" && (
-                              <a href={inv.url} target="_blank" rel="noopener noreferrer"
-                                className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
-                                <ExternalLink className="w-4 h-4" />
+                            {inv.fileData && (
+                              <a
+                                href={inv.fileData}
+                                download={inv.fileName || inv.name}
+                                className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors"
+                                title={`Pobierz: ${inv.fileName || inv.name}`}
+                              >
+                                <Download className="w-4 h-4" />
                               </a>
                             )}
                             <button onClick={() => deleteInvoice(inv.id)}
