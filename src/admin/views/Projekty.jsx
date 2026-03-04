@@ -251,9 +251,9 @@ function ProjectDetail({
             {(project.profitProjekt || project.profitPrefabrykacja || project.profitUruchomienie) ? (
               <div className="sm:col-span-3 flex flex-wrap gap-4 pt-2 border-t border-slate-100">
                 {[
-                  { label: "Zysk – Projekty",       val: project.profitProjekt },
-                  { label: "Zysk – Prefabrykacja",  val: project.profitPrefabrykacja },
-                  { label: "Zysk – Uruchomienie",   val: project.profitUruchomienie },
+                  { label: "Projekty",      val: project.profitProjekt },
+                  { label: "Prefabrykacja", val: project.profitPrefabrykacja },
+                  { label: "Uruchomienie",  val: project.profitUruchomienie },
                 ].map(({ label, val }) => val > 0 && (
                   <div key={label}>
                     <div className="text-xs text-slate-400">{label}</div>
@@ -395,23 +395,30 @@ function ProjectDetail({
           {activeTab === "overview" && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-                <h3 className="font-semibold text-slate-900 text-sm mb-4">Etapy realizacji</h3>
-                <div className="space-y-2">
+                <h3 className="font-semibold text-slate-900 text-sm mb-1">Etapy realizacji</h3>
+                <p className="text-xs text-slate-400 mb-4">Kliknij etap, aby ustawić go jako bieżący</p>
+                <div className="space-y-1.5">
                   {project.stages.map((stage, idx) => {
                     const done    = idx < project.stageIndex;
                     const current = idx === project.stageIndex;
                     return (
-                      <div key={idx} className="flex items-center gap-3">
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                          done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400"
+                      <button
+                        key={idx}
+                        onClick={() => onUpdateProject({ ...project, stageIndex: idx })}
+                        className={`w-full flex items-center gap-3 rounded-lg px-3 py-2 transition-all text-left group ${
+                          current ? "bg-orange-50 border border-orange-200" : "hover:bg-slate-50 border border-transparent"
+                        }`}
+                      >
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-colors ${
+                          done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
                         }`}>
                           {done ? "✓" : idx + 1}
                         </div>
-                        <span className={`text-sm ${done ? "line-through text-slate-400" : current ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
+                        <span className={`text-sm flex-1 ${done ? "line-through text-slate-400" : current ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
                           {stage}
                         </span>
-                        {current && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Aktualny</span>}
-                      </div>
+                        {current && <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium flex-shrink-0">Aktualny</span>}
+                      </button>
                     );
                   })}
                 </div>

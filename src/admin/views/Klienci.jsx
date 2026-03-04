@@ -9,7 +9,7 @@ import { TODAY } from "../mockData";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const STAGES  = ["Lead", "Wycena", "Negocjacje", "Umowa", "Realizacja"];
-const SOURCES = ["Polecenie", "Internet", "Targi", "Social Media", "Inne"];
+const SOURCES = ["Konfigurator", "Polecenie", "Inne"];
 
 const STAGE_META = {
   "Lead":       { bg: "bg-blue-50",   border: "border-blue-200",   text: "text-blue-700",   dot: "bg-blue-500",   dragBg: "bg-blue-100"   },
@@ -20,10 +20,8 @@ const STAGE_META = {
 };
 
 const SOURCE_COLOR = {
+  "Konfigurator": "bg-blue-50 text-blue-700 border-blue-200",
   "Polecenie":    "bg-green-50 text-green-700 border-green-200",
-  "Internet":     "bg-blue-50 text-blue-700 border-blue-200",
-  "Targi":        "bg-orange-50 text-orange-700 border-orange-200",
-  "Social Media": "bg-purple-50 text-purple-700 border-purple-200",
   "Inne":         "bg-slate-100 text-slate-600 border-slate-200",
 };
 
