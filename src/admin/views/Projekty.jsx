@@ -668,108 +668,97 @@ function ProjectDetail({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-6">
+                <div className="overflow-x-auto">
+                  <div style={{ minWidth: "480px" }}>
+                    {/* Nagłówek miesięcy (offset = szerokość kolumny etapów) */}
+                    {gantt && (
+                      <div className="flex mb-1.5 pl-44">
+                        {gantt.months.map((m, mi) => (
+                          <div key={mi} style={{ width: `${m.width}%` }}
+                            className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide px-1 border-l border-slate-100 first:border-l-0 truncate">
+                            {m.label}
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-                  {/* Lewa kolumna: lista etapów (klikalna) */}
-                  <div>
-                    <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">
-                      Kliknij aby ustawić bieżący etap
-                    </p>
-                    <div className="space-y-1">
-                      {project.stages.map((stage, idx) => {
+                    {/* Wiersze: kafelek etapu + pasek Gantta — ta sama wysokość h-7 */}
+                    {(() => {
+                      const minMs    = gantt ? Math.min(...scheduleForm.map(s => +new Date(s.start))) : 0;
+                      const maxMs    = gantt ? Math.max(...scheduleForm.map(s => +new Date(s.end))) : 0;
+                      const todayPct = gantt && maxMs > minMs
+                        ? ((+new Date(TODAY) - minMs) / (maxMs - minMs)) * 100
+                        : -1;
+                      return project.stages.map((stage, idx) => {
                         const done    = idx < project.stageIndex;
                         const current = idx === project.stageIndex;
-                        const sched   = scheduleForm[idx];
+                        const bar     = gantt?.bars[idx];
                         return (
-                          <button
-                            key={idx}
-                            onClick={() => onUpdateProject({ ...project, stageIndex: idx })}
-                            className={`w-full flex items-center gap-2.5 rounded-xl px-3 py-2 text-left transition-all group ${
-                              current ? "bg-orange-50 border border-orange-200" : "hover:bg-slate-50 border border-transparent"
-                            }`}
-                          >
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold transition-colors ${
-                              done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
-                            }`}>{done ? "✓" : idx + 1}</div>
-                            <div className="flex-1 min-w-0">
-                              <span className={`text-sm block truncate ${done ? "line-through text-slate-400" : current ? "text-slate-900 font-semibold" : "text-slate-500"}`}>
-                                {stage}
-                              </span>
-                              {sched?.start && sched?.end && (
-                                <span className="text-[10px] text-slate-400">{sched.start} – {sched.end}</span>
-                              )}
-                            </div>
-                            {current && <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">Aktualny</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                          <div key={idx} className="flex items-center mb-1.5">
+                            {/* Kafelek etapu – kliknięcie ustawia bieżący, wysokość h-7 jak pasek */}
+                            <button
+                              onClick={() => onUpdateProject({ ...project, stageIndex: idx })}
+                              className={`w-44 flex-shrink-0 h-7 flex items-center gap-1.5 px-1.5 rounded-md transition-all text-left group ${
+                                current ? "bg-orange-50 border border-orange-200" : "hover:bg-slate-50 border border-transparent"
+                              }`}
+                            >
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold transition-colors ${
+                                done ? "bg-green-500 text-white" : current ? "bg-orange-500 text-white" : "bg-slate-100 text-slate-400 group-hover:bg-slate-200"
+                              }`}>{done ? "✓" : idx + 1}</div>
+                              <span className={`text-xs font-medium truncate flex-1 ${
+                                done ? "text-slate-400 line-through" : current ? "text-slate-900 font-semibold" : "text-slate-500"
+                              }`}>{stage}</span>
+                              {current && <span className="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0" />}
+                            </button>
 
-                  {/* Prawa kolumna: Gantt */}
-                  <div>
-                    {gantt ? (
-                      <div className="overflow-x-auto">
-                        <div style={{ minWidth: "300px" }}>
-                          {/* Month header */}
-                          <div className="flex mb-2">
-                            {gantt.months.map((m, mi) => (
-                              <div key={mi} style={{ width: `${m.width}%` }}
-                                className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide px-1 border-l border-slate-100 first:border-l-0 truncate">
-                                {m.label}
-                              </div>
-                            ))}
-                          </div>
-                          {/* Gantt bars */}
-                          {(() => {
-                            const minMs    = Math.min(...scheduleForm.map(s => +new Date(s.start)));
-                            const maxMs    = Math.max(...scheduleForm.map(s => +new Date(s.end)));
-                            const todayPct = ((+new Date(TODAY) - minMs) / (maxMs - minMs)) * 100;
-                            return scheduleForm.map((stage, i) => {
-                              const bar = gantt.bars[i];
-                              return (
-                                <div key={i} className="relative h-7 bg-slate-50 rounded-lg mb-1.5 overflow-hidden">
-                                  {gantt.months.map((m, mi) => mi > 0 && (
-                                    <div key={mi} style={{ left: `${m.left}%` }}
-                                      className="absolute top-0 bottom-0 border-l border-slate-200/70" />
-                                  ))}
-                                  {todayPct > 0 && todayPct < 100 && (
-                                    <div style={{ left: `${todayPct}%` }}
-                                      className="absolute top-0 bottom-0 border-l-2 border-orange-400/70 z-10 pointer-events-none" />
-                                  )}
-                                  <div
-                                    style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
-                                    className={`absolute top-1 bottom-1 rounded-md flex items-center justify-center text-[10px] font-semibold ${
-                                      bar.done    ? "bg-green-200 text-green-800 border border-green-300"
-                                      : bar.current ? "bg-orange-200 text-orange-900 border border-orange-300 shadow-sm"
-                                      : "bg-slate-200 text-slate-600 border border-slate-300"
-                                    }`}
-                                  >
-                                    {bar.width > 12 ? `${bar.days}d` : ""}
-                                  </div>
+                            {/* Pasek Gantta – wysokość h-7 */}
+                            {gantt && bar ? (
+                              <div className="flex-1 relative h-7 bg-slate-50 rounded-lg overflow-hidden">
+                                {gantt.months.map((m, mi) => mi > 0 && (
+                                  <div key={mi} style={{ left: `${m.left}%` }}
+                                    className="absolute top-0 bottom-0 border-l border-slate-200/70" />
+                                ))}
+                                {todayPct > 0 && todayPct < 100 && (
+                                  <div style={{ left: `${todayPct}%` }}
+                                    className="absolute top-0 bottom-0 border-l-2 border-orange-400/70 z-10 pointer-events-none" />
+                                )}
+                                <div
+                                  style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
+                                  className={`absolute top-1 bottom-1 rounded flex items-center justify-center text-[10px] font-semibold ${
+                                    bar.done    ? "bg-green-200 text-green-800 border border-green-300"
+                                    : bar.current ? "bg-orange-200 text-orange-900 border border-orange-300 shadow-sm"
+                                    : "bg-slate-200 text-slate-600 border border-slate-300"
+                                  }`}
+                                >
+                                  {bar.width > 10 ? `${bar.days}d` : ""}
                                 </div>
-                              );
-                            });
-                          })()}
-                          {/* Legend */}
-                          <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-100">
-                            {[
-                              { cls: "bg-green-200 border-green-300", label: "Ukończony" },
-                              { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
-                              { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
-                            ].map(({ cls, label }) => (
-                              <div key={label} className="flex items-center gap-1">
-                                <div className={`w-3 h-3 rounded border ${cls}`} />
-                                <span className="text-[10px] text-slate-400">{label}</span>
                               </div>
-                            ))}
+                            ) : (
+                              <div className="flex-1 h-7 bg-slate-50/50 rounded-lg border border-dashed border-slate-200" />
+                            )}
                           </div>
-                        </div>
+                        );
+                      });
+                    })()}
+
+                    {/* Legenda */}
+                    {gantt ? (
+                      <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-100 pl-44">
+                        {[
+                          { cls: "bg-green-200 border-green-300", label: "Ukończony" },
+                          { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
+                          { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
+                        ].map(({ cls, label }) => (
+                          <div key={label} className="flex items-center gap-1">
+                            <div className={`w-3 h-3 rounded border ${cls}`} />
+                            <span className="text-[10px] text-slate-400">{label}</span>
+                          </div>
+                        ))}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-full min-h-[100px] text-sm text-slate-400 text-center px-4">
-                        Brak harmonogramu. Kliknij <strong className="mx-1 text-orange-600">Edytuj daty</strong> aby dodać daty etapów.
-                      </div>
+                      <p className="text-[11px] text-slate-400 mt-2 pl-1">
+                        Kliknij <strong className="text-orange-600">Edytuj daty</strong> aby dodać daty etapów i zobaczyć wykres.
+                      </p>
                     )}
                   </div>
                 </div>
