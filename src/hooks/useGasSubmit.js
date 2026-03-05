@@ -1,14 +1,17 @@
 import { useState, useCallback } from 'react';
+import { GAS_CONFIG } from '../admin/api/gasConfig';
 import { logger } from '../logger';
 
 /**
- * Hook do wysyłania danych do Google Apps Script z mechanizmem retry.
- * Obsługuje CORS przez URLSearchParams, exponential backoff (3 próby).
+ * Hook do wysyłania danych do Google Apps Script.
+ * Wysyła JSON jako text/plain (brak nagłówka Content-Type) – obejście CORS preflight.
+ * GAS czyta body przez e.postData.contents i zwraca { ok: true, data } lub { ok: false, error }.
  *
- * @param {string} gasEndpoint - URL wdrożenia Google Apps Script
+ * @param {string} [gasEndpoint] - URL GAS (domyślnie GAS_CONFIG.scriptUrl)
  * @returns {{ isSubmitting, errorMessage, setErrorMessage, submit }}
  */
 export function useGasSubmit(gasEndpoint) {
+  const endpoint = gasEndpoint || GAS_CONFIG.scriptUrl;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
 
@@ -16,7 +19,6 @@ export function useGasSubmit(gasEndpoint) {
     setErrorMessage(null);
     setIsSubmitting(true);
 
-    const urlEncodedData = new URLSearchParams(payload).toString();
     const maxRetries = 3;
     let success = false;
 
@@ -24,21 +26,21 @@ export function useGasSubmit(gasEndpoint) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
-        const response = await fetch(gasEndpoint, {
+        // Wysyłamy JSON jako zwykły string bez Content-Type – "simple request" CORS
+        const response = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: urlEncodedData,
+          body: JSON.stringify(payload),
           signal: controller.signal,
         });
         clearTimeout(timeoutId);
 
         const result = await response.json();
 
-        if (response.ok && result.status === 'SUCCESS') {
+        if (result.ok === true) {
           success = true;
           break;
         } else {
-          logger.error(`GAS Error (próba ${i + 1}): ${result.status} - ${result.message || response.statusText}`);
+          logger.error(`GAS Error (próba ${i + 1}): ${result.error || response.statusText}`);
         }
       } catch (err) {
         clearTimeout(timeoutId);
@@ -63,7 +65,7 @@ export function useGasSubmit(gasEndpoint) {
       setErrorMessage(msg);
       onError?.(msg);
     }
-  }, [gasEndpoint]);
+  }, [endpoint]);
 
   return { isSubmitting, errorMessage, setErrorMessage, submit };
 }

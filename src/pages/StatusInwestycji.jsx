@@ -10,12 +10,64 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { logger } from "../logger";
+import { GAS_CONFIG } from "../admin/api/gasConfig";
 
 // Importy widoków
 import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
 
-const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
+const GAS_URL = GAS_CONFIG.scriptUrl;
+
+// Mapuje odpowiedź nowego GAS na format oczekiwany przez komponenty inwestycji
+function mapInvestmentResponse(data) {
+  const { project, docs = [], files = [], messages = [] } = data;
+
+  // Etapy: nowy GAS przechowuje jako tablicę stringów, InvestmentTimeline oczekuje obiektów
+  const stages = (project.stages || []).map((name, i) => ({
+    stage_number: i + 1,
+    name: typeof name === "string" ? name : (name.name || String(name)),
+    completion_date: null,
+    notes: null,
+  }));
+
+  // Dokumenty: połącz rekordy z arkusza + pliki z Drive
+  const documents = [
+    ...docs.map(d => ({
+      name:          d.name,
+      url:           d.url,
+      uploaded_by:   "designIQ",
+      uploaded_date: d.date,
+    })),
+    ...files.map(f => ({
+      name:          f.name,
+      url:           f.webViewLink || f.webContentLink,
+      uploaded_by:   "Klient",
+      uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
+    })),
+  ];
+
+  return {
+    // Pola używane przez StatusDashboard / ClientWycenaView
+    project_name:      project.name,
+    package_type:      project.package,
+    start_date:        project.startDate,
+    current_stage:     (Number(project.stageIndex) || 0) + 1,
+    stages,
+    investment_code:   project.code,
+    code:              project.code,   // nowe pole
+    id:                project.id,
+    documents,
+    rooms:             [],
+    quotation_status:  project.status || "Czeka na akceptację",
+    accepted_at:       null,
+    quotation:         null,           // brak danych wyceny w nowym systemie
+    messages,
+    // Status projektu
+    status:            project.status,
+    progress:          project.progress,
+    deadline:          project.deadline,
+  };
+}
 
 // Bezpieczny JSON.parse - zwraca fallback przy błędnych danych
 function safeJsonParse(value, fallback) {
@@ -62,36 +114,17 @@ export default function StatusInwestycji() {
     setNotFound(false);
 
     try {
-      const response = await fetch(`${GAS_URL}?code=${investmentCode.trim()}`);
-      const data = await response.json();
+      const response = await fetch(
+        `${GAS_URL}?action=getInvestment&code=${encodeURIComponent(investmentCode.trim())}`
+      );
+      const result = await response.json();
 
-      if (data && !data.error) {
-        // 1. Parsowanie i filtrowanie pokoi (usuwamy wiersz nagłówkowy z Excela)
-        const rawRooms = safeJsonParse(data.rooms, []);
-        const filteredRooms = rawRooms.filter(room =>
-          room.name &&
-          room.name !== "Pomieszczenie" && // To usuwa nagłówek z arkusza
-          room.name.trim() !== ""
-        );
-
-        // 2. Formatowanie głównego obiektu inwestycji
-        const formattedInvestment = {
-          ...data,
-          stages: safeJsonParse(data.stages, []),
-          documents: safeJsonParse(data.documents, []),
-          rooms: filteredRooms
-        };
-
-        // 3. Obsługa wyceny (quotation)
-        let formattedQuotation = null;
-        if (data.quotation) {
-          formattedQuotation = safeJsonParse(data.quotation, null);
-        }
-
+      if (result.ok && result.data) {
+        const mapped = mapInvestmentResponse(result.data);
         const isUpdate = !!investment;
-        
-        setInvestment(formattedInvestment);
-        setQuotation(formattedQuotation);
+
+        setInvestment(mapped);
+        setQuotation(null); // wycena zarządzana przez panel admina
 
         if (!isUpdate) {
           setActiveView("status");
@@ -102,7 +135,7 @@ export default function StatusInwestycji() {
       } else {
         setNotFound(true);
         setInvestment(null);
-        toast.error(data.error || "Nie znaleziono inwestycji");
+        toast.error(result.error || "Nie znaleziono inwestycji");
       }
     } catch (error) {
       logger.error("Błąd pobierania danych inwestycji:", error);
