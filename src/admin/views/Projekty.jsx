@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
 import { uploadFile } from "../api/gasApi";
+import WycenaEditor from "./WycenaEditor";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -208,6 +209,7 @@ function ProjectDetail({
   const [showAddTask,   setShowAddTask]   = useState(false);
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
+  const [showWycena,        setShowWycena]        = useState(false);
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -1215,7 +1217,7 @@ function ProjectDetail({
                           setUploading(true);
                           setUploadError(null);
                           try {
-                            const uploaded = await uploadFile(docFile, project.id);
+                            const uploaded = await uploadFile(docFile, project.id, project.code);
                             onAddProjectDoc({
                               id: `pd-${Date.now()}`, projectId: project.id,
                               name: newDoc.name || docFile.name,
@@ -1314,6 +1316,24 @@ function ProjectDetail({
           {/* ══ FINANSE ══ */}
           {activeTab === "finanse" && (
             <div className="space-y-4">
+
+              {/* Wycena klienta */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-orange-500" /> Wycena dla klienta
+                  </h3>
+                  <button
+                    onClick={() => setShowWycena(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg text-xs font-semibold hover:bg-orange-100 transition-colors"
+                  >
+                    <DollarSign className="w-3.5 h-3.5" /> Edytuj wycenę
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Wycena widoczna dla klienta w panelu po zatwierdzeniu. Kliknij „Edytuj wycenę" aby dodać lub zmienić pozycje.
+                </p>
+              </div>
 
               {/* Summary */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
@@ -1557,6 +1577,13 @@ function ProjectDetail({
 
         </motion.div>
       </AnimatePresence>
+
+      {showWycena && (
+        <WycenaEditor
+          project={project}
+          onClose={() => setShowWycena(false)}
+        />
+      )}
     </div>
   );
 }

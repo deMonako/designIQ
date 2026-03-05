@@ -3,8 +3,16 @@ import PropTypes from "prop-types";
 import { Card, CardContent } from "../ui/card";
 import { Calendar, DollarSign, ShoppingCart, Map, Cpu } from "lucide-react";
 import { motion } from "framer-motion";
-import { format } from "date-fns";
-import { pl } from "date-fns/locale";
+// Bezpieczna konwersja daty – obsługuje ISO strings z timezone (np. "2025-03-31T22:00:00.000Z")
+function safeDate(dateStr) {
+  if (!dateStr) return null;
+  const s = String(dateStr).substring(0, 10);
+  return s.length === 10 ? new Date(s + "T12:00:00") : null;
+}
+function formatDatePL(dateStr, opts = { day: "2-digit", month: "long", year: "numeric" }) {
+  const d = safeDate(dateStr);
+  return d ? d.toLocaleDateString("pl-PL", opts) : "---";
+}
 import InvestmentTimeline from "./InvestmentTimeline";
 import FileUploadSection from "./FileUploadSection";
 
@@ -31,7 +39,7 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
             <div>
               <div className="text-sm text-slate-500 mb-1">Data rozpoczęcia</div>
               <div className="text-xl font-bold text-slate-900">
-                {investment.start_date ? format(new Date(investment.start_date), 'dd MMMM yyyy', { locale: pl }) : "---"}
+                {formatDatePL(investment.start_date)}
               </div>
             </div>
           </div>

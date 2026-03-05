@@ -20,7 +20,7 @@ const GAS_URL = GAS_CONFIG.scriptUrl;
 
 // Mapuje odpowiedź nowego GAS na format oczekiwany przez komponenty inwestycji
 function mapInvestmentResponse(data) {
-  const { project, docs = [], files = [], messages = [] } = data;
+  const { project, docs = [], files = [], messages = [], wycena } = data;
 
   // Etapy: nowy GAS przechowuje jako tablicę stringów, InvestmentTimeline oczekuje obiektów
   const stages = (project.stages || []).map((name, i) => ({
@@ -58,9 +58,9 @@ function mapInvestmentResponse(data) {
     id:                project.id,
     documents,
     rooms:             [],
-    quotation_status:  project.status || "Czeka na akceptację",
-    accepted_at:       null,
-    quotation:         null,           // brak danych wyceny w nowym systemie
+    quotation_status:  wycena?.status || project.status || "Czeka na akceptację",
+    accepted_at:       wycena?.acceptedAt || null,
+    quotation:         wycena && Array.isArray(wycena.items) && wycena.items.length > 0 ? wycena : null,
     messages,
     // Status projektu
     status:            project.status,
@@ -124,7 +124,7 @@ export default function StatusInwestycji() {
         const isUpdate = !!investment;
 
         setInvestment(mapped);
-        setQuotation(null); // wycena zarządzana przez panel admina
+        setQuotation(mapped.quotation);
 
         if (!isUpdate) {
           setActiveView("status");

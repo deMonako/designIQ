@@ -74,6 +74,10 @@ var HEADERS = {
   // ── Log zdarzeń Loxone (irytacja) ────────────────────────────────────────────
   "Wkurwienia": [
     "id", "date", "note"
+  ],
+  // ── Wyceny projektów ─────────────────────────────────────────────────────────
+  "Wyceny": [
+    "id", "projectId", "items", "status", "acceptedAt", "updatedDate"
   ]
 };
 
@@ -220,22 +224,23 @@ function todayStr() {
 
 // ─── GOOGLE DRIVE ────────────────────────────────────────────────────────────────
 
-function getProjectFolder(projectId) {
-  if (!DRIVE_FOLDER_ID || !projectId) return null;
+// folderName: czytelna nazwa projektu (preferuj code projektu, np. "DEMO")
+function getProjectFolder(folderName) {
+  if (!DRIVE_FOLDER_ID || !folderName) return null;
   try {
     var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-    var folders = root.getFoldersByName(String(projectId));
+    var folders = root.getFoldersByName(String(folderName));
     return folders.hasNext() ? folders.next() : null;
   } catch(e) { return null; }
 }
 
-function getOrCreateProjectFolder(projectId) {
-  if (!DRIVE_FOLDER_ID || !projectId) return null;
+function getOrCreateProjectFolder(folderName) {
+  if (!DRIVE_FOLDER_ID || !folderName) return null;
   try {
     var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-    var folders = root.getFoldersByName(String(projectId));
+    var folders = root.getFoldersByName(String(folderName));
     if (folders.hasNext()) return folders.next();
-    return root.createFolder(String(projectId));
+    return root.createFolder(String(folderName));
   } catch(e) { return null; }
 }
 
@@ -249,8 +254,8 @@ function getOrCreateMaterialsFolder() {
   } catch(e) { return null; }
 }
 
-function getDriveFiles(projectId) {
-  var folder = getProjectFolder(projectId);
+function getDriveFiles(folderName) {
+  var folder = getProjectFolder(folderName);
   if (!folder) return [];
   try {
     var files  = folder.getFiles();
@@ -360,16 +365,24 @@ function doGet(e) {
         var visibleDocs = allDocs.filter(function(d) {
           return String(d.projectId) === String(project.id) && d.clientVisible;
         });
-        var driveFiles  = getDriveFiles(project.id);
+        // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
+        var driveFiles  = getDriveFiles(project.code || project.id);
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
         });
+        // Wycena projektu
+        var allWyceny = sheetToObjects("Wyceny");
+        var wycena = null;
+        for (var wi = 0; wi < allWyceny.length; wi++) {
+          if (String(allWyceny[wi].projectId) === String(project.id)) { wycena = allWyceny[wi]; break; }
+        }
 
         return ok({
           project:   project,
           docs:      visibleDocs,
           files:     driveFiles,
-          messages:  messages
+          messages:  messages,
+          wycena:    wycena
         });
       }
 
@@ -406,6 +419,33 @@ function doGet(e) {
         } catch(ex) {
           return err("Błąd SVG: " + ex.message);
         }
+      }
+
+      // ── Wyceny (panel klienta i admin) ────────────────────────────────────────
+      // GET ?action=getWycena&projectId=proj-123  LUB  &code=DEMO
+      case "getWycena": {
+        var allWy = sheetToObjects("Wyceny");
+        if (e.parameter.code) {
+          var wyProjs = sheetToObjects("Projekty");
+          var wyProj  = null;
+          for (var wj = 0; wj < wyProjs.length; wj++) {
+            if (String(wyProjs[wj].code) === String(e.parameter.code)) { wyProj = wyProjs[wj]; break; }
+          }
+          if (!wyProj) return err("Projekt nie znaleziony: " + e.parameter.code);
+          var wyFound = null;
+          for (var wk = 0; wk < allWy.length; wk++) {
+            if (String(allWy[wk].projectId) === String(wyProj.id)) { wyFound = allWy[wk]; break; }
+          }
+          return ok(wyFound);
+        }
+        if (e.parameter.projectId) {
+          var wyFound2 = null;
+          for (var wl = 0; wl < allWy.length; wl++) {
+            if (String(allWy[wl].projectId) === String(e.parameter.projectId)) { wyFound2 = allWy[wl]; break; }
+          }
+          return ok(wyFound2);
+        }
+        return err("Brak parametru projectId lub code");
       }
 
       // ── Irytacja / Loxone ─────────────────────────────────────────────────────
@@ -461,7 +501,7 @@ function doPost(e) {
 
       // ── Projekty ──────────────────────────────────────────────────────────────
       case "createProject":
-        getOrCreateProjectFolder(body.project.id);
+        getOrCreateProjectFolder(body.project.code || body.project.id);
         return ok(insertRow("Projekty", body.project));
 
       case "updateProject":
@@ -508,8 +548,10 @@ function doPost(e) {
       // ── Upload pliku na Drive ─────────────────────────────────────────────────
       case "uploadFile": {
         if (!body.base64 || !body.name) return err("Brak danych pliku");
-        var uploadFolder = body.projectId
-          ? getOrCreateProjectFolder(body.projectId)
+        // Preferuj code projektu (czytelna nazwa folderu), fallback na projectId
+        var uploadFolderName = body.projectCode || body.projectId;
+        var uploadFolder = uploadFolderName
+          ? getOrCreateProjectFolder(uploadFolderName)
           : getOrCreateMaterialsFolder();
         if (!uploadFolder) return err("Nie można uzyskać dostępu do folderu Drive (sprawdź DRIVE_FOLDER_ID)");
         return ok(uploadBlob(body.base64, body.name, body.mimeType, uploadFolder));
@@ -569,6 +611,19 @@ function doPost(e) {
         if (!obj) return err("Projekt nie znaleziony: " + body.code);
         var updated = Object.assign({}, obj, { status: body.status });
         upsertRow("Projekty", updated);
+        // Aktualizuj status wyceny
+        var allWy2 = sheetToObjects("Wyceny");
+        for (var wi2 = 0; wi2 < allWy2.length; wi2++) {
+          if (String(allWy2[wi2].projectId) === String(obj.id)) {
+            var wyUpd = Object.assign({}, allWy2[wi2], {
+              status:    body.status,
+              acceptedAt: body.status === "Zaakceptowana" ? todayStr() : allWy2[wi2].acceptedAt,
+              updatedDate: todayStr()
+            });
+            upsertRow("Wyceny", wyUpd);
+            break;
+          }
+        }
         if (body.note) {
           insertRow("Wiadomosci", {
             id:         "msg-" + Date.now(),
@@ -614,7 +669,7 @@ function doPost(e) {
           if (String(invProjects[pi3].code) === String(body.code)) { invProject = invProjects[pi3]; break; }
         }
         if (!invProject) return err("Projekt nie znaleziony: " + body.code);
-        var invFolder = getOrCreateProjectFolder(invProject.id);
+        var invFolder = getOrCreateProjectFolder(invProject.code || invProject.id);
         if (!invFolder) return err("Nie można uzyskać dostępu do folderu Drive");
         var uploaded = uploadBlob(body.base64, body.name, body.mimeType, invFolder);
         // Automatycznie dodaj wpis do Dokumentów jako widoczny dla klienta
@@ -630,6 +685,15 @@ function doPost(e) {
         };
         insertRow("Dokumenty", docEntry);
         return ok(Object.assign({}, uploaded, { docId: docEntry.id }));
+      }
+
+      // ── Wyceny ────────────────────────────────────────────────────────────────
+      case "upsertWycena": {
+        var wyObj = body.wycena;
+        if (!wyObj || !wyObj.projectId) return err("Brak wyceny lub projectId");
+        if (!wyObj.id) wyObj.id = "wyc-" + Date.now();
+        wyObj.updatedDate = todayStr();
+        return ok(upsertRow("Wyceny", wyObj));
       }
 
       // ── Konfigurator ──────────────────────────────────────────────────────────

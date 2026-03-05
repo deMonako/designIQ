@@ -196,7 +196,7 @@ function ClientDetail({ client, projects, onBack, onUpdateClient, onDeleteClient
               </div>
               <div>
                 <div className="text-xs text-slate-400 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" /> Dodany</div>
-                <div className="font-medium text-slate-800">{client.createdDate}</div>
+                <div className="font-medium text-slate-800">{String(client.createdDate || "").substring(0, 10) || "—"}</div>
               </div>
             </div>
             {!delConfirm ? (

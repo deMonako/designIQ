@@ -1,14 +1,22 @@
 import React from "react";
-import { 
-  CheckCircle2, Circle, Clock, FileText, Users, Layout, 
-  Package, Truck, Code, TestTube, GraduationCap, Headphones 
+import {
+  CheckCircle2, Circle, Clock, FileText, Users, Layout,
+  Package, Truck, Code, TestTube, GraduationCap, Headphones,
+  Layers, Zap, Settings
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "../ui/card";
-import { format } from "date-fns";
-import { pl } from "date-fns/locale";
 
-// 1. Konfiguracja Ikon
+// Bezpieczna konwersja daty (obsługuje ISO strings z timezone)
+function formatDatePL(dateStr) {
+  if (!dateStr) return null;
+  const s = String(dateStr).substring(0, 10);
+  if (s.length < 10) return null;
+  const d = new Date(s + "T12:00:00");
+  return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "long", year: "numeric" });
+}
+
+// 1. Konfiguracja Ikon — dla standardowych etapów 1-10
 const stageIcons = {
   1: FileText,
   2: Users,
@@ -22,7 +30,10 @@ const stageIcons = {
   10: Headphones
 };
 
-// 2. Konfiguracja Opisów
+// Ikony rotacyjne dla niestandardowych etapów (> 10 lub dowolny numer)
+const fallbackIcons = [Layers, Zap, Settings, Package, Code, CheckCircle2, Users, FileText];
+
+// 2. Konfiguracja Opisów — tylko dla standardowych etapów 1-10
 const stageDescriptions = {
   1: "Twoje zgłoszenie zostało przyjęte i zarejestrowane w systemie",
   2: "Przeprowadzamy szczegółową analizę Twoich potrzeb i przygotowujemy koncepcję systemu",
@@ -80,14 +91,15 @@ export default function InvestmentTimeline({ stages, currentStage }) {
     <div className="space-y-6">
       {stages.map((stage, index) => {
         // Dane pobierane z JSONa w Arkuszu
-        const id = stage.stage_number; 
+        const id = stage.stage_number;
         const status = getStageStatus(index);
         const statusConfig = getStatusConfig(status);
-        
-        // Wybór ikony i opisu na podstawie stage_number
-        const StageIcon = stageIcons[id] || Circle;
+
+        // Ikona etapu: standardowa (1-10) lub rotacyjna dla niestandardowych
+        const StageIcon = stageIcons[id] || fallbackIcons[(index) % fallbackIcons.length];
         const StatusIcon = statusConfig.icon;
-        const description = stageDescriptions[id] || "Brak opisu dla tego etapu.";
+        // Opis: tylko dla standardowych etapów; dla niestandardowych – brak (nie pokazuj "Brak opisu")
+        const description = stageDescriptions[id] || null;
 
         return (
           <motion.div
@@ -131,17 +143,17 @@ export default function InvestmentTimeline({ stages, currentStage }) {
                           )}
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 mb-2">{stage.name}</h3>
-                        <p className="text-slate-600 leading-relaxed">
-                          {description}
-                        </p>
+                        {description && (
+                          <p className="text-slate-600 leading-relaxed">{description}</p>
+                        )}
                       </div>
                     </div>
 
                     {/* Data zakończenia */}
-                    {stage.completion_date && status === 'completed' && (
+                    {stage.completion_date && status === 'completed' && formatDatePL(stage.completion_date) && (
                       <div className="mt-3 pt-3 border-t border-slate-200">
                         <p className="text-sm text-slate-500">
-                          Zakończono: {format(new Date(stage.completion_date), 'dd MMMM yyyy', { locale: pl })}
+                          Zakończono: {formatDatePL(stage.completion_date)}
                         </p>
                       </div>
                     )}

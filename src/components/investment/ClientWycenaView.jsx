@@ -199,7 +199,27 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     doc.save(`Wycena_${investment.project_name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  if (!quotation) return null;
+  if (!quotation) {
+    return (
+      <div className="space-y-4 pb-12">
+        <Button onClick={onBack} variant="outline" className="mb-4 hover:bg-slate-100 border-slate-200">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Powrót do statusu
+        </Button>
+        <Card className="border-2 border-slate-200 bg-white shadow-sm">
+          <CardContent className="p-12 text-center">
+            <div className="mx-auto w-20 h-20 bg-orange-50 rounded-2xl flex items-center justify-center mb-6">
+              <FileText className="w-10 h-10 text-orange-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-3">Wycena w przygotowaniu</h2>
+            <p className="text-slate-500 max-w-md mx-auto leading-relaxed">
+              Nasz zespół pracuje nad przygotowaniem szczegółowej wyceny Twojego projektu Smart Home.
+              Zostaniesz poinformowany, gdy wycena będzie gotowa do przejrzenia.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const totalNet = quotation.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   const totalGross = quotation.items.reduce((sum, item) => 

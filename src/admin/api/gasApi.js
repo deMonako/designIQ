@@ -183,7 +183,7 @@ export async function getProjectFiles(projectId) {
  * @param {string?} projectId  - opcjonalne id projektu
  * @returns {{ driveId, name, url, downloadUrl }}
  */
-export async function uploadFile(file, projectId = null) {
+export async function uploadFile(file, projectId = null, projectCode = null) {
   const base64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload  = (e) => resolve(e.target.result.split(",")[1]);
@@ -192,9 +192,10 @@ export async function uploadFile(file, projectId = null) {
   });
   return gasPost("uploadFile", {
     base64,
-    name:      file.name,
-    mimeType:  file.type || "application/octet-stream",
+    name:        file.name,
+    mimeType:    file.type || "application/octet-stream",
     projectId,
+    projectCode, // używany jako nazwa folderu na Drive
   });
 }
 
@@ -229,4 +230,18 @@ export async function getWiadomosci(projectId) {
 /** Dodaje wiadomość od admina do klienta */
 export async function addAdminMessage(projectId, content, author = "Admin") {
   return gasPost("addAdminMessage", { projectId, content, author });
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+// WYCENY
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera wycenę projektu po projectId */
+export async function getWycena(projectId) {
+  return gasGet("getWycena", { projectId });
+}
+
+/** Zapisuje / aktualizuje wycenę projektu */
+export async function upsertWycena(wycena) {
+  return gasPost("upsertWycena", { wycena });
 }
