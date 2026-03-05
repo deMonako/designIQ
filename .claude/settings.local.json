@@ -12,7 +12,9 @@
       "Bash(git push -u origin claude/inspiring-easley)",
       "Bash(gh pr:*)",
       "Bash(git add src/tailwind-output.css .claude/)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git add GAS_Code.gs src/admin/api/gasApi.js src/admin/views/Klienci.jsx src/admin/views/Projekty.jsx src/admin/views/WycenaEditor.jsx src/components/investment/ClientWycenaView.jsx src/components/investment/FileUploadSection.jsx src/components/investment/InvestmentTimeline.jsx src/components/investment/StatusDashboard.jsx src/pages/StatusInwestycji.jsx)",
+      "Bash(git push -u origin claude/update-status-and-name-ZRAlL)"
     ]
   }
 }
