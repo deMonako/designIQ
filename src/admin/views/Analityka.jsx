@@ -177,22 +177,20 @@ function ProjectHealthCard({ project, tasks, onNavigate }) {
   );
 }
 
-// ── Gantt timeline (per-project colors, no gaps, hover tooltip) ───────────────
-const PROJECT_COLORS = [
-  "#f97316", // orange
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#14b8a6", // teal
-  "#f43f5e", // rose
-  "#d97706", // amber
-  "#10b981", // emerald
-  "#6366f1", // indigo
-  "#ec4899", // pink
-  "#06b6d4", // cyan
+// ── Gantt timeline (per-stage colors, no gaps, floating tooltip) ─────────────
+const STAGE_PALETTE = [
+  "#3b82f6", "#f97316", "#10b981", "#8b5cf6", "#f43f5e",
+  "#14b8a6", "#d97706", "#6366f1", "#ec4899", "#06b6d4",
 ];
 
+function stageColor(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return STAGE_PALETTE[h % STAGE_PALETTE.length];
+}
+
 function GanttTimeline({ projects }) {
-  const [hover, setHover] = useState(null); // { dateStr, xPct }
+  const [hover, setHover] = useState(null); // { dateStr, clientX, clientY, xPct, flipped }
 
   const winStart = useMemo(() => {
     const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() - 14); return d;
@@ -218,7 +216,6 @@ function GanttTimeline({ projects }) {
     return list;
   }, [winStart, winEnd, winMs]);
 
-  // Sort by deadline ascending (closest first)
   const visible = useMemo(() =>
     projects
       .filter(p => {
@@ -232,20 +229,21 @@ function GanttTimeline({ projects }) {
       }),
   [projects, winStart, winEnd]);
 
-  // Assign stable color per project
-  const projColorMap = useMemo(() => {
-    const map = {};
-    visible.forEach((p, i) => { map[p.id] = PROJECT_COLORS[i % PROJECT_COLORS.length]; });
-    return map;
+  // All unique stage names in view (for legend)
+  const allStageNames = useMemo(() => {
+    const names = new Set();
+    visible.forEach(p => (p.stageSchedule || []).forEach(st => names.add(st.name)));
+    return [...names];
   }, [visible]);
 
   // Tooltip entries for hovered date
   const tooltipEntries = useMemo(() => {
     if (!hover) return [];
     return visible.flatMap(p => {
-      const sched = p.stageSchedule || [];
-      const stage = sched.find(st => st.start <= hover.dateStr && st.end >= hover.dateStr);
-      return stage ? [{ project: p, stageName: stage.name }] : [];
+      const stage = (p.stageSchedule || []).find(
+        st => st.start <= hover.dateStr && st.end >= hover.dateStr
+      );
+      return stage ? [{ project: p, stageName: stage.name, color: stageColor(stage.name) }] : [];
     });
   }, [hover, visible]);
 
@@ -254,7 +252,8 @@ function GanttTimeline({ projects }) {
     const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const dateMs = winStart.getTime() + relX * winMs;
     const dateStr = new Date(dateMs).toISOString().slice(0, 10);
-    setHover({ dateStr, xPct: relX * 100 });
+    const flipped = e.clientX > window.innerWidth * 0.62;
+    setHover({ dateStr, clientX: e.clientX, clientY: e.clientY, xPct: relX * 100, flipped });
   }, [winStart, winMs]);
 
   return (
@@ -272,13 +271,12 @@ function GanttTimeline({ projects }) {
       {/* Rows */}
       <div className="space-y-2">
         {visible.map(p => {
-          const color = projColorMap[p.id];
           const schedule = p.stageSchedule || [];
           const pStart = safeDate(p.startDate), pEnd = safeDate(p.deadline);
 
-          // Full project background span
-          const bgLeft = pStart ? Math.max(0, ((pStart - winStart) / winMs) * 100) : 0;
-          const bgRight = pEnd ? Math.min(100, ((pEnd - winStart) / winMs) * 100) : 100;
+          // Background span (include deadline day: +1 day)
+          const bgLeft  = pStart ? Math.max(0, ((pStart.getTime() - winStart.getTime()) / winMs) * 100) : 0;
+          const bgRight = pEnd   ? Math.min(100, ((pEnd.getTime() + 86_400_000 - winStart.getTime()) / winMs) * 100) : 100;
           const bgWidth = Math.max(0.5, bgRight - bgLeft);
 
           return (
@@ -293,35 +291,38 @@ function GanttTimeline({ projects }) {
                 onMouseMove={handleBarMove}
                 onMouseLeave={() => setHover(null)}
               >
-                {/* Full project background (thin, semi-transparent) */}
-                <div
-                  style={{ left: `${bgLeft}%`, width: `${bgWidth}%`, backgroundColor: color, opacity: 0.15 }}
-                  className="absolute h-full rounded-sm"
-                />
-                {/* Stage segments */}
+                {/* Full-project thin background */}
+                <div style={{ left: `${bgLeft}%`, width: `${bgWidth}%` }}
+                  className="absolute h-full rounded-sm bg-slate-300/40" />
+
+                {/* Stage segments — colored by stage name */}
                 {schedule.length > 0 ? schedule.map((st, si) => {
                   const ss = new Date(st.start + "T00:00:00").getTime();
-                  const se = new Date(st.end   + "T00:00:00").getTime();
+                  // +1 day so end date is fully included (no gap when next starts the day after)
+                  const se = new Date(st.end + "T00:00:00").getTime() + 86_400_000;
                   const ls = Math.max(ss, winStart.getTime());
                   const le = Math.min(se, winEnd.getTime());
                   if (le <= ls) return null;
                   const lft = ((ls - winStart.getTime()) / winMs) * 100;
-                  const wid = Math.max(0.5, ((le - ls) / winMs) * 100);
+                  const wid = Math.max(0.3, ((le - ls) / winMs) * 100);
                   return (
-                    <div key={si} style={{ left: `${lft}%`, width: `${wid}%`, backgroundColor: color }}
-                      className="absolute h-full opacity-85 rounded-sm" />
+                    <div key={si}
+                      style={{ left: `${lft}%`, width: `${wid}%`, backgroundColor: stageColor(st.name) }}
+                      className="absolute h-full rounded-sm opacity-80"
+                    />
                   );
                 }) : (
-                  // Fallback: single bar for whole project
-                  <div style={{ left: `${bgLeft}%`, width: `${bgWidth}%`, backgroundColor: color }}
-                    className="absolute h-full opacity-70 rounded-sm" />
+                  <div style={{ left: `${bgLeft}%`, width: `${bgWidth}%` }}
+                    className="absolute h-full rounded-sm bg-slate-400/60" />
                 )}
+
                 {/* Today marker */}
                 {todayPct >= 0 && todayPct <= 100 && (
                   <div style={{ left: `${todayPct}%` }}
                     className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none" />
                 )}
-                {/* Crosshair on hover */}
+
+                {/* Crosshair */}
                 {hover && (
                   <div style={{ left: `${hover.xPct}%` }}
                     className="absolute top-0 bottom-0 w-px bg-slate-500/30 z-20 pointer-events-none" />
@@ -333,42 +334,49 @@ function GanttTimeline({ projects }) {
         {!visible.length && <p className="text-sm text-slate-400 text-center py-3">Brak projektów w tym oknie</p>}
       </div>
 
-      {/* Hover info panel — shows below Gantt when hovering */}
-      <div className={`mt-3 rounded-xl border text-xs transition-all overflow-hidden ${
-        hover ? "border-slate-200 bg-slate-900" : "border-transparent h-0"
-      }`}>
-        {hover && (
-          <div className="p-3 text-white">
-            <div className="font-bold text-slate-300 mb-2">
-              {new Date(hover.dateStr + "T12:00:00").toLocaleDateString("pl-PL", {
-                day: "numeric", month: "long", year: "numeric"
-              })}
-            </div>
-            {tooltipEntries.length > 0 ? (
-              <div className="space-y-1">
-                {tooltipEntries.map(e => (
-                  <div key={e.project.id} className="flex items-center gap-2">
-                    <span style={{ backgroundColor: projColorMap[e.project.id] }}
-                      className="w-2 h-2 rounded-sm flex-shrink-0 inline-block" />
-                    <span className="font-semibold">{e.project.name}</span>
-                    <span className="text-slate-400">—</span>
-                    <span className="text-slate-300">{e.stageName}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-slate-500">Brak aktywnych etapów w tej dacie</div>
-            )}
+      {/* Floating tooltip — follows mouse cursor */}
+      {hover && (
+        <div
+          style={{
+            position: "fixed",
+            left: hover.flipped ? hover.clientX - 228 : hover.clientX + 14,
+            top: hover.clientY - 10,
+            zIndex: 9999,
+            pointerEvents: "none",
+            minWidth: "13rem",
+            maxWidth: "18rem",
+          }}
+          className="bg-slate-900 text-white text-xs rounded-xl shadow-2xl border border-slate-700 p-3"
+        >
+          <div className="font-bold text-slate-200 mb-2">
+            {new Date(hover.dateStr + "T12:00:00").toLocaleDateString("pl-PL", {
+              weekday: "short", day: "numeric", month: "long",
+            })}
           </div>
-        )}
-      </div>
+          {tooltipEntries.length > 0 ? (
+            <div className="space-y-1.5">
+              {tooltipEntries.map(e => (
+                <div key={e.project.id} className="flex items-center gap-2">
+                  <span style={{ backgroundColor: e.color }}
+                    className="w-2 h-2 rounded-sm flex-shrink-0 inline-block" />
+                  <span className="text-slate-300 truncate">{e.project.name}</span>
+                  <span className="text-slate-600">·</span>
+                  <span style={{ color: e.color }} className="font-semibold truncate">{e.stageName}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-slate-500">Brak aktywnych etapów</div>
+          )}
+        </div>
+      )}
 
-      {/* Legend */}
+      {/* Legend — stage names */}
       <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-slate-400">
-        {visible.map(p => (
-          <span key={p.id} className="flex items-center gap-1">
-            <span style={{ backgroundColor: projColorMap[p.id] }} className="w-2.5 h-2.5 rounded-sm inline-block" />
-            {p.name}
+        {allStageNames.map(name => (
+          <span key={name} className="flex items-center gap-1">
+            <span style={{ backgroundColor: stageColor(name) }} className="w-2.5 h-2.5 rounded-sm inline-block" />
+            {name}
           </span>
         ))}
         <span className="flex items-center gap-1">
