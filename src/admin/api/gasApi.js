@@ -199,6 +199,15 @@ export async function uploadFile(file, projectId = null, projectCode = null) {
   });
 }
 
+/**
+ * Pobiera treść pliku projekt.svg i projekt.json z folderu projektu na Drive.
+ * GAS szuka plików po nazwie w folderze DesignIQ/<projectCode>/
+ * Zwraca: { svg: "<svg>...</svg>", attribs: { HANDLE: { tag, desc, ... } } }
+ */
+export async function getDwgViewerContent(projectCode) {
+  return gasGet("getDwgViewerContent", { projectCode });
+}
+
 // ────────────────────────────────────────────────────────────────────────────────
 // LEADY (konfigurator)
 // ────────────────────────────────────────────────────────────────────────────────

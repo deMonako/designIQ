@@ -39,12 +39,14 @@ function mapInvestmentResponse(data) {
       uploaded_by:   "designIQ",
       uploaded_date: d.date,
     })),
-    ...files.map(f => ({
-      name:          f.name,
-      url:           f.webViewLink || f.webContentLink,
-      uploaded_by:   "Klient",
-      uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
-    })),
+    ...files
+      .filter(f => f.name !== "projekt.svg" && f.name !== "projekt.json")
+      .map(f => ({
+        name:          f.name,
+        url:           f.webViewLink || f.webContentLink,
+        uploaded_by:   "Klient",
+        uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
+      })),
   ];
 
   return {

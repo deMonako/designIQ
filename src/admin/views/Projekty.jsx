@@ -11,6 +11,7 @@ import { isOverdue, TODAY } from "../mockData";
 import { uploadFile } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
 import ZakupyEditor from "./ZakupyEditor";
+import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -384,6 +385,7 @@ function ProjectDetail({
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
+    { id: "rzut",         label: "Rzut DWG" },
   ];
 
   const activeTasks = projectTasks.filter(t => t.status !== "Zrobione");
@@ -1312,6 +1314,22 @@ function ProjectDetail({
                   {note || <span className="text-slate-400 italic">Brak notatek</span>}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* ══ RZUT DWG ══ */}
+          {activeTab === "rzut" && (
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+              <div className="mb-3">
+                <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-orange-500" /> Rzut projektu automatyki
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Umieść <code className="bg-slate-100 px-1 rounded">projekt.svg</code> i{" "}
+                  <code className="bg-slate-100 px-1 rounded">projekt.json</code> w folderze projektu na Drive
+                </p>
+              </div>
+              <DwgViewer projectCode={project.code} />
             </div>
           )}
 
