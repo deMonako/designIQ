@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
-  FolderKanban, CheckSquare, AlertTriangle, TrendingUp,
+  FolderKanban, CheckSquare, AlertTriangle,
   BarChart2, Download, FileText, Clock, Banknote,
   Calendar, Target, CheckCircle2, Wallet, Timer,
 } from "lucide-react";
@@ -515,47 +515,6 @@ function StageDurations({ projects }) {
   );
 }
 
-// ── Package breakdown ─────────────────────────────────────────────────────────
-function PackageBreakdown({ projects }) {
-  const data = useMemo(() => {
-    const map = {};
-    projects.forEach(p => {
-      const key = p.package || "Brak";
-      if (!map[key]) map[key] = { count: 0, budget: 0, active: 0 };
-      map[key].count++;
-      map[key].budget += p.budget || 0;
-      if (p.status === "W trakcie") map[key].active++;
-    });
-    return Object.entries(map)
-      .map(([name, v]) => ({ name, ...v }))
-      .sort((a, b) => b.count - a.count);
-  }, [projects]);
-
-  const maxCount = Math.max(...data.map(d => d.count), 1);
-
-  return (
-    <div className="space-y-3">
-      {data.map(d => (
-        <div key={d.name} className="flex items-center gap-3">
-          <div className="w-32 text-xs font-medium text-slate-700 text-right truncate flex-shrink-0">{d.name}</div>
-          <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(d.count / maxCount) * 100}%` }}
-              transition={{ duration: 0.7 }}
-              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"
-            />
-          </div>
-          <div className="text-xs font-bold text-slate-700 w-5 flex-shrink-0">{d.count}</div>
-          {d.budget > 0 && (
-            <div className="text-[10px] text-slate-400 w-20 text-right flex-shrink-0">{formatPLN(d.budget)}</div>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Analityka({ projects, tasks, checklists, clients = [], onNavigateToProject }) {
   const onlyTasks    = tasks.filter(t => t.type === "task");
@@ -673,16 +632,6 @@ export default function Analityka({ projects, tasks, checklists, clients = [], o
           <StageDurations projects={projects} />
         </section>
       </div>
-
-      {/* ── Pakiety ── */}
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <SectionHeader icon={TrendingUp} title="Podział wg pakietów"
-          sub="Liczba projektów i łączna wartość budżetu na pakiet" />
-        <PackageBreakdown projects={projects} />
-        {projects.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-4">Brak projektów</p>
-        )}
-      </section>
 
     </div>
   );
