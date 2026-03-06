@@ -15,12 +15,13 @@ import { GAS_CONFIG } from "../admin/api/gasConfig";
 // Importy widoków
 import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
+import ClientZakupyView from "../components/investment/ClientZakupyView";
 
 const GAS_URL = GAS_CONFIG.scriptUrl;
 
 // Mapuje odpowiedź nowego GAS na format oczekiwany przez komponenty inwestycji
 function mapInvestmentResponse(data) {
-  const { project, docs = [], files = [], messages = [], wycena } = data;
+  const { project, docs = [], files = [], messages = [], wycena, zakupy } = data;
 
   // Etapy: nowy GAS przechowuje jako tablicę stringów, InvestmentTimeline oczekuje obiektów
   const stages = (project.stages || []).map((name, i) => ({
@@ -61,6 +62,7 @@ function mapInvestmentResponse(data) {
     quotation_status:  wycena?.status || project.status || "Czeka na akceptację",
     accepted_at:       wycena?.acceptedAt || null,
     quotation:         wycena && Array.isArray(wycena.items) && wycena.items.length > 0 ? wycena : null,
+    zakupy:            zakupy && Array.isArray(zakupy.items) && zakupy.items.length > 0 ? zakupy : null,
     messages,
     // Status projektu
     status:            project.status,
@@ -84,6 +86,7 @@ export default function StatusInwestycji() {
   const [investmentCode, setInvestmentCode] = useState("");
   const [investment, setInvestment] = useState(null);
   const [quotation, setQuotation] = useState(null);
+  const [zakupy, setZakupy] = useState(null);
   const [activeView, setActiveView] = useState("status"); // "status" | "wycena" | "zakupy"
 
   const [isSearching, setIsSearching] = useState(false);
@@ -125,6 +128,7 @@ export default function StatusInwestycji() {
 
         setInvestment(mapped);
         setQuotation(mapped.quotation);
+        setZakupy(mapped.zakupy);
 
         if (!isUpdate) {
           setActiveView("status");
@@ -181,15 +185,11 @@ export default function StatusInwestycji() {
 
       case "zakupy":
         return (
-          <div className="p-8 text-center bg-white border-2 border-slate-200 rounded-xl my-6 mx-0">
-            <Button onClick={() => navigateTo("status")} variant="ghost" className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
-            </Button>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Lista zakupów</h2>
-            <p className="text-slate-500 mt-2 text-sm tracking-wide">
-              Ten widok jest w trakcie przygotowania.
-            </p>
-          </div>
+          <ClientZakupyView
+            investment={investment}
+            zakupy={zakupy}
+            onBack={() => navigateTo("status")}
+          />
         );
 
       default:

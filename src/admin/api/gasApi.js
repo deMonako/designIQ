@@ -245,3 +245,17 @@ export async function getWycena(projectId) {
 export async function upsertWycena(wycena) {
   return gasPost("upsertWycena", { wycena });
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// ZAKUPY
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera listę zakupów projektu po projectId */
+export async function getZakupy(projectId) {
+  return gasGet("getZakupy", { projectId });
+}
+
+/** Zapisuje / aktualizuje listę zakupów projektu */
+export async function upsertZakupy(zakupy) {
+  return gasPost("upsertZakupy", { zakupy });
+}

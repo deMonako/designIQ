@@ -10,6 +10,7 @@ import {
 import { isOverdue, TODAY } from "../mockData";
 import { uploadFile } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
+import ZakupyEditor from "./ZakupyEditor";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -210,6 +211,7 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
+  const [showZakupy,        setShowZakupy]        = useState(false);
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -1335,6 +1337,24 @@ function ProjectDetail({
                 </p>
               </div>
 
+              {/* Lista zakupów */}
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-2">
+                    <List className="w-4 h-4 text-green-600" /> Lista zakupów
+                  </h3>
+                  <button
+                    onClick={() => setShowZakupy(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-semibold hover:bg-green-100 transition-colors"
+                  >
+                    <List className="w-3.5 h-3.5" /> Edytuj zakupy
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Materiały i urządzenia do zamówienia. Klient widzi status każdej pozycji (Oczekuje / Zamówione / Dostarczone).
+                </p>
+              </div>
+
               {/* Summary */}
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
                 <h3 className="font-semibold text-slate-900 text-sm mb-4 flex items-center gap-2">
@@ -1582,6 +1602,13 @@ function ProjectDetail({
         <WycenaEditor
           project={project}
           onClose={() => setShowWycena(false)}
+        />
+      )}
+
+      {showZakupy && (
+        <ZakupyEditor
+          project={project}
+          onClose={() => setShowZakupy(false)}
         />
       )}
     </div>
