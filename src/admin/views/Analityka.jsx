@@ -1,13 +1,29 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import {
   FolderKanban, CheckSquare, AlertTriangle, TrendingUp,
-  Users, BarChart2, Download, FileText, Clock, Banknote,
-  Calendar, Target, ArrowRight, CheckCircle2,
+  BarChart2, Download, FileText, Clock, Banknote,
+  Calendar, Target, CheckCircle2, Wallet, Timer,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
+
+// ── Formatters ────────────────────────────────────────────────────────────────
+const formatPLN = (v) =>
+  new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(v ?? 0);
+
+function safeDate(str) {
+  if (!str) return null;
+  const s = String(str).substring(0, 10);
+  return s.length === 10 ? new Date(s + "T12:00:00") : null;
+}
+
+function dateDiffDays(start, end) {
+  const s = safeDate(start), e = safeDate(end);
+  if (!s || !e) return 0;
+  return Math.round((e - s) / 86_400_000);
+}
 
 // ── Exports ───────────────────────────────────────────────────────────────────
 function downloadCSV(filename, rows) {
@@ -23,7 +39,7 @@ function downloadCSV(filename, rows) {
   URL.revokeObjectURL(url);
 }
 
-function downloadPDF(projects, tasks, clients) {
+function downloadPDF(projects, tasks) {
   const doc = new jsPDF("p", "mm", "a4");
   const ORANGE = [234, 88, 12];
   doc.setFontSize(18); doc.setTextColor(30, 41, 59);
@@ -76,6 +92,7 @@ function KpiCard({ icon: Icon, label, value, sub, variant = "slate", alert }) {
     red:    "bg-red-50    text-red-600",
     slate:  "bg-slate-100 text-slate-600",
     purple: "bg-purple-50 text-purple-600",
+    teal:   "bg-teal-50   text-teal-600",
   };
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-4 transition-shadow hover:shadow-md ${
@@ -91,36 +108,20 @@ function KpiCard({ icon: Icon, label, value, sub, variant = "slate", alert }) {
   );
 }
 
-function HBar({ label, value, max, color, count }) {
-  const pct = max > 0 ? (value / max) * 100 : 0;
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-24 text-xs text-slate-500 text-right flex-shrink-0 truncate">{label}</div>
-      <div className="flex-1 h-3.5 bg-slate-100 rounded-full overflow-hidden">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className={`h-full rounded-full ${color}`}
-        />
-      </div>
-      <div className="w-5 text-xs font-bold text-slate-700 flex-shrink-0 text-right">{count}</div>
-    </div>
-  );
-}
-
 // ── Project health card ───────────────────────────────────────────────────────
 function ProjectHealthCard({ project, tasks, onNavigate }) {
-  const projTasks  = tasks.filter(t => t.projectId === project.id && t.type === "task");
-  const doneTasks  = projTasks.filter(t => t.status === "Zrobione").length;
-  const lateTasks  = projTasks.filter(t => isOverdue(t.dueDate, t.status)).length;
-  const days       = Math.ceil((new Date(project.deadline + "T00:00:00") - new Date(TODAY + "T00:00:00")) / 86_400_000);
-  const isLate     = days < 0;
-  const isUrgent   = !isLate && days <= 7;
-  const isSoon     = !isLate && !isUrgent && days <= 30;
+  const projTasks = tasks.filter(t => t.projectId === project.id && t.type === "task");
+  const doneTasks = projTasks.filter(t => t.status === "Zrobione").length;
+  const lateTasks = projTasks.filter(t => isOverdue(t.dueDate, t.status)).length;
+  const days      = Math.ceil((safeDate(project.deadline) - safeDate(TODAY)) / 86_400_000);
+  const isLate    = days < 0;
+  const isUrgent  = !isLate && days <= 7;
 
-  const deadlineColor = isLate ? "text-red-600" : isUrgent ? "text-orange-600" : isSoon ? "text-amber-600" : "text-slate-400";
-  const deadlineText  = isLate ? `${Math.abs(days)} dni po terminie` : days === 0 ? "Termin dziś!" : `${days} dni do terminu`;
+  const deadlineColor = isLate ? "text-red-600" : isUrgent ? "text-orange-600" : "text-slate-400";
+  const deadlineText  = isLate
+    ? `${Math.abs(days)} dni po terminie`
+    : days === 0 ? "Termin dziś!"
+    : `${days} dni do terminu`;
 
   const statusStyle = {
     "Wstępny":   "bg-slate-100 text-slate-600",
@@ -176,30 +177,31 @@ function ProjectHealthCard({ project, tasks, onNavigate }) {
   );
 }
 
-// ── Gantt timeline ────────────────────────────────────────────────────────────
-const STAGE_PALETTE = [
-  { key: "wycen",      color: "bg-blue-400",    label: "Wycena" },
-  { key: "projekt a",  color: "bg-indigo-500",   label: "Projekt automatyki" },
-  { key: "projekt sz", color: "bg-violet-500",   label: "Projekt szafy" },
-  { key: "prefabr",    color: "bg-purple-400",   label: "Prefabrykacja" },
-  { key: "monta",      color: "bg-orange-500",   label: "Montaż" },
-  { key: "uruchom",    color: "bg-teal-500",     label: "Uruchomienie" },
-  { key: "szkolen",    color: "bg-green-400",    label: "Szkolenie" },
-  { key: "odbió",      color: "bg-emerald-500",  label: "Odbiór" },
+// ── Gantt timeline (per-project colors, no gaps, hover tooltip) ───────────────
+const PROJECT_COLORS = [
+  "#f97316", // orange
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+  "#14b8a6", // teal
+  "#f43f5e", // rose
+  "#d97706", // amber
+  "#10b981", // emerald
+  "#6366f1", // indigo
+  "#ec4899", // pink
+  "#06b6d4", // cyan
 ];
 
-function stageColor(name) {
-  const n = name.toLowerCase();
-  for (const { key, color } of STAGE_PALETTE) {
-    if (n.includes(key)) return color;
-  }
-  return "bg-slate-400";
-}
-
 function GanttTimeline({ projects }) {
-  const winStart = useMemo(() => { const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() - 14); return d; }, []);
-  const winEnd   = useMemo(() => { const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() + 70); return d; }, []);
-  const winMs    = winEnd - winStart;
+  const [hover, setHover] = useState(null); // { dateStr, xPct }
+
+  const winStart = useMemo(() => {
+    const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() - 14); return d;
+  }, []);
+  const winEnd = useMemo(() => {
+    const d = new Date(TODAY + "T00:00:00"); d.setDate(d.getDate() + 70); return d;
+  }, []);
+  const winMs = winEnd - winStart;
+
   const todayPct = ((new Date(TODAY + "T00:00:00") - winStart) / winMs) * 100;
 
   const months = useMemo(() => {
@@ -207,55 +209,97 @@ function GanttTimeline({ projects }) {
     let d = new Date(winStart.getFullYear(), winStart.getMonth(), 1);
     while (d <= winEnd) {
       const pct = ((d - winStart) / winMs) * 100;
-      if (pct >= 0 && pct <= 100) list.push({ label: d.toLocaleDateString("pl-PL", { month: "short" }), pct });
+      if (pct >= 0 && pct <= 100) list.push({
+        label: d.toLocaleDateString("pl-PL", { month: "short", day: "numeric" }),
+        pct,
+      });
       d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
     }
     return list;
   }, [winStart, winEnd, winMs]);
 
-  const visible = projects.filter(p => {
-    const s = new Date(p.startDate + "T00:00:00");
-    const e = new Date(p.deadline + "T00:00:00");
-    return e >= winStart && s <= winEnd;
-  });
+  // Sort by deadline ascending (closest first)
+  const visible = useMemo(() =>
+    projects
+      .filter(p => {
+        const s = safeDate(p.startDate), e = safeDate(p.deadline);
+        return s && e && e >= winStart && s <= winEnd;
+      })
+      .sort((a, b) => {
+        const da = safeDate(a.deadline) || new Date("9999-12-31");
+        const db = safeDate(b.deadline) || new Date("9999-12-31");
+        return da - db;
+      }),
+  [projects, winStart, winEnd]);
 
-  // Build unique stage legend from visible projects
-  const legendStages = useMemo(() => {
-    const seen = new Set();
-    const result = [];
-    visible.forEach(p => (p.stageSchedule ?? []).forEach(st => {
-      const c = stageColor(st.name);
-      if (!seen.has(c)) { seen.add(c); result.push({ color: c, label: st.name }); }
-    }));
-    return result;
+  // Assign stable color per project
+  const projColorMap = useMemo(() => {
+    const map = {};
+    visible.forEach((p, i) => { map[p.id] = PROJECT_COLORS[i % PROJECT_COLORS.length]; });
+    return map;
   }, [visible]);
+
+  // Tooltip entries for hovered date
+  const tooltipEntries = useMemo(() => {
+    if (!hover) return [];
+    return visible.flatMap(p => {
+      const sched = p.stageSchedule || [];
+      const stage = sched.find(st => st.start <= hover.dateStr && st.end >= hover.dateStr);
+      return stage ? [{ project: p, stageName: stage.name }] : [];
+    });
+  }, [hover, visible]);
+
+  const handleBarMove = useCallback((e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const dateMs = winStart.getTime() + relX * winMs;
+    const dateStr = new Date(dateMs).toISOString().slice(0, 10);
+    setHover({ dateStr, xPct: relX * 100 });
+  }, [winStart, winMs]);
 
   return (
     <div>
       {/* Month labels */}
       <div className="relative h-5 mb-1 ml-36">
         {months.map((m, i) => (
-          <span key={i} style={{ left: `${m.pct}%` }} className="absolute text-[10px] text-slate-400 -translate-x-1/2 font-medium">{m.label}</span>
+          <span key={i} style={{ left: `${m.pct}%` }}
+            className="absolute text-[10px] text-slate-400 -translate-x-1/2 font-medium whitespace-nowrap">
+            {m.label}
+          </span>
         ))}
       </div>
 
       {/* Rows */}
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {visible.map(p => {
-          const schedule = p.stageSchedule ?? [];
-          // Fallback: single bar if no stageSchedule
-          const hasSched = schedule.length > 0;
-          const fallbackColor = p.status === "Ukończony" ? "bg-green-400" : p.status === "Wstrzymany" ? "bg-amber-400"
-            : isOverdue(p.deadline, p.status) ? "bg-red-400" : "bg-orange-400";
+          const color = projColorMap[p.id];
+          const schedule = p.stageSchedule || [];
+          const pStart = safeDate(p.startDate), pEnd = safeDate(p.deadline);
+
+          // Full project background span
+          const bgLeft = pStart ? Math.max(0, ((pStart - winStart) / winMs) * 100) : 0;
+          const bgRight = pEnd ? Math.min(100, ((pEnd - winStart) / winMs) * 100) : 100;
+          const bgWidth = Math.max(0.5, bgRight - bgLeft);
 
           return (
             <div key={p.id} className="flex items-center gap-2">
-              <div className="text-xs text-slate-600 truncate text-right flex-shrink-0 pr-2 leading-tight" style={{ width: "9rem" }}>
+              <div className="text-xs text-slate-600 truncate text-right flex-shrink-0 pr-2 leading-tight"
+                style={{ width: "9rem" }}>
                 <div className="font-medium">{p.name}</div>
                 {p.code && <div className="text-[10px] text-slate-400">{p.code}</div>}
               </div>
-              <div className="flex-1 relative h-5 bg-slate-100 rounded-sm overflow-hidden">
-                {hasSched ? schedule.map((st, si) => {
+              <div
+                className="flex-1 relative h-5 bg-slate-100 rounded-sm overflow-visible cursor-crosshair"
+                onMouseMove={handleBarMove}
+                onMouseLeave={() => setHover(null)}
+              >
+                {/* Full project background (thin, semi-transparent) */}
+                <div
+                  style={{ left: `${bgLeft}%`, width: `${bgWidth}%`, backgroundColor: color, opacity: 0.15 }}
+                  className="absolute h-full rounded-sm"
+                />
+                {/* Stage segments */}
+                {schedule.length > 0 ? schedule.map((st, si) => {
                   const ss = new Date(st.start + "T00:00:00").getTime();
                   const se = new Date(st.end   + "T00:00:00").getTime();
                   const ls = Math.max(ss, winStart.getTime());
@@ -264,27 +308,24 @@ function GanttTimeline({ projects }) {
                   const lft = ((ls - winStart.getTime()) / winMs) * 100;
                   const wid = Math.max(0.5, ((le - ls) / winMs) * 100);
                   return (
-                    <div
-                      key={si}
-                      style={{ left: `${lft}%`, width: `${wid}%` }}
-                      title={`${st.name}: ${st.start} → ${st.end}`}
-                      className={`absolute h-full ${stageColor(st.name)} opacity-85`}
-                    />
+                    <div key={si} style={{ left: `${lft}%`, width: `${wid}%`, backgroundColor: color }}
+                      className="absolute h-full opacity-85 rounded-sm" />
                   );
                 }) : (
-                  // Fallback bar
-                  (() => {
-                    const s  = new Date(p.startDate + "T00:00:00").getTime();
-                    const e  = new Date(p.deadline  + "T00:00:00").getTime();
-                    const ls = Math.max(s, winStart.getTime());
-                    const le = Math.min(e, winEnd.getTime());
-                    const lft = ((ls - winStart.getTime()) / winMs) * 100;
-                    const wid = Math.max(1, ((le - ls) / winMs) * 100);
-                    return <div style={{ left: `${lft}%`, width: `${wid}%` }} className={`absolute h-full ${fallbackColor} opacity-80`} />;
-                  })()
+                  // Fallback: single bar for whole project
+                  <div style={{ left: `${bgLeft}%`, width: `${bgWidth}%`, backgroundColor: color }}
+                    className="absolute h-full opacity-70 rounded-sm" />
                 )}
                 {/* Today marker */}
-                <div style={{ left: `${todayPct}%` }} className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10" />
+                {todayPct >= 0 && todayPct <= 100 && (
+                  <div style={{ left: `${todayPct}%` }}
+                    className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10 pointer-events-none" />
+                )}
+                {/* Crosshair on hover */}
+                {hover && (
+                  <div style={{ left: `${hover.xPct}%` }}
+                    className="absolute top-0 bottom-0 w-px bg-slate-500/30 z-20 pointer-events-none" />
+                )}
               </div>
             </div>
           );
@@ -292,119 +333,217 @@ function GanttTimeline({ projects }) {
         {!visible.length && <p className="text-sm text-slate-400 text-center py-3">Brak projektów w tym oknie</p>}
       </div>
 
+      {/* Hover info panel — shows below Gantt when hovering */}
+      <div className={`mt-3 rounded-xl border text-xs transition-all overflow-hidden ${
+        hover ? "border-slate-200 bg-slate-900" : "border-transparent h-0"
+      }`}>
+        {hover && (
+          <div className="p-3 text-white">
+            <div className="font-bold text-slate-300 mb-2">
+              {new Date(hover.dateStr + "T12:00:00").toLocaleDateString("pl-PL", {
+                day: "numeric", month: "long", year: "numeric"
+              })}
+            </div>
+            {tooltipEntries.length > 0 ? (
+              <div className="space-y-1">
+                {tooltipEntries.map(e => (
+                  <div key={e.project.id} className="flex items-center gap-2">
+                    <span style={{ backgroundColor: projColorMap[e.project.id] }}
+                      className="w-2 h-2 rounded-sm flex-shrink-0 inline-block" />
+                    <span className="font-semibold">{e.project.name}</span>
+                    <span className="text-slate-400">—</span>
+                    <span className="text-slate-300">{e.stageName}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-slate-500">Brak aktywnych etapów w tej dacie</div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mt-3 text-[10px] text-slate-400">
-        {legendStages.map(({ color, label }) => (
-          <span key={color} className="flex items-center gap-1">
-            <span className={`w-2.5 h-2.5 rounded-sm ${color}`} />{label}
+        {visible.map(p => (
+          <span key={p.id} className="flex items-center gap-1">
+            <span style={{ backgroundColor: projColorMap[p.id] }} className="w-2.5 h-2.5 rounded-sm inline-block" />
+            {p.name}
           </span>
         ))}
-        <span className="flex items-center gap-1"><span className="w-0.5 h-3 bg-red-500 rounded-full inline-block" /> Dziś</span>
+        <span className="flex items-center gap-1">
+          <span className="w-0.5 h-3 bg-red-500 rounded-full inline-block" /> Dziś
+        </span>
       </div>
     </div>
   );
 }
 
-// ── Task heatmap ──────────────────────────────────────────────────────────────
-function TaskHeatmap({ tasks }) {
-  const NAMES = ["Pn","Wt","Śr","Cz","Pt","So","Nd"];
-  const { days, maxCount, offset } = useMemo(() => {
-    const today = new Date(TODAY + "T00:00:00");
-    const list  = Array.from({ length: 28 }, (_, i) => {
-      const d = new Date(today); d.setDate(d.getDate() - (27 - i));
-      const dateStr = d.toISOString().slice(0, 10);
-      return { date: dateStr, count: tasks.filter(t => t.dueDate === dateStr && t.type === "task").length, isToday: dateStr === TODAY };
+// ── Finance Overview ──────────────────────────────────────────────────────────
+function FinanceOverview({ projects }) {
+  const active = projects
+    .filter(p => p.status !== "Ukończony" && (p.budget || 0) > 0)
+    .sort((a, b) => {
+      const remA = (a.budget || 0) - ((a.paidProjekt || 0) + (a.paidPrefabrykacja || 0) + (a.paidUruchomienie || 0));
+      const remB = (b.budget || 0) - ((b.paidProjekt || 0) + (b.paidPrefabrykacja || 0) + (b.paidUruchomienie || 0));
+      return remB - remA;
     });
-    const max    = Math.max(...list.map(d => d.count), 1);
-    const off    = (new Date(list[0].date + "T00:00:00").getDay() + 6) % 7;
-    return { days: list, maxCount: max, offset: off };
-  }, [tasks]);
 
-  const heat = (n) => {
-    if (n === 0) return "bg-slate-100";
-    const r = n / maxCount;
-    return r <= 0.25 ? "bg-orange-100" : r <= 0.5 ? "bg-orange-200" : r <= 0.75 ? "bg-orange-300" : "bg-orange-500";
-  };
+  if (active.length === 0) {
+    return <p className="text-sm text-slate-400 text-center py-6">Brak danych finansowych</p>;
+  }
+
+  const totBudget   = active.reduce((s, p) => s + (p.budget || 0), 0);
+  const totPaid     = active.reduce((s, p) => s + ((p.paidProjekt || 0) + (p.paidPrefabrykacja || 0) + (p.paidUruchomienie || 0)), 0);
+  const totRemain   = Math.max(0, totBudget - totPaid);
 
   return (
-    <div>
-      <div className="grid grid-cols-7 gap-1 mb-1">
-        {NAMES.map(d => <div key={d} className="text-[10px] text-slate-400 text-center font-medium">{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {Array.from({ length: offset }).map((_, i) => <div key={`p${i}`} className="aspect-square" />)}
-        {days.map(day => (
-          <div key={day.date} title={`${day.date}: ${day.count} zadań`}
-            className={`aspect-square rounded-md ${heat(day.count)} ${day.isToday ? "ring-2 ring-orange-500" : ""} transition-colors`}
-          />
-        ))}
-      </div>
-      <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400">
-        <span>Mniej</span>
-        {["bg-slate-100","bg-orange-100","bg-orange-200","bg-orange-300","bg-orange-500"].map(c => (
-          <span key={c} className={`w-3 h-3 rounded ${c}`} />
-        ))}
-        <span>Więcej</span>
-      </div>
-    </div>
-  );
-}
-
-// ── CRM Pipeline ──────────────────────────────────────────────────────────────
-const PIPELINE_STAGES = ["Lead","Wycena","Negocjacje","Umowa","Realizacja"];
-const STAGE_COLORS = { Lead:"bg-blue-400", Wycena:"bg-amber-400", Negocjacje:"bg-purple-400", Umowa:"bg-green-400", Realizacja:"bg-orange-500" };
-const STAGE_TEXT   = { Lead:"text-blue-600", Wycena:"text-amber-600", Negocjacje:"text-purple-600", Umowa:"text-green-600", Realizacja:"text-orange-600" };
-
-function PipelineFunnel({ clients, projects }) {
-  const active = clients.filter(c => !c.isArchived);
-  const maxCount = Math.max(...PIPELINE_STAGES.map(s => active.filter(c => c.pipelineStatus === s).length), 1);
-
-  return (
-    <div className="space-y-2.5">
-      {PIPELINE_STAGES.map(stage => {
-        const stageClients = active.filter(c => c.pipelineStatus === stage);
-        const count  = stageClients.length;
-        // Szacowana wartość: powiąż klientów z projektami
-        const budget = projects.filter(p => stageClients.some(c => c.id === p.clientId) && p.status !== "Ukończony")
-          .reduce((s, p) => s + (p.budget ?? 0), 0);
-
+    <div className="space-y-4">
+      {active.map(p => {
+        const paid    = (p.paidProjekt || 0) + (p.paidPrefabrykacja || 0) + (p.paidUruchomienie || 0);
+        const budget  = p.budget || 0;
+        const remain  = Math.max(0, budget - paid);
+        const pct     = budget > 0 ? Math.round((paid / budget) * 100) : 0;
         return (
-          <div key={stage} className="flex items-center gap-3">
-            <div className="w-24 text-xs font-semibold text-slate-600 text-right flex-shrink-0">{stage}</div>
-            <div className="flex-1 h-6 bg-slate-100 rounded-full overflow-hidden">
+          <div key={p.id}>
+            <div className="flex items-baseline justify-between mb-1">
+              <span className="text-xs font-semibold text-slate-700 truncate max-w-[55%]">{p.name}</span>
+              <span className="text-xs text-slate-400 text-right">
+                {pct}% wpłacono · <span className={remain > 0 ? "text-orange-600 font-semibold" : "text-green-600 font-semibold"}>
+                  {remain > 0 ? `pozostało ${formatPLN(remain)}` : "opłacono w całości"}
+                </span>
+              </span>
+            </div>
+            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
-                animate={{ width: `${(count / maxCount) * 100}%` }}
-                transition={{ duration: 0.7, ease: "easeOut" }}
-                className={`h-full rounded-full ${STAGE_COLORS[stage]}`}
+                animate={{ width: `${pct}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className={`h-full rounded-full ${pct >= 100 ? "bg-green-500" : "bg-gradient-to-r from-orange-500 to-orange-400"}`}
               />
             </div>
-            <div className={`w-5 text-xs font-bold flex-shrink-0 text-right ${count > 0 ? STAGE_TEXT[stage] : "text-slate-300"}`}>{count}</div>
-            {budget > 0 && (
-              <div className="text-xs text-slate-400 flex-shrink-0 w-24 text-right">
-                {new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(budget)}
-              </div>
-            )}
+            <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
+              <span>Budżet: {formatPLN(budget)}</span>
+              <span>Wpłacono: {formatPLN(paid)}</span>
+            </div>
           </div>
         );
       })}
+
+      {/* Totals */}
+      <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-wide">Łączny budżet</div>
+          <div className="text-sm font-bold text-slate-800">{formatPLN(totBudget)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-wide">Wpłacono</div>
+          <div className="text-sm font-bold text-green-600">{formatPLN(totPaid)}</div>
+        </div>
+        <div>
+          <div className="text-[10px] text-slate-400 uppercase tracking-wide">Do zapłaty</div>
+          <div className="text-sm font-bold text-orange-600">{formatPLN(totRemain)}</div>
+        </div>
+      </div>
     </div>
   );
 }
 
-// ── Upcoming tasks ────────────────────────────────────────────────────────────
-function UpcomingTask({ task, project }) {
-  const days   = Math.ceil((new Date(task.dueDate + "T00:00:00") - new Date(TODAY + "T00:00:00")) / 86_400_000);
-  const color  = days < 0 ? "text-red-500" : days === 0 ? "text-orange-600" : "text-slate-500";
-  const label  = days < 0 ? `${Math.abs(days)}d po terminie` : days === 0 ? "Dziś" : `za ${days}d`;
-  return (
-    <div className="flex items-center gap-2.5 py-1.5 border-b border-slate-50 last:border-0">
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-0.5 ${days < 0 ? "bg-red-400" : "bg-orange-400"}`} />
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-slate-700 truncate">{task.title}</p>
-        {project && <p className="text-[10px] text-slate-400 truncate">{project.name}</p>}
+// ── Stage Duration Analysis ───────────────────────────────────────────────────
+function StageDurations({ projects }) {
+  const stats = useMemo(() => {
+    const map = {};
+    projects.forEach(p => {
+      (p.stageSchedule || []).forEach(st => {
+        const days = dateDiffDays(st.start, st.end);
+        if (days <= 0 || days > 365) return;
+        if (!map[st.name]) map[st.name] = [];
+        map[st.name].push(days);
+      });
+    });
+    return Object.entries(map)
+      .map(([name, vals]) => ({
+        name,
+        avg:  Math.round(vals.reduce((s, v) => s + v, 0) / vals.length),
+        min:  Math.min(...vals),
+        max:  Math.max(...vals),
+        count: vals.length,
+      }))
+      .sort((a, b) => b.avg - a.avg);
+  }, [projects]);
+
+  if (stats.length === 0) {
+    return (
+      <div className="text-sm text-slate-400 text-center py-6">
+        Brak danych harmonogramów — uzupełnij harmonogram w edytorze projektów
       </div>
-      <span className={`text-[10px] font-semibold flex-shrink-0 ${color}`}>{label}</span>
+    );
+  }
+
+  const maxAvg = Math.max(...stats.map(d => d.avg), 1);
+
+  return (
+    <div className="space-y-3">
+      {stats.map(d => (
+        <div key={d.name}>
+          <div className="flex items-baseline justify-between mb-1">
+            <span className="text-xs font-medium text-slate-700 truncate max-w-[60%]">{d.name}</span>
+            <span className="text-[10px] text-slate-400">
+              śr. <span className="font-bold text-slate-700">{d.avg} dni</span>
+              {d.count > 1 && ` (${d.min}–${d.max}) · ×${d.count}`}
+            </span>
+          </div>
+          <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(d.avg / maxAvg) * 100}%` }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="h-full bg-gradient-to-r from-teal-500 to-teal-400 rounded-full"
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Package breakdown ─────────────────────────────────────────────────────────
+function PackageBreakdown({ projects }) {
+  const data = useMemo(() => {
+    const map = {};
+    projects.forEach(p => {
+      const key = p.package || "Brak";
+      if (!map[key]) map[key] = { count: 0, budget: 0, active: 0 };
+      map[key].count++;
+      map[key].budget += p.budget || 0;
+      if (p.status === "W trakcie") map[key].active++;
+    });
+    return Object.entries(map)
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.count - a.count);
+  }, [projects]);
+
+  const maxCount = Math.max(...data.map(d => d.count), 1);
+
+  return (
+    <div className="space-y-3">
+      {data.map(d => (
+        <div key={d.name} className="flex items-center gap-3">
+          <div className="w-32 text-xs font-medium text-slate-700 text-right truncate flex-shrink-0">{d.name}</div>
+          <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(d.count / maxCount) * 100}%` }}
+              transition={{ duration: 0.7 }}
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full"
+            />
+          </div>
+          <div className="text-xs font-bold text-slate-700 w-5 flex-shrink-0">{d.count}</div>
+          {d.budget > 0 && (
+            <div className="text-[10px] text-slate-400 w-20 text-right flex-shrink-0">{formatPLN(d.budget)}</div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -412,34 +551,38 @@ function UpcomingTask({ task, project }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Analityka({ projects, tasks, checklists, clients = [], onNavigateToProject }) {
   const onlyTasks    = tasks.filter(t => t.type === "task");
-  const activeProj   = projects.filter(p => p.status === "W trakcie");
   const overdueCount = onlyTasks.filter(t => isOverdue(t.dueDate, t.status)).length;
   const openTasks    = onlyTasks.filter(t => t.status !== "Zrobione");
 
-  const pipelineValue = projects
-    .filter(p => p.status !== "Ukończony")
-    .reduce((s, p) => s + (p.budget ?? 0), 0);
-
-  const activeClients = clients.filter(c => !c.isArchived && c.pipelineStatus !== "Zakończony");
+  // Active projects sorted by closest deadline
+  const activeProj = useMemo(() =>
+    projects
+      .filter(p => p.status === "W trakcie")
+      .sort((a, b) => {
+        const da = safeDate(a.deadline) || new Date("9999-12-31");
+        const db = safeDate(b.deadline) || new Date("9999-12-31");
+        return da - db;
+      }),
+  [projects]);
 
   const avgProgress = activeProj.length
     ? Math.round(activeProj.reduce((s, p) => s + p.progress, 0) / activeProj.length) : 0;
 
-  const formatPLN = (v) => new Intl.NumberFormat("pl-PL", { style: "currency", currency: "PLN", maximumFractionDigits: 0 }).format(v);
+  // Remaining to pay by clients (active projects only)
+  const remainingToPay = useMemo(() =>
+    projects
+      .filter(p => p.status !== "Ukończony")
+      .reduce((s, p) => {
+        const paid = (p.paidProjekt || 0) + (p.paidPrefabrykacja || 0) + (p.paidUruchomienie || 0);
+        return s + Math.max(0, (p.budget || 0) - paid);
+      }, 0),
+  [projects]);
 
-  // Upcoming tasks (next 14 days + overdue)
-  const upcoming = useMemo(() => {
-    const cutoff = new Date(TODAY + "T00:00:00"); cutoff.setDate(cutoff.getDate() + 14);
-    const cutStr = cutoff.toISOString().slice(0, 10);
-    return openTasks.filter(t => t.dueDate <= cutStr).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 10);
-  }, [openTasks]);
+  const completedThisYear = useMemo(() =>
+    projects.filter(p => p.status === "Ukończony" && (p.deadline || "").startsWith(new Date().getFullYear().toString())).length,
+  [projects]);
 
-  const STATUS_COLORS   = { "Wstępny":"bg-slate-400","W trakcie":"bg-blue-500","Wstrzymany":"bg-amber-500","Ukończony":"bg-green-500" };
-  const PRIORITY_COLORS = { "Krytyczny":"bg-red-500","Wysoki":"bg-orange-500","Normalny":"bg-blue-400","Niski":"bg-slate-300" };
-  const statusData      = ["Wstępny","W trakcie","Wstrzymany","Ukończony"].map(s => ({ label: s, count: projects.filter(p => p.status === s).length }));
-  const prioData        = ["Krytyczny","Wysoki","Normalny","Niski"].map(p => ({ label: p, count: openTasks.filter(t => t.priority === p).length }));
-  const maxStatus       = Math.max(...statusData.map(d => d.count), 1);
-  const maxPrio         = Math.max(...prioData.map(d => d.count), 1);
+  const activeClients = clients.filter(c => !c.isArchived);
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-7xl mx-auto">
@@ -450,17 +593,21 @@ export default function Analityka({ projects, tasks, checklists, clients = [], o
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <BarChart2 className="w-5 h-5 text-orange-500" /> Analityka studia
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Puls projektów, zadań i klientów · {TODAY}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Finanse, harmonogram i kondycja projektów · {TODAY}</p>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => downloadCSV("projekty.csv", projects.map(p => ({ Nazwa: p.name, Status: p.status, Pakiet: p.package, Postep: `${p.progress}%`, Termin: p.deadline })))}
+            onClick={() => downloadCSV("projekty.csv", projects.map(p => ({
+              Nazwa: p.name, Status: p.status, Pakiet: p.package,
+              Postep: `${p.progress}%`, Termin: p.deadline,
+              Budzet: p.budget, Pozostalo: Math.max(0, (p.budget||0) - ((p.paidProjekt||0)+(p.paidPrefabrykacja||0)+(p.paidUruchomienie||0))),
+            })))}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
           >
             <Download className="w-3.5 h-3.5" /> CSV
           </button>
           <button
-            onClick={() => downloadPDF(projects, tasks, clients)}
+            onClick={() => downloadPDF(projects, tasks)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-xs font-semibold hover:shadow-md transition-all"
           >
             <FileText className="w-3.5 h-3.5" /> Raport PDF
@@ -470,88 +617,62 @@ export default function Analityka({ projects, tasks, checklists, clients = [], o
 
       {/* ── KPI ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard icon={Banknote}      label="Wartość w realizacji" variant="orange"
-          value={formatPLN(pipelineValue)} sub={`${activeProj.length} aktywnych projektów`} />
-        <KpiCard icon={FolderKanban}  label="Aktywne projekty"    variant="blue"
+        <KpiCard icon={Wallet}        label="Do zapłaty przez klientów" variant="orange"
+          value={formatPLN(remainingToPay)} sub={`${activeProj.length} aktywnych proj.`} />
+        <KpiCard icon={FolderKanban}  label="Aktywne projekty"          variant="blue"
           value={activeProj.length} sub={`śr. postęp ${avgProgress}%`} />
-        <KpiCard icon={CheckSquare}   label="Otwarte zadania"      variant="slate"
+        <KpiCard icon={CheckSquare}   label="Otwarte zadania"            variant="slate"
           value={openTasks.length} sub={`z ${onlyTasks.length} łącznie`} />
-        <KpiCard icon={AlertTriangle} label="Po terminie"          variant={overdueCount ? "red" : "green"} alert={overdueCount > 0}
+        <KpiCard icon={AlertTriangle} label="Zadania po terminie"        variant={overdueCount ? "red" : "green"} alert={overdueCount > 0}
           value={overdueCount} sub={overdueCount ? "Wymaga uwagi!" : "Wszystko OK"} />
-        <KpiCard icon={Users}         label="Klienci w pipeline"   variant="purple"
-          value={activeClients.length} sub={`${clients.length} łącznie`} />
+        <KpiCard icon={CheckCircle2}  label="Ukończone w tym roku"       variant="teal"
+          value={completedThisYear} sub={`${clients.length} klientów łącznie`} />
       </div>
 
-      {/* ── Projekty pod lupą ── */}
+      {/* ── Projekty pod lupą (sorted by deadline) ── */}
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <SectionHeader icon={Target} title="Projekty pod lupą" sub="Zdrowie i terminowość aktywnych projektów" />
+        <SectionHeader icon={Target} title="Projekty pod lupą"
+          sub="Aktywne projekty · sortowane od najbliższego terminu" />
         {activeProj.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {activeProj.map(p => <ProjectHealthCard key={p.id} project={p} tasks={tasks} onNavigate={onNavigateToProject} />)}
+            {activeProj.map(p => (
+              <ProjectHealthCard key={p.id} project={p} tasks={tasks} onNavigate={onNavigateToProject} />
+            ))}
           </div>
         ) : (
           <p className="text-sm text-slate-400 text-center py-6">Brak aktywnych projektów</p>
         )}
       </section>
 
-      {/* ── Oś czasu ── */}
+      {/* ── Harmonogram ── */}
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <SectionHeader icon={Calendar} title="Harmonogram projektów" sub="Okno: 2 tygodnie wstecz → 10 tygodni do przodu" />
+        <SectionHeader icon={Calendar} title="Harmonogram projektów"
+          sub="Przesuń mysz nad linię czasu aby zobaczyć szczegóły etapów danego dnia" />
         <GanttTimeline projects={projects} />
       </section>
 
-      {/* ── Zadania + Aktywność ── */}
+      {/* ── Finanse + Czas etapów ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* Zadania: rozkład */}
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-          <SectionHeader icon={CheckSquare} title="Zadania" sub="Rozkład wg statusu i priorytetu" />
-          <div className="space-y-6">
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Projekty wg statusu</p>
-              <div className="space-y-2">
-                {statusData.map(d => <HBar key={d.label} label={d.label} value={d.count} max={maxStatus} count={d.count} color={STATUS_COLORS[d.label]} />)}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Otwarte zadania wg priorytetu</p>
-              <div className="space-y-2">
-                {prioData.map(d => <HBar key={d.label} label={d.label} value={d.count} max={maxPrio} count={d.count} color={PRIORITY_COLORS[d.label]} />)}
-              </div>
-            </div>
-          </div>
+          <SectionHeader icon={Banknote} title="Finanse projektów"
+            sub="Budżet, wpłaty i kwota pozostała do zapłaty" />
+          <FinanceOverview projects={projects} />
         </section>
 
-        {/* Aktywność + Nadchodzące */}
-        <div className="space-y-6">
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <SectionHeader icon={BarChart2} title="Heatmapa zadań" sub="Aktywność w ostatnich 4 tygodniach" />
-            <TaskHeatmap tasks={tasks} />
-          </section>
-
-          <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <SectionHeader icon={AlertTriangle} title="Nadchodzące" sub="Zadania do 14 dni + zaległe" />
-            {upcoming.length > 0 ? (
-              <div>
-                {upcoming.map(t => (
-                  <UpcomingTask key={t.id} task={t} project={projects.find(p => p.id === t.projectId)} />
-                ))}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-sm text-green-600">
-                <CheckCircle2 className="w-4 h-4" /> Brak zaległych zadań – studio up to date!
-              </div>
-            )}
-          </section>
-        </div>
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <SectionHeader icon={Timer} title="Czas realizacji etapów"
+            sub="Średni czas trwania etapów na podstawie harmonogramów" />
+          <StageDurations projects={projects} />
+        </section>
       </div>
 
-      {/* ── Pipeline CRM ── */}
+      {/* ── Pakiety ── */}
       <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-        <SectionHeader icon={TrendingUp} title="Pipeline CRM" sub="Klienci wg etapu · szacowana wartość powiązanych projektów" />
-        <PipelineFunnel clients={clients} projects={projects} />
-        {clients.length === 0 && (
-          <p className="text-sm text-slate-400 text-center py-4">Brak danych CRM</p>
+        <SectionHeader icon={TrendingUp} title="Podział wg pakietów"
+          sub="Liczba projektów i łączna wartość budżetu na pakiet" />
+        <PackageBreakdown projects={projects} />
+        {projects.length === 0 && (
+          <p className="text-sm text-slate-400 text-center py-4">Brak projektów</p>
         )}
       </section>
 

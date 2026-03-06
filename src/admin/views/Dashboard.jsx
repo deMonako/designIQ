@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
-  StickyNote, Play, Pause, RotateCcw, Coffee, FolderKanban, Phone, Mail,
+  StickyNote, FolderKanban, Phone, Mail,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -233,90 +233,6 @@ function QuickNotes() {
   );
 }
 
-// ─── Pomodoro Timer ───────────────────────────────────────────────────────────
-
-const POMO_MODES = {
-  work:       { label: "Praca",          secs: 25 * 60, color: "text-orange-600", bg: "bg-orange-50",  stroke: "#f97316" },
-  shortBreak: { label: "Krótka przerwa", secs:  5 * 60, color: "text-green-600",  bg: "bg-green-50",   stroke: "#22c55e" },
-  longBreak:  { label: "Długa przerwa",  secs: 15 * 60, color: "text-blue-600",   bg: "bg-blue-50",    stroke: "#3b82f6" },
-};
-
-function PomodoroTimer() {
-  const [state,  setState]  = useState({ mode: "work", running: false, seconds: 25 * 60 });
-  const [rounds, setRounds] = useState(0);
-
-  useEffect(() => {
-    if (!state.running) return;
-    const id = setInterval(() => {
-      setState(prev => {
-        if (prev.seconds > 1) return { ...prev, seconds: prev.seconds - 1 };
-        const nr = prev.mode === "work" ? rounds + 1 : rounds;
-        setRounds(nr);
-        const nm = prev.mode === "work" ? (nr % 4 === 0 ? "longBreak" : "shortBreak") : "work";
-        return { mode: nm, running: false, seconds: POMO_MODES[nm].secs };
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [state.running, rounds]);
-
-  const cfg  = POMO_MODES[state.mode];
-  const mm   = String(Math.floor(state.seconds / 60)).padStart(2, "0");
-  const ss   = String(state.seconds % 60).padStart(2, "0");
-  const r    = 28, circ = 2 * Math.PI * r;
-  const pct  = 1 - state.seconds / cfg.secs;
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-3">
-        <Coffee className="w-4 h-4 text-orange-500" />
-        <span className="text-sm font-semibold text-slate-700">Focus Timer</span>
-        {rounds > 0 && (
-          <span className="ml-auto text-xs text-slate-400">{rounds} {rounds === 1 ? "runda" : "rundy"}</span>
-        )}
-      </div>
-      <div className="flex gap-1 mb-4">
-        {Object.entries(POMO_MODES).map(([key, m]) => (
-          <button key={key}
-            onClick={() => setState({ mode: key, running: false, seconds: m.secs })}
-            className={`flex-1 text-xs py-1 rounded-lg font-medium transition-all ${
-              state.mode === key ? `${cfg.bg} ${cfg.color}` : "text-slate-400 hover:text-slate-600"
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex items-center justify-center gap-5 flex-1">
-        <div className="relative w-16 h-16 flex items-center justify-center">
-          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 64 64">
-            <circle cx="32" cy="32" r={r} fill="none" stroke="#f1f5f9" strokeWidth="4" />
-            <circle cx="32" cy="32" r={r} fill="none" stroke={cfg.stroke} strokeWidth="4"
-              strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-              className="transition-all duration-1000" />
-          </svg>
-          <span className={`text-sm font-bold tabular-nums ${cfg.color}`}>{mm}:{ss}</span>
-        </div>
-        <div className="flex flex-col gap-2">
-          <button
-            onClick={() => setState(p => ({ ...p, running: !p.running }))}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-              state.running ? "bg-slate-100 text-slate-700 hover:bg-slate-200" : `${cfg.bg} ${cfg.color}`
-            }`}
-          >
-            {state.running ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-            {state.running ? "Pauza" : "Start"}
-          </button>
-          <button
-            onClick={() => setState({ mode: "work", running: false, seconds: 25 * 60 })}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all"
-          >
-            <RotateCcw className="w-3 h-3" /> Reset
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
@@ -601,11 +517,8 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
         </div>
       </div>
 
-      {/* ── Widżety: notatki + pomodoro ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <QuickNotes />
-        <PomodoroTimer />
-      </div>
+      {/* ── Notatki ── */}
+      <QuickNotes />
     </div>
   );
 }
