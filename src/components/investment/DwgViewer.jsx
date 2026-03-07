@@ -176,15 +176,28 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const svgEl = wrap.querySelector("svg");
     if (!svgEl) return;
 
-    // Fit to container
+    // Fit to container — napraw viewBox jeśli brakuje lub pochodzi z DXF (ogromne współrzędne)
     svgEl.style.width  = "100%";
     svgEl.style.height = "100%";
     svgEl.removeAttribute("width");
     svgEl.removeAttribute("height");
-    if (!svgEl.getAttribute("viewBox")) {
-      const bbox = svgEl.getBBox?.();
-      if (bbox) svgEl.setAttribute("viewBox", `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`);
-    }
+
+    // Pobierz rzeczywisty bounding box wszystkich elementów i ustaw viewBox
+    // (getBBox działa tylko po dołączeniu do DOM — wrap musi być widoczny)
+    requestAnimationFrame(() => {
+      try {
+        const bbox = svgEl.getBBox();
+        if (bbox && bbox.width > 0 && bbox.height > 0) {
+          const pad = Math.max(bbox.width, bbox.height) * 0.02;
+          svgEl.setAttribute(
+            "viewBox",
+            `${bbox.x - pad} ${bbox.y - pad} ${bbox.width + pad * 2} ${bbox.height + pad * 2}`
+          );
+        }
+      } catch {
+        // getBBox niedostępne (SVG poza DOM) — viewBox zostawiamy z pliku
+      }
+    });
 
     const groups = collectGroups(svgEl);
 
