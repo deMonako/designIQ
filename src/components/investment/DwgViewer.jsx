@@ -135,7 +135,7 @@ function Toolbar({ scale, onZoomIn, onZoomOut, onReset, onFullscreen, isFullscre
  * Bloki w SVG muszą mieć id odpowiadające kluczom w JSON
  * (AutoCAD/NanoCAD eksportuje id jako handle lub nazwę bloku).
  */
-export default function DwgViewer({ projectCode, height = 520 }) {
+export default function DwgViewer({ projectCode, height = 520, clientMode = false }) {
   const [state, setState]         = useState("idle"); // idle | loading | ok | error | empty
   const [svgContent, setSvgContent] = useState("");
   const [attribs, setAttribs]     = useState({});     // { id: { ...attrs } }
@@ -286,11 +286,20 @@ export default function DwgViewer({ projectCode, height = 520 }) {
       {state === "empty" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400 px-8 text-center">
           <span className="text-2xl">📐</span>
-          <span className="text-sm font-medium text-slate-600">Brak pliku projekt.svg</span>
-          <span className="text-xs text-slate-400">
-            Umieść pliki <code className="bg-slate-100 px-1 rounded">projekt.svg</code> i{" "}
-            <code className="bg-slate-100 px-1 rounded">projekt.json</code> w folderze projektu na Drive
-          </span>
+          {clientMode ? (
+            <>
+              <span className="text-sm font-medium text-slate-600">Projekt automatyki będzie dostępny wkrótce</span>
+              <span className="text-xs text-slate-400">Trwają prace nad dokumentacją Twojej instalacji</span>
+            </>
+          ) : (
+            <>
+              <span className="text-sm font-medium text-slate-600">Brak pliku projekt.svg</span>
+              <span className="text-xs text-slate-400">
+                Umieść pliki <code className="bg-slate-100 px-1 rounded">projekt.svg</code> i{" "}
+                <code className="bg-slate-100 px-1 rounded">projekt.json</code> w folderze projektu na Drive
+              </span>
+            </>
+          )}
         </div>
       )}
 

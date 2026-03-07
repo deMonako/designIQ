@@ -24,7 +24,7 @@ export const GAS_CONFIG = {
   driveFolderId: "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6",
 
   /** Limit czasu żądania w ms */
-  requestTimeout: 10000,
+  requestTimeout: 30000,
 
   /** Wersja API */
   apiVersion: "1",

@@ -16,6 +16,7 @@ import { GAS_CONFIG } from "../admin/api/gasConfig";
 import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
 import ClientZakupyView from "../components/investment/ClientZakupyView";
+import DwgViewer from "../components/investment/DwgViewer";
 
 const GAS_URL = GAS_CONFIG.scriptUrl;
 
@@ -192,6 +193,28 @@ export default function StatusInwestycji() {
             zakupy={zakupy}
             onBack={() => navigateTo("status")}
           />
+        );
+
+      case "projekt":
+        return (
+          <div className="my-6">
+            <Button onClick={() => navigateTo("status")} variant="ghost" className="mb-4">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
+            </Button>
+            <div className="bg-white border-2 border-indigo-100 rounded-2xl p-5 shadow-lg">
+              <h2 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                <span className="text-2xl">📐</span> Projekt automatyki
+              </h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Interaktywny rzut instalacji — kliknij element aby zobaczyć szczegóły
+              </p>
+              <DwgViewer
+                projectCode={investment.investment_code}
+                clientMode
+                height={560}
+              />
+            </div>
+          </div>
         );
 
       default:
