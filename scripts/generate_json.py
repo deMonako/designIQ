@@ -96,8 +96,29 @@ def parse_txt(path):
     elements = []
     tag_counts = {}
 
-    with open(path, encoding="utf-8", errors="replace") as f:
-        for lineno, line in enumerate(f, 1):
+    # Auto-wykrywanie kodowania: próbuj UTF-8, fallback na CP1250 (Windows/NanoCAD)
+    for enc in ("utf-8-sig", "utf-8", "cp1250", "latin-1"):
+        try:
+            with open(path, encoding=enc) as f:
+                content = f.read()
+            # Prosta heurystyka: polskie znaki powinny być czytelne
+            if enc in ("utf-8-sig", "utf-8") and "\ufffd" in content:
+                continue  # replacement char → złe kodowanie
+            print(f"  Kodowanie pliku TXT: {enc}", file=sys.stderr)
+            lines = content.splitlines()
+            break
+        except (UnicodeDecodeError, LookupError):
+            continue
+    else:
+        with open(path, encoding="latin-1") as f:
+            lines = f.read().splitlines()
+        print("  Kodowanie pliku TXT: latin-1 (fallback)", file=sys.stderr)
+
+    for lineno, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line:
+                continue
+
             line = line.strip()
             if not line:
                 continue
