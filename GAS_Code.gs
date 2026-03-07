@@ -333,6 +333,35 @@ function doGet(e) {
       case "getProjectFiles":
         return ok(getDriveFiles(e.parameter.projectId));
 
+      // ── DWG Viewer — projekt.svg + projekt.json z folderu projektu ────────────
+      // GET ?action=getDwgViewerContent&projectCode=KOW-2026-001
+      case "getDwgViewerContent": {
+        var dwgCode = e.parameter.projectCode;
+        if (!dwgCode) return err("Brak parametru projectCode");
+        var dwgFolder = getProjectFolder(dwgCode);
+        if (!dwgFolder) return ok({ svg: null, attribs: null });
+
+        var svgContent  = null;
+        var jsonContent = null;
+
+        var dwgFiles = dwgFolder.getFiles();
+        while (dwgFiles.hasNext()) {
+          var df   = dwgFiles.next();
+          var name = df.getName().toLowerCase();
+          if (name === "projekt.svg")  svgContent  = df.getBlob().getDataAsString("UTF-8");
+          if (name === "projekt.json") jsonContent = df.getBlob().getDataAsString("UTF-8");
+        }
+
+        if (!svgContent) return ok({ svg: null, attribs: null });
+
+        var attribs = null;
+        if (jsonContent) {
+          try { attribs = JSON.parse(jsonContent); } catch(ex) { attribs = null; }
+        }
+
+        return ok({ svg: svgContent, attribs: attribs });
+      }
+
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────
       case "getLeads":
         return ok(sheetToObjects("Leady"));
