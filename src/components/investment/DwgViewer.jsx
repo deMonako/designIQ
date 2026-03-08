@@ -342,6 +342,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const [activeTypes, setActiveTypes] = useState(null); // null = pokaż wszystko
   const [floorNames,  setFloorNames]  = useState([]);   // nazwy pięter
   const [activeFloor, setActiveFloor] = useState(0);    // indeks aktywnego piętra
+  const [dbgAnchor,   setDbgAnchor]   = useState(null); // debug: punkt zakotwiczenia zoomu
+
+  const dbgTimerRef  = useRef(null);
 
   const containerRef = useRef(null);
   const wrapRef      = useRef(null);
@@ -556,6 +559,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   useEffect(() => { load(); }, [load]);
 
+  // Wersja komponentu – widoczna w konsoli, ułatwia weryfikację czy działa nowy kod
+  useEffect(() => {
+    console.log(
+      "%c[DwgViewer v5]%c zoom: anchorX*(1-r)+panX*r | overlay: preserveAspectRatio=none",
+      "color:#3b82f6;font-weight:bold", "color:#64748b"
+    );
+  }, []);
+
   // Cleanup overlay tylko przy unmount komponentu
   useEffect(() => () => { cleanupRef.current(); }, []);
 
@@ -653,10 +664,19 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    // Pozycja myszy od lewego-górnego rogu kontenera (= lewego-górnego rogu wrappera)
+    const container = containerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    // Pozycja myszy względem lewego-górnego rogu kontenera (= origin wrappera przed transformem)
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
+    // Debug: czerwona kropka pokazuje obliczone kotwiczenie zoomu
+    setDbgAnchor({ x: mx, y: my });
+    if (dbgTimerRef.current) clearTimeout(dbgTimerRef.current);
+    dbgTimerRef.current = setTimeout(() => setDbgAnchor(null), 800);
+    console.log(
+      `[zoom] cursor(${mx.toFixed(0)},${my.toFixed(0)}) pan(${tRef.current.panX.toFixed(0)},${tRef.current.panY.toFixed(0)}) scale=${tRef.current.scale.toFixed(3)} Δ=${e.deltaY < 0 ? "↑IN" : "↓OUT"}`
+    );
     applyZoom(tRef.current.scale * (e.deltaY < 0 ? 1.12 : 0.9), mx, my);
   }, [applyZoom]);
 
@@ -824,6 +844,30 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
             />
           </>
         )}
+
+        {/* Debug: punkt kotwiczenia zoomu (czerwona kropka = obliczona pozycja myszy) */}
+        {dbgAnchor && (
+          <div
+            style={{
+              position: "absolute",
+              left: dbgAnchor.x - 6,
+              top:  dbgAnchor.y - 6,
+              width: 12, height: 12,
+              borderRadius: "50%",
+              background: "#ef4444",
+              opacity: 0.85,
+              pointerEvents: "none",
+              zIndex: 200,
+              boxShadow: "0 0 0 2px white",
+            }}
+          />
+        )}
+
+        {/* Wersja – potwierdza że nowy kod jest załadowany */}
+        <div style={{
+          position: "absolute", bottom: 2, right: 4,
+          fontSize: 8, color: "#cbd5e1", pointerEvents: "none", zIndex: 1,
+        }}>v5</div>
       </div>
     </div>
   );
