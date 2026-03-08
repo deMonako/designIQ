@@ -16,11 +16,26 @@ function buildTransform(meta, elements) {
     if (Math.abs(dx) < 1 || Math.abs(dy) < 1) return null;
     const sx = (c2.svgX - c1.svgX) / dx, sy = (c2.svgY - c1.svgY) / dy;
     const ox = c1.svgX - el1.X * sx, oy = c1.svgY - el1.Y * sy;
+    console.log(
+      "%c[DwgViewer · kalibracja]%c\n" +
+      "  punkt1: tag=%s  X=%s Y=%s  →  svgX=%s svgY=%s\n" +
+      "  punkt2: tag=%s  X=%s Y=%s  →  svgX=%s svgY=%s\n" +
+      "  skala:  sx=%s  sy=%s   offset: ox=%s  oy=%s",
+      "color:#8b5cf6;font-weight:bold", "color:#475569",
+      c1.tag, el1.X, el1.Y, c1.svgX, c1.svgY,
+      c2.tag, el2.X, el2.Y, c2.svgX, c2.svgY,
+      sx.toFixed(4), sy.toFixed(4), ox.toFixed(2), oy.toFixed(2)
+    );
     return (mx, my) => ({ svgX: mx * sx + ox, svgY: my * sy + oy });
   }
 
   const { scale, originX, originY, svgHeight, flipY = true } = meta;
   if (!scale || scale <= 0) return null;
+  console.log(
+    "%c[DwgViewer · skala generyczna]%c scale=%s originX=%s originY=%s svgHeight=%s flipY=%s",
+    "color:#8b5cf6;font-weight:bold", "color:#475569",
+    scale, originX, originY, svgHeight, flipY
+  );
   return (mx, my) => ({
     svgX: (mx - (originX ?? 0)) / scale,
     svgY: flipY
@@ -139,6 +154,26 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   const listeners = [];
 
   if (transform) {
+    // Diagnostyka: wypisz pierwsze kilka elementów (rzeczywiste → SVG coords)
+    const diagEntries = Object.entries(elements).filter(([,e]) => e.X != null).slice(0, 4);
+    if (diagEntries.length) {
+      console.log(
+        "%c[DwgViewer · overlay · viewBox]%c vbX=%s vbY=%s svgW=%s svgH=%s",
+        "color:#10b981;font-weight:bold", "color:#475569",
+        vbX, vbY, svgW, svgH
+      );
+      diagEntries.forEach(([key, el]) => {
+        const { svgX, svgY } = transform(el.X, el.Y);
+        // Oblicz gdzie kropka pojawi się w pikselach wrappera (bez pan/zoom)
+        const pxX = (svgX - vbX) / svgW;  // ułamek 0–1 szerokości overlay
+        const pxY = (svgY - vbY) / svgH;  // ułamek 0–1 wysokości overlay
+        console.log(
+          `  ${key}: realXY=(${el.X}, ${el.Y})  →  svgXY=(${svgX.toFixed(1)}, ${svgY.toFixed(1)})  ` +
+          `→  overlay_frac=(${(pxX*100).toFixed(1)}%, ${(pxY*100).toFixed(1)}%)`
+        );
+      });
+    }
+
     Object.entries(elements).forEach(([key, el]) => {
       if (el.X == null || el.Y == null) return;
       const { svgX, svgY } = transform(el.X, el.Y);
@@ -342,10 +377,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const [activeTypes, setActiveTypes] = useState(null); // null = pokaż wszystko
   const [floorNames,  setFloorNames]  = useState([]);   // nazwy pięter
   const [activeFloor, setActiveFloor] = useState(0);    // indeks aktywnego piętra
-  const [dbgAnchor,   setDbgAnchor]   = useState(null); // debug: punkt zakotwiczenia zoomu
-
-  const dbgTimerRef  = useRef(null);
-
   const containerRef = useRef(null);
   const wrapRef      = useRef(null);
   const svgWrapRef   = useRef(null);   // div – bezpośredni rodzic canvasa i overlay SVG
@@ -437,6 +468,18 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const offX = Math.round((contW - dispW) / 2);
     const offY = Math.round((contH - dispH) / 2);
     const layoutCss = `position:absolute;left:${offX}px;top:${offY}px;width:${dispW}px;height:${dispH}px;`;
+
+    console.log(
+      "%c[DwgViewer · layout]%c\n" +
+      "  SVG viewBox: x=%s y=%s w=%s h=%s\n" +
+      "  kontener:    %s × %s px\n" +
+      "  wyświetlany: %s × %s px  (offset %s,%s)\n" +
+      "  → kropka na 50%% overlay SVG powinna być w centrum rzutu",
+      "color:#f59e0b;font-weight:bold", "color:#475569",
+      vbX, vbY, svgW, svgH,
+      contW, contH,
+      dispW, dispH, offX, offY
+    );
 
     // ── Krok 2: rasteryzuj SVG → Canvas
     // rasterizeSvg wewnętrznie liczy rozdzielczość 3× viewBox (ostrość do 3× zooma)
@@ -559,14 +602,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   useEffect(() => { load(); }, [load]);
 
-  // Wersja komponentu – widoczna w konsoli, ułatwia weryfikację czy działa nowy kod
-  useEffect(() => {
-    console.log(
-      "%c[DwgViewer v5]%c zoom: anchorX*(1-r)+panX*r | overlay: preserveAspectRatio=none",
-      "color:#3b82f6;font-weight:bold", "color:#64748b"
-    );
-  }, []);
-
   // Cleanup overlay tylko przy unmount komponentu
   useEffect(() => () => { cleanupRef.current(); }, []);
 
@@ -667,16 +702,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const container = containerRef.current;
     if (!container) return;
     const rect = container.getBoundingClientRect();
-    // Pozycja myszy względem lewego-górnego rogu kontenera (= origin wrappera przed transformem)
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
-    // Debug: czerwona kropka pokazuje obliczone kotwiczenie zoomu
-    setDbgAnchor({ x: mx, y: my });
-    if (dbgTimerRef.current) clearTimeout(dbgTimerRef.current);
-    dbgTimerRef.current = setTimeout(() => setDbgAnchor(null), 800);
-    console.log(
-      `[zoom] cursor(${mx.toFixed(0)},${my.toFixed(0)}) pan(${tRef.current.panX.toFixed(0)},${tRef.current.panY.toFixed(0)}) scale=${tRef.current.scale.toFixed(3)} Δ=${e.deltaY < 0 ? "↑IN" : "↓OUT"}`
-    );
     applyZoom(tRef.current.scale * (e.deltaY < 0 ? 1.12 : 0.9), mx, my);
   }, [applyZoom]);
 
@@ -845,29 +872,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           </>
         )}
 
-        {/* Debug: punkt kotwiczenia zoomu (czerwona kropka = obliczona pozycja myszy) */}
-        {dbgAnchor && (
-          <div
-            style={{
-              position: "absolute",
-              left: dbgAnchor.x - 6,
-              top:  dbgAnchor.y - 6,
-              width: 12, height: 12,
-              borderRadius: "50%",
-              background: "#ef4444",
-              opacity: 0.85,
-              pointerEvents: "none",
-              zIndex: 200,
-              boxShadow: "0 0 0 2px white",
-            }}
-          />
-        )}
-
-        {/* Wersja – potwierdza że nowy kod jest załadowany */}
-        <div style={{
-          position: "absolute", bottom: 2, right: 4,
-          fontSize: 8, color: "#cbd5e1", pointerEvents: "none", zIndex: 1,
-        }}>v5</div>
       </div>
     </div>
   );
