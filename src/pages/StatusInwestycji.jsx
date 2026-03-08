@@ -10,12 +10,69 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { logger } from "../logger";
+import { GAS_CONFIG } from "../admin/api/gasConfig";
 
 // Importy widoków
 import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
+import ClientZakupyView from "../components/investment/ClientZakupyView";
+import DwgViewer from "../components/investment/DwgViewer";
 
-const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
+const GAS_URL = GAS_CONFIG.scriptUrl;
+
+// Mapuje odpowiedź nowego GAS na format oczekiwany przez komponenty inwestycji
+function mapInvestmentResponse(data) {
+  const { project, docs = [], files = [], messages = [], wycena, zakupy } = data;
+
+  // Etapy: nowy GAS przechowuje jako tablicę stringów, InvestmentTimeline oczekuje obiektów
+  const stages = (project.stages || []).map((name, i) => ({
+    stage_number: i + 1,
+    name: typeof name === "string" ? name : (name.name || String(name)),
+    completion_date: null,
+    notes: null,
+  }));
+
+  // Dokumenty: połącz rekordy z arkusza + pliki z Drive
+  const documents = [
+    ...docs.map(d => ({
+      name:          d.name,
+      url:           d.url,
+      uploaded_by:   "designIQ",
+      uploaded_date: d.date,
+    })),
+    ...files
+      .filter(f => f.name !== "projekt.svg" && f.name !== "projekt.json")
+      .map(f => ({
+        name:          f.name,
+        url:           f.webViewLink || f.webContentLink,
+        uploaded_by:   "Klient",
+        uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
+      })),
+  ];
+
+  return {
+    // Pola używane przez StatusDashboard / ClientWycenaView
+    project_name:      project.name,
+    package_type:      project.package,
+    start_date:        project.startDate,
+    current_stage:     (Number(project.stageIndex) || 0) + 1,
+    stages,
+    investment_code:   project.code,
+    code:              project.code,   // nowe pole
+    id:                project.id,
+    documents,
+    rooms:             [],
+    quotation_status:  wycena?.status || project.status || "Czeka na akceptację",
+    accepted_at:       wycena?.acceptedAt || null,
+    quotation:         wycena && Array.isArray(wycena.items) && wycena.items.length > 0 ? wycena : null,
+    zakupy:            zakupy && Array.isArray(zakupy.items) && zakupy.items.length > 0 ? zakupy : null,
+    messages,
+    // Status projektu
+    status:            project.status,
+    progress:          project.progress,
+    deadline:          project.deadline,
+  };
+}
 
 // Bezpieczny JSON.parse - zwraca fallback przy błędnych danych
 function safeJsonParse(value, fallback) {
@@ -32,6 +89,7 @@ export default function StatusInwestycji() {
   const [investmentCode, setInvestmentCode] = useState("");
   const [investment, setInvestment] = useState(null);
   const [quotation, setQuotation] = useState(null);
+  const [zakupy, setZakupy] = useState(null);
   const [activeView, setActiveView] = useState("status"); // "status" | "wycena" | "zakupy"
 
   const [isSearching, setIsSearching] = useState(false);
@@ -62,36 +120,18 @@ export default function StatusInwestycji() {
     setNotFound(false);
 
     try {
-      const response = await fetch(`${GAS_URL}?code=${investmentCode.trim()}`);
-      const data = await response.json();
+      const response = await fetch(
+        `${GAS_URL}?action=getInvestment&code=${encodeURIComponent(investmentCode.trim())}`
+      );
+      const result = await response.json();
 
-      if (data && !data.error) {
-        // 1. Parsowanie i filtrowanie pokoi (usuwamy wiersz nagłówkowy z Excela)
-        const rawRooms = safeJsonParse(data.rooms, []);
-        const filteredRooms = rawRooms.filter(room =>
-          room.name &&
-          room.name !== "Pomieszczenie" && // To usuwa nagłówek z arkusza
-          room.name.trim() !== ""
-        );
-
-        // 2. Formatowanie głównego obiektu inwestycji
-        const formattedInvestment = {
-          ...data,
-          stages: safeJsonParse(data.stages, []),
-          documents: safeJsonParse(data.documents, []),
-          rooms: filteredRooms
-        };
-
-        // 3. Obsługa wyceny (quotation)
-        let formattedQuotation = null;
-        if (data.quotation) {
-          formattedQuotation = safeJsonParse(data.quotation, null);
-        }
-
+      if (result.ok && result.data) {
+        const mapped = mapInvestmentResponse(result.data);
         const isUpdate = !!investment;
-        
-        setInvestment(formattedInvestment);
-        setQuotation(formattedQuotation);
+
+        setInvestment(mapped);
+        setQuotation(mapped.quotation);
+        setZakupy(mapped.zakupy);
 
         if (!isUpdate) {
           setActiveView("status");
@@ -102,7 +142,7 @@ export default function StatusInwestycji() {
       } else {
         setNotFound(true);
         setInvestment(null);
-        toast.error(data.error || "Nie znaleziono inwestycji");
+        toast.error(result.error || "Nie znaleziono inwestycji");
       }
     } catch (error) {
       logger.error("Błąd pobierania danych inwestycji:", error);
@@ -148,14 +188,32 @@ export default function StatusInwestycji() {
 
       case "zakupy":
         return (
-          <div className="p-8 text-center bg-white border-2 border-slate-200 rounded-xl my-6 mx-0">
+          <ClientZakupyView
+            investment={investment}
+            zakupy={zakupy}
+            onBack={() => navigateTo("status")}
+          />
+        );
+
+      case "projekt":
+        return (
+          <div className="my-6">
             <Button onClick={() => navigateTo("status")} variant="ghost" className="mb-4">
               <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
             </Button>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight">Lista zakupów</h2>
-            <p className="text-slate-500 mt-2 text-sm tracking-wide">
-              Ten widok jest w trakcie przygotowania.
-            </p>
+            <div className="bg-white border-2 border-indigo-100 rounded-2xl p-5 shadow-lg">
+              <h2 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                <span className="text-2xl">📐</span> Projekt automatyki
+              </h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Interaktywny rzut instalacji — kliknij element aby zobaczyć szczegóły
+              </p>
+              <DwgViewer
+                projectCode={investment.investment_code}
+                clientMode
+                height={560}
+              />
+            </div>
           </div>
         );
 

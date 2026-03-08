@@ -6,10 +6,18 @@ import { Card, CardContent } from "../ui/card";
 import { Upload, FileText, Image, Download, Loader2, X, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { pl } from "date-fns/locale";
+import { GAS_CONFIG } from "../../admin/api/gasConfig";
 
-const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
+const GAS_URL = GAS_CONFIG.scriptUrl;
+
+// Bezpieczne formatowanie daty — obsługuje ISO strings i YYYY-MM-DD
+function formatDate(dateStr) {
+  if (!dateStr) return "Brak daty";
+  const s = String(dateStr).substring(0, 10);
+  if (s.length < 10) return "Brak daty";
+  const [y, m, d] = s.split("-");
+  return `${d}.${m}.${y}`;
+}
 
 export default function FileUploadSection({ investment, onFileUploaded, isReadOnly }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -49,25 +57,29 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
     
     reader.onload = async () => {
       try {
+        // Usuń prefix "data:mime/type;base64," — GAS oczekuje czystego base64
+        const dataUrl = reader.result;
+        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+
         const response = await fetch(GAS_URL, {
           method: "POST",
           body: JSON.stringify({
-            investment_code: investment.investment_code,
-            author: "Klient",
+            action: "uploadInvestmentFile",
+            code: investment.code || investment.investment_code,
             name: selectedFile.name,
-            type: selectedFile.type,
-            fileData: reader.result
+            mimeType: selectedFile.type,
+            base64,
           })
         });
 
         const result = await response.json();
 
-        if (result.success) {
+        if (result.ok) {
           toast.success("Plik przesłany!");
           setSelectedFile(null);
           if (onFileUploaded) onFileUploaded();
         } else {
-          throw new Error(result.error);
+          throw new Error(result.error || "Błąd przesyłania");
         }
       } catch (error) {
         toast.error("Błąd: " + error.message);
@@ -149,7 +161,7 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">{doc.name}</div>
                           <div className="text-xs text-slate-500">
-                            {doc.uploaded_date ? format(new Date(doc.uploaded_date), 'dd.MM.yyyy', { locale: pl }) : "Brak daty"}
+                            {formatDate(doc.uploaded_date)}
                           </div>
                         </div>
                       </div>
@@ -181,7 +193,7 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">{doc.name}</div>
                           <div className="text-xs text-slate-500">
-                            {doc.uploaded_date ? format(new Date(doc.uploaded_date), 'dd.MM.yyyy', { locale: pl }) : "Brak daty"}
+                            {formatDate(doc.uploaded_date)}
                           </div>
                         </div>
                       </div>

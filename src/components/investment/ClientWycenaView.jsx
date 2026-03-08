@@ -17,6 +17,7 @@ import LoxonePromo from "../quotation/LoxonePromo";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { font, LOGO_BASE64 } from "../ui/fonts";
+import { GAS_CONFIG } from "../../admin/api/gasConfig";
 
 // Dane testowe, które naprawią błąd 'is not defined'
 const roomAnalysis = [
@@ -34,7 +35,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingType, setSubmittingType] = useState(null);
 
-  const GAS_URL = process.env.REACT_APP_GAS_STATUS_URL;
+  const GAS_URL = GAS_CONFIG.scriptUrl;
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -198,7 +199,27 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     doc.save(`Wycena_${investment.project_name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  if (!quotation) return null;
+  if (!quotation) {
+    return (
+      <div className="space-y-4 pb-12">
+        <Button onClick={onBack} variant="outline" className="mb-4 hover:bg-slate-100 border-slate-200">
+          <ArrowLeft className="w-4 h-4 mr-2" /> Powrót do statusu
+        </Button>
+        <Card className="border-2 border-slate-200 bg-white shadow-sm">
+          <CardContent className="p-12 text-center">
+            <div className="mx-auto w-20 h-20 bg-orange-50 rounded-2xl flex items-center justify-center mb-6">
+              <FileText className="w-10 h-10 text-orange-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-3">Wycena w przygotowaniu</h2>
+            <p className="text-slate-500 max-w-md mx-auto leading-relaxed">
+              Nasz zespół pracuje nad przygotowaniem szczegółowej wyceny Twojego projektu Smart Home.
+              Zostaniesz poinformowany, gdy wycena będzie gotowa do przejrzenia.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const totalNet = quotation.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
   const totalGross = quotation.items.reduce((sum, item) => 
@@ -231,32 +252,32 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     console.log("Próba aktualizacji statusu dla:", code, "na:", newStatus);
 
     const payload = {
-      action: "updateStatus",
-      investment_code: String(code).trim(), 
+      action: "updateInvestmentStatus",
+      code: String(code).trim(),
       status: newStatus,
-      // GAS i tak sam wygeneruje datę w doPost dla bezpieczeństwa
-      acceptedAt: new Date().toISOString() 
     };
 
     try {
-      await fetch(GAS_URL, {
+      const response = await fetch(GAS_URL, {
         method: 'POST',
-        mode: 'no-cors', // Tryb no-cors nie zwraca błędów, zawsze udaje sukces
-        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       });
 
+      const result = await response.json();
+
+      if (!result.ok) {
+        throw new Error(result.error || "Błąd serwera");
+      }
+
       toast.success(`Decyzja (${newStatus}) została wysłana.`);
-      
-      // Bardzo ważne: Google Sheets potrzebuje chwili na przeliczenie po POST
-      // Zwiększamy timeout do 2 sekund
+
       if (onRefresh) {
         setTimeout(async () => {
           await onRefresh();
           setShowModal(null);
           setIsSubmitting(false);
           setSubmittingType(null);
-        }, 2000);
+        }, 1500);
       } else {
         setShowModal(null);
         setIsSubmitting(false);
@@ -316,7 +337,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                       <p className="text-sm text-slate-500 leading-relaxed px-4">
                         Ta wycena została zatwierdzona {investment.accepted_at && (
                           <span className="font-semibold text-slate-900">
-                            dnia {new Date(investment.accepted_at).toLocaleDateString('pl-PL')}
+                            dnia {String(investment.accepted_at).substring(0, 10).split("-").reverse().join(".")}
                           </span>
                         )}.
                       </p>
@@ -393,7 +414,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                 </div>
                 {investment.accepted_at && (
                   <div className="text-xs text-slate-400 font-normal">
-                    Zatwierdzono: {new Date(investment.accepted_at).toLocaleDateString('pl-PL')}
+                    Zatwierdzono: {String(investment.accepted_at).substring(0, 10).split("-").reverse().join(".")}
                   </div>
                 )}
               </div>

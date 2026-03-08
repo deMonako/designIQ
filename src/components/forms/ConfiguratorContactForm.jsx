@@ -5,8 +5,7 @@ import { Label } from "../ui/label";
 import { gtmEvent } from "../analytics";
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 import { useGasSubmit } from "../../hooks/useGasSubmit";
-
-const GAS_ENDPOINT = process.env.REACT_APP_GAS_CONTACT_URL;
+// useGasSubmit używa GAS_CONFIG.scriptUrl jako domyślnego endpointu
 
 function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
   const [submitted, setSubmitted] = useState(false);
@@ -18,7 +17,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     wiadomosc: ""
   });
 
-  const { isSubmitting, errorMessage, submit } = useGasSubmit(GAS_ENDPOINT);
+  const { isSubmitting, errorMessage, submit } = useGasSubmit();
 
   const handleChange = useCallback((field) => (e) => {
     setContactData(prev => ({ ...prev, [field]: e.target.value }));
@@ -28,17 +27,16 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     e.preventDefault();
 
     const payload = {
-      name: contactData.imie_nazwisko,
-      email: contactData.email,
-      phone: contactData.telefon,
-      city: contactData.miasto || 'Nie podano',
-      message: contactData.wiadomosc || 'Brak dodatkowych informacji',
-      price:
-        `${Math.round(estimatedPrice * 0.8).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} – ` +
-        `${Math.round(estimatedPrice * 1.3).toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} PLN`,
-      configuration: JSON.stringify(formData),
       action: 'submitForm',
-      timestamp: new Date().toLocaleString('pl-PL'),
+      name:       contactData.imie_nazwisko,
+      email:      contactData.email,
+      phone:      contactData.telefon,
+      quoteValue: estimatedPrice,
+      configData: {
+        ...formData,
+        miasto: contactData.miasto || '',
+        uwagi:  contactData.wiadomosc || '',
+      },
     };
 
     await submit(payload, {

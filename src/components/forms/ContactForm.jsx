@@ -6,8 +6,6 @@ import { Send, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGasSubmit } from "../../hooks/useGasSubmit";
 
-const GAS_ENDPOINT = process.env.REACT_APP_GAS_CONTACT_URL;
-
 export default function ContactForm() {
   const [submitted, setSubmitted] = useState(false);
   const [formData, setFormData] = useState({
@@ -18,7 +16,7 @@ export default function ContactForm() {
     wiadomosc: ""
   });
 
-  const { isSubmitting, errorMessage, submit } = useGasSubmit(GAS_ENDPOINT);
+  const { isSubmitting, errorMessage, submit } = useGasSubmit();
 
   const handleChange = (field) => (e) => {
     setFormData(prev => ({ ...prev, [field]: e.target.value }));
