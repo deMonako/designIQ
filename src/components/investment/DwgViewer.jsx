@@ -57,98 +57,112 @@ function dotColor(typ) {
   return c;
 }
 
-// ── Overlay injection ─────────────────────────────────────────────────────────
+// ── Rasteryzacja SVG → Canvas (eliminuje lag pana) ────────────────────────────
+//
+// Canvas to pojedyncza tekstura GPU. Pan = przesunięcie tekstury na GPU.
+// Zero repaintu SVG podczas przesuwania. Kosztem jednorazowego renderowania.
 
-/**
- * Wstrzykuje do SVG:
- * 1. <style> wyłączający pointer-events na wszystkich ścieżkach CAD
- *    → przeglądarka nie robi hit-testingu na tysiącach path/line/rect
- *    → eliminuje główną przyczynę lagu podczas przesuwania
- * 2. Grupę interaktywnych kółek (#__overlay__)
- *    → tylko te kółka mają pointer-events: auto
- */
-function injectOverlay(svgEl, elements, meta, onSelect) {
-  const transform = buildTransform(meta, elements);
-  if (!transform) return () => {};
+async function rasterizeSvg(svgEl, cw, ch) {
+  const serializer = new XMLSerializer();
+  let svgStr = serializer.serializeToString(svgEl);
 
-  const NS = "http://www.w3.org/2000/svg";
+  // Upewnij się że namespace SVG jest obecny (XMLSerializer może go pominąć)
+  if (!svgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
+    svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
 
-  // ── 1. CSS: pointer-events none na wszystkich elementach SVG poza nakładką
+  const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width  = cw;
+      canvas.height = ch;
+      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(img, 0, 0, cw, ch);
+      URL.revokeObjectURL(url);
+      resolve(canvas);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("SVG rasterization failed"));
+    };
+    img.src = url;
+  });
+}
+
+// ── Budowanie nakładki SVG (oddzielna warstwa interaktywna) ───────────────────
+//
+// Oddzielny element SVG z kółkami – nie wpływa na repaint canvasa.
+
+function buildOverlay(svgW, svgH, elements, meta, onSelectFn) {
+  const NS      = "http://www.w3.org/2000/svg";
+  const svgEl   = document.createElementNS(NS, "svg");
+  svgEl.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+  svgEl.setAttribute("preserveAspectRatio", "none");
+  svgEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;";
+
+  // Tylko .hit kółka mają pointer-events; reszta jest przezroczysta na kliknięcia
   const styleEl = document.createElementNS(NS, "style");
-  styleEl.id = "__dwg_style__";
-  styleEl.textContent = `
-    svg > :not(#__overlay__) * { pointer-events: none !important; }
-    #__overlay__ circle.hit    { pointer-events: auto !important; cursor: pointer; }
-  `;
-  svgEl.insertBefore(styleEl, svgEl.firstChild);
+  styleEl.textContent = "* { pointer-events: none; } circle.hit { pointer-events: auto !important; cursor: pointer; }";
+  svgEl.appendChild(styleEl);
 
-  // ── 2. Kółka (ring + dot + label + hit area)
-  const group = document.createElementNS(NS, "g");
-  group.setAttribute("id", "__overlay__");
-
+  const transform = buildTransform(meta, elements);
   const listeners = [];
 
-  Object.entries(elements).forEach(([key, el]) => {
-    if (el.X == null || el.Y == null) return;
-    const { svgX, svgY } = transform(el.X, el.Y);
-    if (!isFinite(svgX) || !isFinite(svgY)) return;
+  if (transform) {
+    Object.entries(elements).forEach(([key, el]) => {
+      if (el.X == null || el.Y == null) return;
+      const { svgX, svgY } = transform(el.X, el.Y);
+      if (!isFinite(svgX) || !isFinite(svgY)) return;
 
-    const color = dotColor(el.typ);
+      const color = dotColor(el.typ);
 
-    const ring = document.createElementNS(NS, "circle");
-    ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
-    ring.setAttribute("r", "5");   ring.setAttribute("fill", color);
-    ring.setAttribute("fill-opacity", "0.2");
-    ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "1");
+      const ring = document.createElementNS(NS, "circle");
+      ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
+      ring.setAttribute("r", "5");   ring.setAttribute("fill", color);
+      ring.setAttribute("fill-opacity", "0.2");
+      ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "1");
 
-    const dot = document.createElementNS(NS, "circle");
-    dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
-    dot.setAttribute("r", "3");   dot.setAttribute("fill", color);
-    dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.8");
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
+      dot.setAttribute("r", "3");   dot.setAttribute("fill", color);
+      dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.8");
 
-    const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", svgX + 4.5); label.setAttribute("y", svgY - 4);
-    label.setAttribute("font-size", "4.5"); label.setAttribute("fill", color);
-    label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
-    label.setAttribute("paint-order", "stroke");
-    label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1.5");
-    label.setAttribute("stroke-linejoin", "round");
-    label.textContent = el.tag ?? key;
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", svgX + 4.5); label.setAttribute("y", svgY - 4);
+      label.setAttribute("font-size", "4.5"); label.setAttribute("fill", color);
+      label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
+      label.setAttribute("paint-order", "stroke");
+      label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1.5");
+      label.setAttribute("stroke-linejoin", "round");
+      label.textContent = el.tag ?? key;
 
-    // Hit area — większe kółko, jawnie oznaczone klasą dla CSS selector
-    const hit = document.createElementNS(NS, "circle");
-    hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
-    hit.setAttribute("r", "9");   hit.setAttribute("fill", "transparent");
-    hit.classList.add("hit");
+      const hit = document.createElementNS(NS, "circle");
+      hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
+      hit.setAttribute("r", "9");   hit.setAttribute("fill", "transparent");
+      hit.classList.add("hit");
 
-    const onClick = (e) => {
-      e.stopPropagation();
-      onSelect({ tag: el.tag ?? key, attrib: el, clientX: e.clientX, clientY: e.clientY });
-    };
-    const onEnter = () => { ring.setAttribute("r", "8"); ring.setAttribute("fill-opacity", "0.35"); };
-    const onLeave = () => { ring.setAttribute("r", "5"); ring.setAttribute("fill-opacity", "0.2"); };
+      const onClick  = (e) => { e.stopPropagation(); onSelectFn({ el, tag: el.tag ?? key, clientX: e.clientX, clientY: e.clientY }); };
+      hit.addEventListener("click", onClick);
+      listeners.push({ hit, onClick });
 
-    hit.addEventListener("click", onClick);
-    hit.addEventListener("mouseenter", onEnter);
-    hit.addEventListener("mouseleave", onLeave);
-    listeners.push({ hit, onClick, onEnter, onLeave });
-
-    const g = document.createElementNS(NS, "g");
-    g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
-    group.appendChild(g);
-  });
-
-  svgEl.appendChild(group);
-
-  return () => {
-    listeners.forEach(({ hit, onClick, onEnter, onLeave }) => {
-      hit.removeEventListener("click", onClick);
-      hit.removeEventListener("mouseenter", onEnter);
-      hit.removeEventListener("mouseleave", onLeave);
+      const g = document.createElementNS(NS, "g");
+      g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
+      svgEl.appendChild(g);
     });
-    styleEl.remove();
-    group.remove();
+  }
+
+  const cleanup = () => {
+    listeners.forEach(({ hit, onClick }) => hit.removeEventListener("click", onClick));
   };
+
+  return { el: svgEl, cleanup };
 }
 
 // ── Panel atrybutów ────────────────────────────────────────────────────────────
@@ -174,7 +188,7 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
     const r = containerRef.current.getBoundingClientRect();
     if (left + panelW > r.width  - 8) left = pos.x - panelW - 16;
     if (top  + panelH > r.height - 8) top  = r.height - panelH - 8;
-    if (top  < 8) top  = 8;
+    if (top  < 8) top = 8;
     if (left < 8) left = 8;
   }
 
@@ -237,7 +251,7 @@ function Legend({ elements }) {
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
-function Toolbar({ scalePct, onZoomIn, onZoomOut, onReset, onFullscreen, isFullscreen }) {
+function Toolbar({ scalePct, onZoomIn, onZoomOut, onReset, onFullscreen }) {
   return (
     <div className="absolute top-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1 shadow-sm z-40">
       <button onClick={onZoomIn}  className="p-1.5 rounded hover:bg-slate-100 text-slate-600"><ZoomIn  className="w-4 h-4" /></button>
@@ -252,126 +266,195 @@ function Toolbar({ scalePct, onZoomIn, onZoomOut, onReset, onFullscreen, isFulls
   );
 }
 
+// ── Pasek ładowania ───────────────────────────────────────────────────────────
+
+function LoadBar({ progress, label }) {
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+      <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
+      <div className="w-56 flex flex-col gap-1.5">
+        <div className="flex justify-between text-xs text-slate-400">
+          <span>{label}</span>
+          <span>{progress}%</span>
+        </div>
+        <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function DwgViewer({ projectCode, height = 520, clientMode = false }) {
-  const [loadState, setLoadState] = useState("idle");
-  const [meta, setMeta]       = useState(null);
-  const [elements, setElements] = useState({});
-  const [selected, setSelected] = useState(null);
-  const [scalePct, setScalePct] = useState(100);
+  const [loadState, setLoadState]     = useState("idle");
+  const [loadProg,  setLoadProg]      = useState({ pct: 0, label: "Pobieranie…" });
+  const [elements,  setElements]      = useState({});
+  const [selected,  setSelected]      = useState(null);
+  const [scalePct,  setScalePct]      = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showFsHint, setShowFsHint]   = useState(true);
 
-  // Refs zachowują dane bez rerenderów
   const containerRef = useRef(null);
   const wrapRef      = useRef(null);
-  const svgWrapRef   = useRef(null);   // div z innerHTML SVG
-  const svgContentRef = useRef("");    // kopia SVG string (bez triggeru re-renderu)
-  const metaRef      = useRef(null);
-  const elementsRef  = useRef({});
+  const svgWrapRef   = useRef(null);   // div – bezpośredni rodzic canvasa i overlay SVG
+  const svgContentRef = useRef("");
+  const metaRef       = useRef(null);
+  const elementsRef   = useRef({});
 
   const tRef       = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef    = useRef(null);
   const hasDragRef = useRef(false);
   const rafRef     = useRef(null);
-  const cleanupOverlayRef = useRef(() => {});
+  const cleanupRef = useRef(() => {});
 
-  // ── Direct DOM transform ──────────────────────────────────────────────────
+  // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
     if (!wrapRef.current) return;
     const { scale, panX, panY } = tRef.current;
     wrapRef.current.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
   }, []);
 
-  // ── Inject SVG + overlay ──────────────────────────────────────────────────
-  const mountSvg = useCallback(() => {
-    const wrap = svgWrapRef.current;
+  // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
+  const mountView = useCallback(async () => {
+    const wrap   = svgWrapRef.current;
     const svgStr = svgContentRef.current;
-    const m = metaRef.current;
-    const elems = elementsRef.current;
+    const m      = metaRef.current;
+    const elems  = elementsRef.current;
     if (!wrap || !svgStr) return;
 
-    // Wyczyść poprzednią nakładkę
-    cleanupOverlayRef.current();
+    cleanupRef.current();
+    wrap.innerHTML = "";
 
-    // Wstaw SVG jako innerHTML — jedyna niezawodna metoda wyświetlania SVG
-    wrap.innerHTML = svgStr;
-    const svgEl = wrap.querySelector("svg");
-    if (!svgEl) return;
+    // ── Krok 1: parsuj SVG string przez DOMParser (szybko, bez layoutu)
+    setLoadProg({ pct: 50, label: "Renderowanie…" });
 
-    // Fit SVG do kontenera
-    svgEl.style.width  = "100%";
-    svgEl.style.height = "100%";
-    svgEl.removeAttribute("width");
-    svgEl.removeAttribute("height");
+    const parser    = new DOMParser();
+    const doc       = parser.parseFromString(svgStr, "image/svg+xml");
+    const parsedSvg = doc.querySelector("svg");
 
-    if (!m) return;
+    if (!parsedSvg) {
+      // Fallback: innerHTML
+      wrap.innerHTML = svgStr;
+      setLoadProg({ pct: 100, label: "Gotowe" });
+      return;
+    }
 
-    const hasCoords = Object.values(elems).some(e => e.X != null);
-    if (!hasCoords) return;
+    // Odczytaj wymiary z viewBox (nie potrzebuje layoutu)
+    const vb   = parsedSvg.viewBox?.baseVal;
+    const svgW = (vb && vb.width  > 0) ? vb.width  : 1200;
+    const svgH = (vb && vb.height > 0) ? vb.height : 900;
 
-    // Inject overlay (style + circles)
-    cleanupOverlayRef.current = injectOverlay(svgEl, elems, m, ({ tag, attrib, clientX, clientY }) => {
-      if (hasDragRef.current) return;
-      const rect = containerRef.current?.getBoundingClientRect();
-      setSelected({
-        tag, attrib,
-        pos: rect ? { x: clientX - rect.left, y: clientY - rect.top } : { x: 120, y: 80 },
-      });
-    });
+    // ── Krok 2: rasteryzuj SVG → Canvas
+    // Rozmiar canvasa = rozmiar kontenera × DPR (ostrość na Retina)
+    const cont = containerRef.current;
+    const dpr  = Math.min(window.devicePixelRatio || 1, 2);
+    const cw   = Math.ceil((cont ? cont.offsetWidth  : 800) * dpr);
+    const ch   = Math.ceil((cont ? cont.offsetHeight : 520) * dpr);
 
-    // Klik na puste miejsce → odznacz
-    const onSvgClick = (e) => {
-      if (!hasDragRef.current && !e.target.classList.contains("hit")) {
-        setSelected(null);
+    let canvas = null;
+    try {
+      canvas = await rasterizeSvg(parsedSvg, cw, ch);
+    } catch (e) {
+      // Fallback: inline SVG z pointer-events injection
+      console.warn("DwgViewer: canvas fallback →", e.message);
+      wrap.innerHTML = svgStr;
+      const svgEl = wrap.querySelector("svg");
+      if (svgEl) {
+        svgEl.style.width  = "100%";
+        svgEl.style.height = "100%";
+        svgEl.removeAttribute("width");
+        svgEl.removeAttribute("height");
+        if (m) {
+          const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
+          styleEl.textContent = "svg > :not(#__overlay__) * { pointer-events: none !important; } #__overlay__ circle.hit { pointer-events: auto !important; cursor: pointer; }";
+          svgEl.insertBefore(styleEl, svgEl.firstChild);
+        }
       }
-    };
-    svgEl.addEventListener("click", onSvgClick);
-    const prevCleanup = cleanupOverlayRef.current;
-    cleanupOverlayRef.current = () => {
-      prevCleanup();
-      svgEl.removeEventListener("click", onSvgClick);
-    };
+      setLoadProg({ pct: 100, label: "Gotowe" });
+      setTimeout(() => setLoadState("ok_mounted"), 300);
+      return;
+    }
+
+    setLoadProg({ pct: 80, label: "Nakładka…" });
+
+    // ── Krok 3: dołącz canvas
+    wrap.appendChild(canvas);
+
+    // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
+    const hasCoords = m && Object.values(elems).some(e => e.X != null);
+    if (hasCoords) {
+      const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, elems, m, ({ tag, attrib, clientX, clientY, el: attEl }) => {
+        if (hasDragRef.current) return;
+        const rect = containerRef.current?.getBoundingClientRect();
+        setSelected({
+          tag,
+          attrib: attEl,
+          pos: rect ? { x: clientX - rect.left, y: clientY - rect.top } : { x: 120, y: 80 },
+        });
+      });
+
+      overlayEl.addEventListener("click", (e) => {
+        if (!hasDragRef.current && !e.target.classList.contains("hit")) setSelected(null);
+      });
+
+      wrap.appendChild(overlayEl);
+      cleanupRef.current = () => { cleanup(); overlayEl.remove(); };
+    }
+
+    setLoadProg({ pct: 100, label: "Gotowe" });
+    setTimeout(() => setLoadState("ok_mounted"), 300);
   }, []);
 
-  // ── Load ──────────────────────────────────────────────────────────────────
-  const load = useCallback(async () => {
+  // ── Ładowanie danych z GAS ────────────────────────────────────────────────
+  const load = useCallback(async (attempt = 0) => {
     if (!projectCode) return;
     setLoadState("loading");
+    setLoadProg({ pct: 5, label: "Pobieranie…" });
     colorCache.clear();
     try {
+      setLoadProg({ pct: 20, label: "Pobieranie…" });
       const res = await getDwgViewerContent(projectCode);
+      setLoadProg({ pct: 40, label: "Pobieranie…" });
+
       if (!res?.svg) { setLoadState("empty"); return; }
 
       const { _meta, ...elems } = res.attribs ?? {};
       svgContentRef.current = res.svg;
-      metaRef.current = _meta ?? null;
-      elementsRef.current = elems;
+      metaRef.current       = _meta ?? null;
+      elementsRef.current   = elems;
 
-      setMeta(_meta ?? null);
       setElements(elems);
       tRef.current = { scale: 1, panX: 0, panY: 0 };
       setScalePct(100);
       setSelected(null);
-      setLoadState("ok");
+      setLoadState("processing");
     } catch {
-      setLoadState("error");
+      if (attempt === 0) {
+        // Automatyczny retry po 1.5s (pierwsze ładowanie czasem zawodzi)
+        setTimeout(() => load(1), 1500);
+      } else {
+        setLoadState("error");
+      }
     }
   }, [projectCode]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Gdy stan przejdzie na "ok" i SVG wrap istnieje → mount
+  // Po przejściu w stan "processing" → montuj widok
   useEffect(() => {
-    if (loadState !== "ok") return;
-    // requestAnimationFrame: SVG div jest już w DOM po renderze
-    const raf = requestAnimationFrame(mountSvg);
+    if (loadState !== "processing") return;
+    const raf = requestAnimationFrame(() => { mountView(); });
     return () => {
       cancelAnimationFrame(raf);
-      cleanupOverlayRef.current();
-      cleanupOverlayRef.current = () => {};
+      cleanupRef.current();
+      cleanupRef.current = () => {};
     };
-  }, [loadState, mountSvg]);
+  }, [loadState, mountView]);
 
   // ── Pan ───────────────────────────────────────────────────────────────────
   const onMouseDown = useCallback((e) => {
@@ -407,6 +490,26 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     window.addEventListener("mouseup",   onUp);
   }, [flushTransform]);
 
+  // Touch pan (mobile)
+  const touchRef = useRef(null);
+  const onTouchStart = useCallback((e) => {
+    if (e.touches.length !== 1) return;
+    hasDragRef.current = false;
+    const { panX, panY } = tRef.current;
+    touchRef.current = { mx: e.touches[0].clientX, my: e.touches[0].clientY, px: panX, py: panY };
+  }, []);
+  const onTouchMove = useCallback((e) => {
+    if (!touchRef.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    const dx = e.touches[0].clientX - touchRef.current.mx;
+    const dy = e.touches[0].clientY - touchRef.current.my;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) hasDragRef.current = true;
+    tRef.current.panX = touchRef.current.px + dx;
+    tRef.current.panY = touchRef.current.py + dy;
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => { rafRef.current = null; flushTransform(); });
+  }, [flushTransform]);
+
   // ── Zoom ──────────────────────────────────────────────────────────────────
   const handleWheel = useCallback((e) => {
     e.preventDefault();
@@ -434,25 +537,31 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   }, [flushTransform]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const isLoaded = loadState === "ok_mounted";
+
   const containerStyle = isFullscreen
     ? { position: "fixed", inset: 0, zIndex: 9999, background: "#f1f5f9", borderRadius: 0 }
     : { position: "relative", height, borderRadius: 16, overflow: "hidden", border: "1px solid #e2e8f0", background: "#f1f5f9" };
 
   return (
-    <div style={containerStyle} ref={containerRef} onMouseDown={onMouseDown}>
+    <div
+      style={containerStyle}
+      ref={containerRef}
+      onMouseDown={onMouseDown}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+    >
 
-      {loadState === "loading" && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-slate-400">
-          <Loader2 className="w-7 h-7 animate-spin" />
-          <span className="text-sm">Ładowanie rzutu…</span>
-        </div>
+      {/* Pasek ładowania */}
+      {(loadState === "loading" || loadState === "processing") && (
+        <LoadBar progress={loadProg.pct} label={loadProg.label} />
       )}
 
       {loadState === "error" && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
           <AlertCircle className="w-8 h-8 text-red-400" />
           <span className="text-sm text-slate-500">Nie udało się załadować pliku</span>
-          <button onClick={load} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50">
+          <button onClick={() => load()} className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 px-3 py-1.5 rounded-lg border border-blue-200 hover:bg-blue-50">
             <RefreshCw className="w-3.5 h-3.5" /> Spróbuj ponownie
           </button>
         </div>
@@ -478,65 +587,76 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         </div>
       )}
 
-      {loadState === "ok" && (
-        <>
-          {/*
-            Pan/zoom wrapper.
-            will-change: transform + translateZ(0) → wymusza GPU compositor layer.
-            Przenoszenie elementu na GPU layer = pan to przesunięcie tekstury GPU,
-            bez jakiegokolwiek repaintu ścieżek SVG.
+      {/* Widok rzutu (canvas + overlay) */}
+      <div
+        style={{
+          position: "absolute", inset: 0,
+          // Ukryjemy div zanim canvas będzie gotowy żeby nie migał
+          opacity: isLoaded ? 1 : 0,
+          transition: "opacity 0.3s",
+          pointerEvents: isLoaded ? "auto" : "none",
+        }}
+      >
+        {/*
+          Pan/zoom wrapper — GPU compositor layer.
+          Canvas wewnątrz to pojedyncza tekstura GPU.
+          Pan = przesunięcie tekstury, zero repaintu SVG.
+        */}
+        <div
+          ref={wrapRef}
+          style={{
+            position: "absolute", top: 0, left: 0,
+            width: "100%", height: "100%",
+            transform: "translateZ(0) translate(0px,0px) scale(1)",
+            transformOrigin: "center center",
+            willChange: "transform",
+            cursor: "grab",
+            userSelect: "none",
+          }}
+        >
+          <div ref={svgWrapRef} style={{ position: "relative", width: "100%", height: "100%" }} />
+        </div>
 
-            Kluczowa optymalizacja dla płynności:
-            Wstrzykujemy do SVG <style> z pointer-events:none na wszystkich
-            elementach CAD — przeglądarka nie robi hit-testingu na tysiącach
-            ścieżek podczas ruchu myszy. Tylko nasze kółka mają pointer-events:auto.
-          */}
-          <div
-            ref={wrapRef}
-            style={{
-              position: "absolute", top: 0, left: 0,
-              width: "100%", height: "100%",
-              transform: "translateZ(0) translate(0px,0px) scale(1)",
-              transformOrigin: "center center",
-              willChange: "transform",
-              cursor: "grab",
-              userSelect: "none",
-            }}
-          >
-            {/* SVG renderowany przez innerHTML — jedyna niezawodna metoda */}
-            <div
-              ref={svgWrapRef}
-              style={{ width: "100%", height: "100%" }}
+        {isLoaded && (
+          <>
+            <Toolbar
+              scalePct={scalePct}
+              onZoomIn={() => { tRef.current.scale = Math.min(tRef.current.scale * 1.2, 15); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
+              onZoomOut={() => { tRef.current.scale = Math.max(tRef.current.scale / 1.2, 0.1); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
+              onReset={handleReset}
+              onFullscreen={() => { setIsFullscreen(f => !f); setShowFsHint(false); }}
             />
-          </div>
 
-          <Toolbar
-            scalePct={scalePct}
-            onZoomIn={() => { tRef.current.scale = Math.min(tRef.current.scale * 1.2, 15); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
-            onZoomOut={() => { tRef.current.scale = Math.max(tRef.current.scale / 1.2, 0.1); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
-            onReset={handleReset}
-            onFullscreen={() => setIsFullscreen(f => !f)}
-            isFullscreen={isFullscreen}
-          />
+            {isFullscreen && (
+              <button onClick={() => setIsFullscreen(false)}
+                className="absolute top-3 left-3 p-1.5 rounded-lg bg-white/90 border border-slate-200 shadow-sm text-slate-600 hover:text-slate-800 z-40">
+                <X className="w-4 h-4" />
+              </button>
+            )}
 
-          {isFullscreen && (
-            <button onClick={() => setIsFullscreen(false)}
-              className="absolute top-3 left-3 p-1.5 rounded-lg bg-white/90 border border-slate-200 shadow-sm text-slate-600 hover:text-slate-800 z-40">
-              <X className="w-4 h-4" />
-            </button>
-          )}
+            {Object.keys(elements).length > 0 && <Legend elements={elements} />}
 
-          {Object.keys(elements).length > 0 && <Legend elements={elements} />}
+            {/* Adnotacja: zalecany tryb pełnoekranowy */}
+            {!isFullscreen && showFsHint && (
+              <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-[11px] px-2.5 py-1.5 rounded-lg shadow-sm z-40 max-w-[220px]">
+                <Maximize2 className="w-3.5 h-3.5 flex-shrink-0" />
+                <span>Zalecany tryb pełnoekranowy dla komfortu pracy</span>
+                <button onClick={() => setShowFsHint(false)} className="text-blue-400 hover:text-blue-600 flex-shrink-0 ml-1">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
 
-          <AttribPanel
-            tag={selected?.tag}
-            attrib={selected?.attrib}
-            pos={selected?.pos}
-            onClose={() => setSelected(null)}
-            containerRef={containerRef}
-          />
-        </>
-      )}
+            <AttribPanel
+              tag={selected?.tag}
+              attrib={selected?.attrib}
+              pos={selected?.pos}
+              onClose={() => setSelected(null)}
+              containerRef={containerRef}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
