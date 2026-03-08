@@ -509,6 +509,38 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
     setLoadProg({ pct: 80, label: "Nakładka…" });
 
+    // ── DEBUG: narysuj kółka bezpośrednio na canvas przy przewidywanych pozycjach.
+    // Cel: odróżnić błąd formuły od błędu renderowania overlay.
+    // • Kółko POKRYWA element na rzucie → formuła OK, problem leży w overlay SVG
+    // • Kółko MIJA element na rzucie    → błąd w danych kalibracyjnych (scale/origin)
+    if (m) {
+      const dbgTr = buildTransform(m, elems);
+      if (dbgTr) {
+        const ctx  = canvas.getContext("2d");
+        const kx   = canvas.width  / svgW;   // canvas px per SVG unit
+        const ky   = canvas.height / svgH;
+        const r    = Math.max(canvas.width, canvas.height) / 60; // ~2% wymiaru
+        const dbgList = Object.entries(elems).filter(([, e]) => e.X != null).slice(0, 6);
+        dbgList.forEach(([key, el]) => {
+          const { svgX, svgY } = dbgTr(el.X, el.Y);
+          if (!isFinite(svgX) || !isFinite(svgY)) return;
+          const cx = (svgX - vbX) * kx;
+          const cy = (svgY - vbY) * ky;
+          // Czerwone kółko z białą obwódką
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.strokeStyle = "#ff0000"; ctx.lineWidth = r * 0.25; ctx.stroke();
+          // Pionowa i pozioma linia (krzyżyk)
+          ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
+          ctx.moveTo(cx, cy - r);  ctx.lineTo(cx, cy + r);
+          ctx.strokeStyle = "#ff0000"; ctx.lineWidth = r * 0.15; ctx.stroke();
+          // Etykieta z kluczem elementu
+          ctx.fillStyle = "#ff0000";
+          ctx.font = `bold ${r * 0.9}px sans-serif`;
+          ctx.fillText(key, cx + r * 0.4, cy - r * 0.4);
+        });
+      }
+    }
+
     // ── Krok 3: dołącz canvas z letterbox CSS
     canvas.style.cssText += layoutCss;
     wrap.appendChild(canvas);
