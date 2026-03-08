@@ -70,10 +70,12 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
   const cw = Math.min(Math.ceil(svgW * K), 6000);
   const ch = Math.min(Math.ceil(svgH * K), 6000);
 
-  // Ustaw dokładny rozmiar — nie wymuszaj preserveAspectRatio; cw/ch mają ten sam AR co SVG,
-  // więc treść wypełnia canvas bez zniekształceń.
+  // preserveAspectRatio=none — canvas wypełniony 1:1 z viewBox (bez wewnętrznego letterbox).
+  // Bez tego SVG domyślnie stosuje xMidYMid meet, co powoduje przesunięcie elementów
+  // w kierunku środka (widoczne przy narożnych punktach rzutu).
   svgEl.setAttribute("width",  cw);
   svgEl.setAttribute("height", ch);
+  svgEl.setAttribute("preserveAspectRatio", "none");
 
   const serializer = new XMLSerializer();
   let svgStr = serializer.serializeToString(svgEl);
@@ -111,10 +113,12 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
 //
 // Oddzielny element SVG z kółkami – nie wpływa na repaint canvasa.
 
-function buildOverlay(svgW, svgH, elements, meta, onSelectFn) {
+function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   const NS      = "http://www.w3.org/2000/svg";
   const svgEl   = document.createElementNS(NS, "svg");
-  svgEl.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
+  // viewBox musi być identyczny z viewBox canvasa (po ustawieniu preserveAspectRatio=none)
+  // aby koordynaty nakładki pokrywały się 1:1 z pikselami canvasa.
+  svgEl.setAttribute("viewBox", `${vbX} ${vbY} ${svgW} ${svgH}`);
   // CSS (position/size) ustawia mountView po obliczeniu letterbox
 
   // SVG root musi mieć pointer-events: auto (domyślne), żeby routować eventy do dzieci.
@@ -164,6 +168,7 @@ function buildOverlay(svgW, svgH, elements, meta, onSelectFn) {
       listeners.push({ hit, onClick });
 
       const g = document.createElementNS(NS, "g");
+      g.setAttribute("data-typ", el.typ || "");
       g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
       svgEl.appendChild(g);
     });
@@ -241,21 +246,38 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
 
 // ── Legenda ───────────────────────────────────────────────────────────────────
 
-function Legend({ elements }) {
+function Legend({ elements, activeTypes, onToggle }) {
   const types = {};
   Object.values(elements).forEach(el => {
     if (el.typ && !types[el.typ]) types[el.typ] = dotColor(el.typ);
   });
   const entries = Object.entries(types);
   if (!entries.length) return null;
+  const isFiltered = activeTypes && activeTypes.size > 0;
   return (
     <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur border border-slate-200 rounded-lg px-2.5 py-2 shadow-sm z-40 max-w-[240px]">
-      {entries.map(([typ, color]) => (
-        <div key={typ} className="flex items-center gap-1.5 text-[10px] text-slate-600 py-0.5">
-          <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-          <span className="truncate">{typ}</span>
+      {isFiltered && (
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-[9px] text-blue-500 font-semibold uppercase tracking-wide">Filtr</span>
+          <button onClick={() => onToggle(null)} className="text-[9px] text-slate-400 hover:text-slate-600 underline">Pokaż wszystko</button>
         </div>
-      ))}
+      )}
+      {!isFiltered && (
+        <div className="text-[9px] text-slate-400 mb-1">Kliknij typ aby filtrować</div>
+      )}
+      {entries.map(([typ, color]) => {
+        const isActive = !isFiltered || activeTypes.has(typ);
+        return (
+          <button
+            key={typ}
+            onClick={() => onToggle(typ)}
+            className={`flex items-center gap-1.5 text-[10px] py-0.5 w-full text-left transition-opacity ${isActive ? "text-slate-600" : "text-slate-400 opacity-40"}`}
+          >
+            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isActive ? color : "#94a3b8" }} />
+            <span className="truncate">{typ}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -309,6 +331,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const [scalePct,  setScalePct]      = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFsHint, setShowFsHint]   = useState(true);
+  const [activeTypes, setActiveTypes] = useState(null); // null = pokaż wszystko
 
   const containerRef = useRef(null);
   const wrapRef      = useRef(null);
@@ -317,11 +340,12 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const metaRef       = useRef(null);
   const elementsRef   = useRef({});
 
-  const tRef       = useRef({ scale: 1, panX: 0, panY: 0 });
-  const dragRef    = useRef(null);
-  const hasDragRef = useRef(false);
-  const rafRef     = useRef(null);
-  const cleanupRef = useRef(() => {});
+  const tRef        = useRef({ scale: 1, panX: 0, panY: 0 });
+  const dragRef     = useRef(null);
+  const hasDragRef  = useRef(false);
+  const rafRef      = useRef(null);
+  const cleanupRef  = useRef(() => {});
+  const overlayElRef = useRef(null); // referencja do overlay SVG (filtrowanie typów)
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
@@ -329,6 +353,29 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const { scale, panX, panY } = tRef.current;
     wrapRef.current.style.transform = `translate(${panX}px,${panY}px) scale(${scale})`;
   }, []);
+
+  // ── Filtrowanie typów bloków w overlay ────────────────────────────────────
+  const handleToggleType = useCallback((typ) => {
+    if (typ === null) { setActiveTypes(null); return; }
+    setActiveTypes(prev => {
+      if (!prev) return new Set([typ]);
+      const next = new Set(prev);
+      if (next.has(typ)) { next.delete(typ); return next.size === 0 ? null : next; }
+      next.add(typ);
+      return next;
+    });
+  }, []);
+
+  // Aplikuj filtr typów do overlay DOM (bez przebudowy)
+  useEffect(() => {
+    const overlay = overlayElRef.current;
+    if (!overlay) return;
+    const groups = overlay.querySelectorAll("g[data-typ]");
+    groups.forEach(g => {
+      const typ = g.getAttribute("data-typ");
+      g.style.display = (!activeTypes || activeTypes.size === 0 || activeTypes.has(typ)) ? "" : "none";
+    });
+  }, [activeTypes]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
   const mountView = useCallback(async () => {
@@ -359,6 +406,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const vb   = parsedSvg.viewBox?.baseVal;
     const svgW = (vb && vb.width  > 0) ? vb.width  : 1200;
     const svgH = (vb && vb.height > 0) ? vb.height : 900;
+    const vbX  = (vb && vb.x  != null) ? vb.x  : 0;
+    const vbY  = (vb && vb.y  != null) ? vb.y  : 0;
 
     // ── Letterbox: dopasuj SVG do kontenera zachowując proporcje (xMidYMid meet)
     const cont   = containerRef.current;
@@ -410,7 +459,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
     const hasCoords = m && Object.values(elems).some(e => e.X != null);
     if (hasCoords) {
-      const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, elems, m, ({ tag, attrib, clientX, clientY, el: attEl }) => {
+      const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, vbX, vbY, elems, m, ({ tag, attrib, clientX, clientY, el: attEl }) => {
         if (hasDragRef.current) return;
         const rect = containerRef.current?.getBoundingClientRect();
         setSelected({
@@ -427,7 +476,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       // Overlay SVG dostaje ten sam letterbox CSS co canvas
       overlayEl.style.cssText = layoutCss + "overflow:visible;";
       wrap.appendChild(overlayEl);
-      cleanupRef.current = () => { cleanup(); overlayEl.remove(); };
+      overlayElRef.current = overlayEl;
+      cleanupRef.current = () => { cleanup(); overlayEl.remove(); overlayElRef.current = null; };
     }
 
     setLoadProg({ pct: 100, label: "Gotowe" });
@@ -456,6 +506,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       tRef.current = { scale: 1, panX: 0, panY: 0 };
       setScalePct(100);
       setSelected(null);
+      setActiveTypes(null);
       setLoadState("processing");
     } catch {
       if (attempt === 0) {
@@ -536,10 +587,27 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     rafRef.current = requestAnimationFrame(() => { rafRef.current = null; flushTransform(); });
   }, [flushTransform]);
 
-  // ── Zoom ──────────────────────────────────────────────────────────────────
+  // ── Zoom w kierunku kursora ───────────────────────────────────────────────
+  // transformOrigin = "center center" → skalowanie wokół środka kontenera.
+  // Aby zoom działał w miejscu kursora, korygujemy pan o wektor środek→kursor
+  // przemnożony przez (1 - ratio), gdzie ratio = newScale / oldScale.
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    tRef.current.scale = Math.min(Math.max(tRef.current.scale * (e.deltaY < 0 ? 1.12 : 0.9), 0.1), 15);
+    const cont = containerRef.current;
+    const rect = cont ? cont.getBoundingClientRect() : null;
+    const oldScale = tRef.current.scale;
+    const ratio    = e.deltaY < 0 ? 1.12 : 0.9;
+    const newScale = Math.min(Math.max(oldScale * ratio, 0.1), 15);
+
+    if (rect) {
+      // Pozycja myszy względem środka kontenera (punkt obrotu transformOrigin)
+      const cx = e.clientX - rect.left - rect.width  / 2;
+      const cy = e.clientY - rect.top  - rect.height / 2;
+      tRef.current.panX = tRef.current.panX + cx * (1 - newScale / oldScale);
+      tRef.current.panY = tRef.current.panY + cy * (1 - newScale / oldScale);
+    }
+    tRef.current.scale = newScale;
+
     flushTransform();
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => {
@@ -660,7 +728,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
               </button>
             )}
 
-            {Object.keys(elements).length > 0 && <Legend elements={elements} />}
+            {Object.keys(elements).length > 0 && <Legend elements={elements} activeTypes={activeTypes} onToggle={handleToggleType} />}
 
             {/* Adnotacja: zalecany tryb pełnoekranowy */}
             {!isFullscreen && showFsHint && (
