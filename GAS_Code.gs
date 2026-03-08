@@ -338,32 +338,64 @@ function doGet(e) {
         return ok(getDriveFiles(e.parameter.projectId));
 
       // ── DWG Viewer — projekt.svg + projekt.json z folderu projektu ────────────
+      // Obsługuje pliki pojedyncze (projekt.svg / projekt.json) oraz wielopiętrowe:
+      //   projekt_Parter.svg + projekt_Parter.json
+      //   projekt_Piętro.svg + projekt_Piętro.json  → zwraca tablicę floors
       // GET ?action=getDwgViewerContent&projectCode=KOW-2026-001
       case "getDwgViewerContent": {
         var dwgCode = e.parameter.projectCode;
         if (!dwgCode) return err("Brak parametru projectCode");
         var dwgFolder = getProjectFolder(dwgCode);
-        if (!dwgFolder) return ok({ svg: null, attribs: null });
+        if (!dwgFolder) return ok({ floors: [] });
 
-        var svgContent  = null;
-        var jsonContent = null;
+        var singleSvg  = null;
+        var singleJson = null;
+        var floorMap   = {}; // { "Parter": { svg: null, json: null }, ... }
 
         var dwgFiles = dwgFolder.getFiles();
         while (dwgFiles.hasNext()) {
-          var df   = dwgFiles.next();
-          var name = df.getName().toLowerCase();
-          if (name === "projekt.svg")  svgContent  = df.getBlob().getDataAsString("UTF-8");
-          if (name === "projekt.json") jsonContent = df.getBlob().getDataAsString("UTF-8");
+          var df      = dwgFiles.next();
+          var origName = df.getName();
+          var nameLow  = origName.toLowerCase();
+
+          if (nameLow === "projekt.svg") {
+            singleSvg  = df.getBlob().getDataAsString("UTF-8");
+          } else if (nameLow === "projekt.json") {
+            singleJson = df.getBlob().getDataAsString("UTF-8");
+          } else {
+            // projekt_NazwaPiętra.svg / projekt_NazwaPiętra.json
+            var floorSvg  = nameLow.match(/^projekt_(.+)\.svg$/);
+            var floorJson = nameLow.match(/^projekt_(.+)\.json$/);
+            if (floorSvg || floorJson) {
+              // Pobierz nazwę z oryginalnego pliku (zachowaj wielkość liter)
+              var dotIdx   = origName.lastIndexOf(".");
+              var floorKey = origName.slice(8, dotIdx); // "projekt_".length === 8
+              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null };
+              if (floorSvg)  floorMap[floorKey].svg  = df.getBlob().getDataAsString("UTF-8");
+              if (floorJson) floorMap[floorKey].json = df.getBlob().getDataAsString("UTF-8");
+            }
+          }
         }
 
-        if (!svgContent) return ok({ svg: null, attribs: null });
+        var floorKeys = Object.keys(floorMap);
 
-        var attribs = null;
-        if (jsonContent) {
-          try { attribs = JSON.parse(jsonContent); } catch(ex) { attribs = null; }
+        if (floorKeys.length > 0) {
+          // Tryb wielopiętrowy – zwróć wszystkie piętra
+          var floors = floorKeys.map(function(key) {
+            var att = null;
+            if (floorMap[key].json) {
+              try { att = JSON.parse(floorMap[key].json); } catch(ex) {}
+            }
+            return { name: key, svg: floorMap[key].svg, attribs: att };
+          });
+          return ok({ floors: floors });
         }
 
-        return ok({ svg: svgContent, attribs: attribs });
+        // Tryb jednostronicowy (wsteczna kompatybilność)
+        if (!singleSvg) return ok({ floors: [] });
+        var singleAtt = null;
+        if (singleJson) { try { singleAtt = JSON.parse(singleJson); } catch(ex) {} }
+        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt }] });
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────

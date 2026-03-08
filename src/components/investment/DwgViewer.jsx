@@ -124,7 +124,13 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   // SVG root musi mieć pointer-events: auto (domyślne), żeby routować eventy do dzieci.
   // Blokujemy tylko konkretne elementy rysunkowe; circle.hit pozostaje klikalny.
   const styleEl = document.createElementNS(NS, "style");
-  styleEl.textContent = "g > circle:not(.hit), g > text { pointer-events: none; } circle.hit { pointer-events: auto; cursor: pointer; }";
+  styleEl.textContent = [
+    "g > circle:not(.hit), g > text { pointer-events: none; }",
+    "circle.hit { pointer-events: auto; cursor: pointer; }",
+    // Efekt hover: skalowanie wokół własnego środka (transform-box: fill-box)
+    "g[data-typ] { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
+    "g[data-typ]:hover { transform: scale(1.9); }",
+  ].join(" ");
   svgEl.appendChild(styleEl);
 
   const transform = buildTransform(meta, elements);
@@ -140,27 +146,27 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
       const ring = document.createElementNS(NS, "circle");
       ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
-      ring.setAttribute("r", "5");   ring.setAttribute("fill", color);
-      ring.setAttribute("fill-opacity", "0.2");
-      ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "1");
+      ring.setAttribute("r", "2.5"); ring.setAttribute("fill", color);
+      ring.setAttribute("fill-opacity", "0.25");
+      ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
 
       const dot = document.createElementNS(NS, "circle");
       dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
-      dot.setAttribute("r", "3");   dot.setAttribute("fill", color);
-      dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.8");
+      dot.setAttribute("r", "1.5"); dot.setAttribute("fill", color);
+      dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.5");
 
       const label = document.createElementNS(NS, "text");
-      label.setAttribute("x", svgX + 4.5); label.setAttribute("y", svgY - 4);
-      label.setAttribute("font-size", "4.5"); label.setAttribute("fill", color);
+      label.setAttribute("x", svgX + 2.5); label.setAttribute("y", svgY - 2.5);
+      label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
       label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
       label.setAttribute("paint-order", "stroke");
-      label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1.5");
+      label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
       label.setAttribute("stroke-linejoin", "round");
       label.textContent = el.tag ?? key;
 
       const hit = document.createElementNS(NS, "circle");
       hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
-      hit.setAttribute("r", "9");   hit.setAttribute("fill", "transparent");
+      hit.setAttribute("r", "5");   hit.setAttribute("fill", "transparent");
       hit.classList.add("hit");
 
       const onClick  = (e) => { e.stopPropagation(); onSelectFn({ el, tag: el.tag ?? key, clientX: e.clientX, clientY: e.clientY }); };
@@ -332,6 +338,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFsHint, setShowFsHint]   = useState(true);
   const [activeTypes, setActiveTypes] = useState(null); // null = pokaż wszystko
+  const [floorNames,  setFloorNames]  = useState([]);   // nazwy pięter
+  const [activeFloor, setActiveFloor] = useState(0);    // indeks aktywnego piętra
 
   const containerRef = useRef(null);
   const wrapRef      = useRef(null);
@@ -340,12 +348,13 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const metaRef       = useRef(null);
   const elementsRef   = useRef({});
 
-  const tRef        = useRef({ scale: 1, panX: 0, panY: 0 });
-  const dragRef     = useRef(null);
-  const hasDragRef  = useRef(false);
-  const rafRef      = useRef(null);
-  const cleanupRef  = useRef(() => {});
-  const overlayElRef = useRef(null); // referencja do overlay SVG (filtrowanie typów)
+  const tRef         = useRef({ scale: 1, panX: 0, panY: 0 });
+  const dragRef      = useRef(null);
+  const hasDragRef   = useRef(false);
+  const rafRef       = useRef(null);
+  const cleanupRef   = useRef(() => {});
+  const overlayElRef = useRef(null);  // referencja do overlay SVG (filtrowanie typów)
+  const floorsDataRef = useRef([]);   // pełne dane wszystkich pięter [{ name, svg, attribs }]
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
@@ -484,6 +493,23 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     setTimeout(() => setLoadState("ok_mounted"), 300);
   }, []);
 
+  // ── Przełączanie pięter (bez re-fetchu) ──────────────────────────────────
+  const switchFloor = useCallback((idx) => {
+    const floor = floorsDataRef.current[idx];
+    if (!floor) return;
+    const { _meta, ...elems } = floor.attribs ?? {};
+    svgContentRef.current = floor.svg ?? "";
+    metaRef.current       = _meta ?? null;
+    elementsRef.current   = elems;
+    setElements(elems);
+    setSelected(null);
+    setActiveTypes(null);
+    tRef.current = { scale: 1, panX: 0, panY: 0 };
+    setScalePct(100);
+    setActiveFloor(idx);
+    setLoadState("processing");
+  }, []);
+
   // ── Ładowanie danych z GAS ────────────────────────────────────────────────
   const load = useCallback(async (attempt = 0) => {
     if (!projectCode) return;
@@ -495,10 +521,17 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       const res = await getDwgViewerContent(projectCode);
       setLoadProg({ pct: 40, label: "Pobieranie…" });
 
-      if (!res?.svg) { setLoadState("empty"); return; }
+      // GAS zwraca { floors: [...] }
+      const floors = res?.floors;
+      if (!floors || floors.length === 0) { setLoadState("empty"); return; }
 
-      const { _meta, ...elems } = res.attribs ?? {};
-      svgContentRef.current = res.svg;
+      floorsDataRef.current = floors;
+      setFloorNames(floors.map(f => f.name));
+
+      // Załaduj pierwsze piętro
+      const first = floors[0];
+      const { _meta, ...elems } = first.attribs ?? {};
+      svgContentRef.current = first.svg ?? "";
       metaRef.current       = _meta ?? null;
       elementsRef.current   = elems;
 
@@ -507,6 +540,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       setScalePct(100);
       setSelected(null);
       setActiveTypes(null);
+      setActiveFloor(0);
       setLoadState("processing");
     } catch {
       if (attempt === 0) {
@@ -671,10 +705,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
             </>
           ) : (
             <>
-              <span className="text-sm font-medium text-slate-600">Brak pliku projekt.svg</span>
-              <span className="text-xs text-slate-400">
+              <span className="text-sm font-medium text-slate-600">Brak pliku rzutu</span>
+              <span className="text-xs text-slate-400 leading-relaxed">
                 Umieść <code className="bg-slate-100 px-1 rounded">projekt.svg</code> i{" "}
-                <code className="bg-slate-100 px-1 rounded">projekt.json</code> w folderze projektu na Drive
+                <code className="bg-slate-100 px-1 rounded">projekt.json</code> w folderze projektu na Drive.
+                <br />
+                Wiele pięter:{" "}
+                <code className="bg-slate-100 px-1 rounded">projekt_Parter.svg</code>,{" "}
+                <code className="bg-slate-100 px-1 rounded">projekt_Piętro.svg</code> itd.
               </span>
             </>
           )}
@@ -710,6 +748,26 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         >
           <div ref={svgWrapRef} style={{ position: "relative", width: "100%", height: "100%" }} />
         </div>
+
+        {/* Przełącznik pięter – zawsze widoczny gdy są dane (nie tylko po załadowaniu) */}
+        {floorNames.length > 1 && (loadState === "ok_mounted" || loadState === "processing") && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1 shadow-sm z-40 pointer-events-auto">
+            {floorNames.map((name, idx) => (
+              <button
+                key={name}
+                onClick={() => switchFloor(idx)}
+                disabled={loadState === "processing"}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors disabled:opacity-60 ${
+                  idx === activeFloor
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        )}
 
         {isLoaded && (
           <>
