@@ -78,6 +78,10 @@ var HEADERS = {
   // ── Wyceny projektów ─────────────────────────────────────────────────────────
   "Wyceny": [
     "id", "projectId", "items", "status", "acceptedAt", "updatedDate"
+  ],
+  // ── Listy zakupów projektów ───────────────────────────────────────────────────
+  "Zakupy": [
+    "id", "projectId", "items", "updatedDate"
   ]
 };
 
@@ -100,7 +104,7 @@ function setupSheets() {
   SpreadsheetApp.getUi().alert(
     "✅ Zakładki gotowe!\n\n" +
     "Zakładki: Klienci, Projekty, Zadania, Checklists, Materiały, Dokumenty,\n" +
-    "          Leady, Wiadomosci, Kontakty, Wkurwienia\n\n" +
+    "          Leady, Wiadomosci, Kontakty, Wkurwienia, Wyceny, Zakupy\n\n" +
     "Uzupełnij ADMIN_EMAIL i LOXONE_URL w sekcji konfiguracji, a następnie wdróż Web App."
   );
 }
@@ -450,6 +454,20 @@ function doGet(e) {
         }
       }
 
+      // ── Zakupy ────────────────────────────────────────────────────────────────
+      // GET ?action=getZakupy&projectId=proj-123
+      case "getZakupy": {
+        var allZak = sheetToObjects("Zakupy");
+        if (!e.parameter.projectId) return err("Brak parametru projectId");
+        var zakFound = null;
+        for (var zi = 0; zi < allZak.length; zi++) {
+          if (String(allZak[zi].projectId) === String(e.parameter.projectId)) {
+            zakFound = allZak[zi]; break;
+          }
+        }
+        return ok(zakFound);
+      }
+
       // ── Wyceny (panel klienta i admin) ────────────────────────────────────────
       // GET ?action=getWycena&projectId=proj-123  LUB  &code=DEMO
       case "getWycena": {
@@ -714,6 +732,15 @@ function doPost(e) {
         };
         insertRow("Dokumenty", docEntry);
         return ok(Object.assign({}, uploaded, { docId: docEntry.id }));
+      }
+
+      // ── Zakupy ────────────────────────────────────────────────────────────────
+      case "upsertZakupy": {
+        var zakObj = body.zakupy;
+        if (!zakObj || !zakObj.projectId) return err("Brak zakupy lub projectId");
+        if (!zakObj.id) zakObj.id = "zak-" + Date.now();
+        zakObj.updatedDate = todayStr();
+        return ok(upsertRow("Zakupy", zakObj));
       }
 
       // ── Wyceny ────────────────────────────────────────────────────────────────
