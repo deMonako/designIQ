@@ -70,7 +70,8 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
   const cw = Math.min(Math.ceil(svgW * K), 6000);
   const ch = Math.min(Math.ceil(svgH * K), 6000);
 
-  svgEl.setAttribute("preserveAspectRatio", "none");
+  // Ustaw dokładny rozmiar — nie wymuszaj preserveAspectRatio; cw/ch mają ten sam AR co SVG,
+  // więc treść wypełnia canvas bez zniekształceń.
   svgEl.setAttribute("width",  cw);
   svgEl.setAttribute("height", ch);
 
@@ -89,7 +90,8 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
       const canvas = document.createElement("canvas");
       canvas.width  = cw;
       canvas.height = ch;
-      canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%;display:block;";
+      // CSS ustawia mountView po obliczeniu letterbox — tu tylko display:block
+      canvas.style.cssText = "display:block;";
       const ctx = canvas.getContext("2d");
       ctx.fillStyle = "#f1f5f9";
       ctx.fillRect(0, 0, cw, ch);
@@ -113,8 +115,7 @@ function buildOverlay(svgW, svgH, elements, meta, onSelectFn) {
   const NS      = "http://www.w3.org/2000/svg";
   const svgEl   = document.createElementNS(NS, "svg");
   svgEl.setAttribute("viewBox", `0 0 ${svgW} ${svgH}`);
-  svgEl.setAttribute("preserveAspectRatio", "none");
-  svgEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;";
+  // CSS (position/size) ustawia mountView po obliczeniu letterbox
 
   // SVG root musi mieć pointer-events: auto (domyślne), żeby routować eventy do dzieci.
   // Blokujemy tylko konkretne elementy rysunkowe; circle.hit pozostaje klikalny.
@@ -359,6 +360,21 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const svgW = (vb && vb.width  > 0) ? vb.width  : 1200;
     const svgH = (vb && vb.height > 0) ? vb.height : 900;
 
+    // ── Letterbox: dopasuj SVG do kontenera zachowując proporcje (xMidYMid meet)
+    const cont   = containerRef.current;
+    const contW  = cont ? cont.offsetWidth  : 800;
+    const contH  = cont ? cont.offsetHeight : 520;
+    const svgAR  = svgW / svgH;
+    const contAR = contW / contH;
+    let dispW, dispH;
+    if (svgAR > contAR) { dispW = contW;              dispH = contW / svgAR; }
+    else                { dispH = contH;              dispW = contH * svgAR; }
+    dispW = Math.round(dispW);
+    dispH = Math.round(dispH);
+    const offX = Math.round((contW - dispW) / 2);
+    const offY = Math.round((contH - dispH) / 2);
+    const layoutCss = `position:absolute;left:${offX}px;top:${offY}px;width:${dispW}px;height:${dispH}px;`;
+
     // ── Krok 2: rasteryzuj SVG → Canvas
     // rasterizeSvg wewnętrznie liczy rozdzielczość 3× viewBox (ostrość do 3× zooma)
     let canvas = null;
@@ -387,7 +403,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
     setLoadProg({ pct: 80, label: "Nakładka…" });
 
-    // ── Krok 3: dołącz canvas
+    // ── Krok 3: dołącz canvas z letterbox CSS
+    canvas.style.cssText += layoutCss;
     wrap.appendChild(canvas);
 
     // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
@@ -407,6 +424,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         if (!hasDragRef.current && !e.target.classList.contains("hit")) setSelected(null);
       });
 
+      // Overlay SVG dostaje ten sam letterbox CSS co canvas
+      overlayEl.style.cssText = layoutCss + "overflow:visible;";
       wrap.appendChild(overlayEl);
       cleanupRef.current = () => { cleanup(); overlayEl.remove(); };
     }
@@ -450,15 +469,17 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   useEffect(() => { load(); }, [load]);
 
-  // Po przejściu w stan "processing" → montuj widok
+  // Cleanup overlay tylko przy unmount komponentu
+  useEffect(() => () => { cleanupRef.current(); }, []);
+
+  // Po przejściu w stan "processing" → montuj widok.
+  // WAŻNE: ten useEffect NIE czyści overlay w return — robiłoby to natychmiast
+  // gdy loadState zmienia się z "processing" na "ok_mounted", usuwając overlay
+  // zanim użytkownik zdąży kliknąć element.
   useEffect(() => {
     if (loadState !== "processing") return;
     const raf = requestAnimationFrame(() => { mountView(); });
-    return () => {
-      cancelAnimationFrame(raf);
-      cleanupRef.current();
-      cleanupRef.current = () => {};
-    };
+    return () => cancelAnimationFrame(raf);
   }, [loadState, mountView]);
 
   // ── Pan ───────────────────────────────────────────────────────────────────

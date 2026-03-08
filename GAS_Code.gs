@@ -410,12 +410,20 @@ function doGet(e) {
           if (String(allWyceny[wi].projectId) === String(project.id)) { wycena = allWyceny[wi]; break; }
         }
 
+        // Zakupy projektu
+        var allZakupy = sheetToObjects("Zakupy");
+        var zakupy = null;
+        for (var zk = 0; zk < allZakupy.length; zk++) {
+          if (String(allZakupy[zk].projectId) === String(project.id)) { zakupy = allZakupy[zk]; break; }
+        }
+
         return ok({
           project:   project,
           docs:      visibleDocs,
           files:     driveFiles,
           messages:  messages,
-          wycena:    wycena
+          wycena:    wycena,
+          zakupy:    zakupy
         });
       }
 
