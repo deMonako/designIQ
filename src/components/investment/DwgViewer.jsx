@@ -116,9 +116,11 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
 function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   const NS      = "http://www.w3.org/2000/svg";
   const svgEl   = document.createElementNS(NS, "svg");
-  // viewBox musi być identyczny z viewBox canvasa (po ustawieniu preserveAspectRatio=none)
-  // aby koordynaty nakładki pokrywały się 1:1 z pikselami canvasa.
+  // viewBox + preserveAspectRatio=none → koordynaty nakładki mapują się 1:1 z canvasem.
+  // Bez "none" przeglądarka stosuje domyślnie xMidYMid meet, co przy nawet 1px różnicy
+  // proporcji (po Math.round dispW/dispH) dodaje wewnętrzny letterbox i przesuwa kropki.
   svgEl.setAttribute("viewBox", `${vbX} ${vbY} ${svgW} ${svgH}`);
+  svgEl.setAttribute("preserveAspectRatio", "none");
   // CSS (position/size) ustawia mountView po obliczeniu letterbox
 
   // SVG root musi mieć pointer-events: auto (domyślne), żeby routować eventy do dzieci.
@@ -621,34 +623,34 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     rafRef.current = requestAnimationFrame(() => { rafRef.current = null; flushTransform(); });
   }, [flushTransform]);
 
-  // ── Zoom w kierunku kursora ───────────────────────────────────────────────
-  // transformOrigin = "center center" → skalowanie wokół środka kontenera.
-  // Aby zoom działał w miejscu kursora, korygujemy pan o wektor środek→kursor
-  // przemnożony przez (1 - ratio), gdzie ratio = newScale / oldScale.
+  // ── Zoom ─────────────────────────────────────────────────────────────────
+  // transformOrigin = "0 0" → skalowanie wokół lewego-górnego rogu wrappera.
+  // Formuła: newPan = oldPan + mouseFromTopLeft × (1 − actualRatio)
+  // gdzie actualRatio = newScale / oldScale (uwzględnia clamping do 0.1…15).
+  const applyZoom = useCallback((newScale, anchorX, anchorY) => {
+    const oldScale   = tRef.current.scale;
+    const clamped    = Math.min(Math.max(newScale, 0.1), 15);
+    const factor     = clamped / oldScale;
+    tRef.current.panX  = tRef.current.panX  + anchorX * (1 - factor);
+    tRef.current.panY  = tRef.current.panY  + anchorY * (1 - factor);
+    tRef.current.scale = clamped;
+    flushTransform();
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        setScalePct(Math.round(tRef.current.scale * 100));
+      });
+    }
+  }, [flushTransform]);
+
   const handleWheel = useCallback((e) => {
     e.preventDefault();
-    const cont = containerRef.current;
-    const rect = cont ? cont.getBoundingClientRect() : null;
-    const oldScale = tRef.current.scale;
-    const ratio    = e.deltaY < 0 ? 1.12 : 0.9;
-    const newScale = Math.min(Math.max(oldScale * ratio, 0.1), 15);
-
-    if (rect) {
-      // Pozycja myszy względem środka kontenera (punkt obrotu transformOrigin)
-      const cx = e.clientX - rect.left - rect.width  / 2;
-      const cy = e.clientY - rect.top  - rect.height / 2;
-      tRef.current.panX = tRef.current.panX + cx * (1 - newScale / oldScale);
-      tRef.current.panY = tRef.current.panY + cy * (1 - newScale / oldScale);
-    }
-    tRef.current.scale = newScale;
-
-    flushTransform();
-    if (rafRef.current) return;
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null;
-      setScalePct(Math.round(tRef.current.scale * 100));
-    });
-  }, [flushTransform]);
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Pozycja myszy od lewego-górnego rogu kontenera (= lewego-górnego rogu wrappera)
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    applyZoom(tRef.current.scale * (e.deltaY < 0 ? 1.12 : 0.9), mx, my);
+  }, [applyZoom]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -739,8 +741,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           style={{
             position: "absolute", top: 0, left: 0,
             width: "100%", height: "100%",
-            transform: "translateZ(0) translate(0px,0px) scale(1)",
-            transformOrigin: "center center",
+            transform: "translate(0px,0px) scale(1)",
+            transformOrigin: "0 0",
             willChange: "transform",
             cursor: "grab",
             userSelect: "none",
@@ -773,8 +775,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           <>
             <Toolbar
               scalePct={scalePct}
-              onZoomIn={() => { tRef.current.scale = Math.min(tRef.current.scale * 1.2, 15); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
-              onZoomOut={() => { tRef.current.scale = Math.max(tRef.current.scale / 1.2, 0.1); flushTransform(); setScalePct(Math.round(tRef.current.scale * 100)); }}
+              onZoomIn={() => {
+                const c = containerRef.current;
+                applyZoom(tRef.current.scale * 1.2, c ? c.offsetWidth / 2 : 0, c ? c.offsetHeight / 2 : 0);
+              }}
+              onZoomOut={() => {
+                const c = containerRef.current;
+                applyZoom(tRef.current.scale / 1.2, c ? c.offsetWidth / 2 : 0, c ? c.offsetHeight / 2 : 0);
+              }}
               onReset={handleReset}
               onFullscreen={() => { setIsFullscreen(f => !f); setShowFsHint(false); }}
             />
