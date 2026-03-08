@@ -62,11 +62,20 @@ function dotColor(typ) {
 // Canvas to pojedyncza tekstura GPU. Pan = przesunięcie tekstury na GPU.
 // Zero repaintu SVG podczas przesuwania. Kosztem jednorazowego renderowania.
 
-async function rasterizeSvg(svgEl, cw, ch) {
+async function rasterizeSvg(svgEl, svgW, svgH) {
+  // Rasteryzuj z 3× rozdzielczością viewBox — Chrome renderuje SVG wektorowo
+  // do podanego rozmiaru, więc każdy zoom <3× zachowuje ostrość.
+  // preserveAspectRatio=none → canvas wypełniony 1:1 z viewBox (brak letterbox).
+  const K  = 3;
+  const cw = Math.min(Math.ceil(svgW * K), 6000);
+  const ch = Math.min(Math.ceil(svgH * K), 6000);
+
+  svgEl.setAttribute("preserveAspectRatio", "none");
+  svgEl.setAttribute("width",  cw);
+  svgEl.setAttribute("height", ch);
+
   const serializer = new XMLSerializer();
   let svgStr = serializer.serializeToString(svgEl);
-
-  // Upewnij się że namespace SVG jest obecny (XMLSerializer może go pominąć)
   if (!svgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
     svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
   }
@@ -107,9 +116,10 @@ function buildOverlay(svgW, svgH, elements, meta, onSelectFn) {
   svgEl.setAttribute("preserveAspectRatio", "none");
   svgEl.style.cssText = "position:absolute;inset:0;width:100%;height:100%;overflow:visible;";
 
-  // Tylko .hit kółka mają pointer-events; reszta jest przezroczysta na kliknięcia
+  // SVG root musi mieć pointer-events: auto (domyślne), żeby routować eventy do dzieci.
+  // Blokujemy tylko konkretne elementy rysunkowe; circle.hit pozostaje klikalny.
   const styleEl = document.createElementNS(NS, "style");
-  styleEl.textContent = "* { pointer-events: none; } circle.hit { pointer-events: auto !important; cursor: pointer; }";
+  styleEl.textContent = "g > circle:not(.hit), g > text { pointer-events: none; } circle.hit { pointer-events: auto; cursor: pointer; }";
   svgEl.appendChild(styleEl);
 
   const transform = buildTransform(meta, elements);
@@ -350,15 +360,10 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const svgH = (vb && vb.height > 0) ? vb.height : 900;
 
     // ── Krok 2: rasteryzuj SVG → Canvas
-    // Rozmiar canvasa = rozmiar kontenera × DPR (ostrość na Retina)
-    const cont = containerRef.current;
-    const dpr  = Math.min(window.devicePixelRatio || 1, 2);
-    const cw   = Math.ceil((cont ? cont.offsetWidth  : 800) * dpr);
-    const ch   = Math.ceil((cont ? cont.offsetHeight : 520) * dpr);
-
+    // rasterizeSvg wewnętrznie liczy rozdzielczość 3× viewBox (ostrość do 3× zooma)
     let canvas = null;
     try {
-      canvas = await rasterizeSvg(parsedSvg, cw, ch);
+      canvas = await rasterizeSvg(parsedSvg, svgW, svgH);
     } catch (e) {
       // Fallback: inline SVG z pointer-events injection
       console.warn("DwgViewer: canvas fallback →", e.message);
