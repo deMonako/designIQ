@@ -62,9 +62,16 @@ export default function ZakupyEditor({ project, onClose }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-    gasGet("getCennik")
-      .then(data => { if (Array.isArray(data)) setCennik(data); })
-      .catch(() => {});
+    Promise.all([
+      gasGet("getCennik").catch(() => []),
+      gasGet("getMaterialyJson").catch(() => []),
+    ]).then(([cennikData, matData]) => {
+      const merged = [
+        ...(Array.isArray(cennikData) ? cennikData : []),
+        ...(Array.isArray(matData) ? matData.map(m => ({ name: m.name, price_pln: m.price_pln, sku: null, link: m.link })) : []),
+      ];
+      setCennik(merged);
+    });
   }, [project.id]);
 
   // Zamknij podpowiedzi po kliknięciu poza
@@ -223,17 +230,19 @@ export default function ZakupyEditor({ project, onClose }) {
                               <ul style={{ position: 'fixed', top: suggPos[item.id].top + 2, left: suggPos[item.id].left, width: Math.max(suggPos[item.id].width, 280), zIndex: 9999 }} className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
                                 {sugg[item.id].list.map(c => (
                                   <li
-                                    key={c.sku}
+                                    key={c.sku ?? c.name}
                                     onMouseDown={() => selectSugg(item.id, c)}
                                     className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 gap-2"
                                   >
-                                    <span className="truncate">{c.name}</span>
-                                    <span className="shrink-0 text-xs text-slate-400 font-mono">{c.sku}</span>
-                                    {c.price_pln != null && (
-                                      <span className="shrink-0 text-xs font-semibold text-green-600">
-                                        {c.price_pln.toLocaleString("pl-PL")} zł
-                                      </span>
-                                    )}
+                                    <span className="flex-1 truncate">{c.name}</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {c.sku && <span className="text-xs text-slate-400 font-mono">{c.sku}</span>}
+                                      {c.price_pln != null && (
+                                        <span className="text-xs font-semibold text-green-600">
+                                          {c.price_pln.toLocaleString("pl-PL")} zł
+                                        </span>
+                                      )}
+                                    </div>
                                   </li>
                                 ))}
                               </ul>
