@@ -121,7 +121,7 @@ export default function ZakupyEditor({ project, onClose }) {
   const selectSugg = useCallback((itemId, cennikItem) => {
     setItems(prev => prev.map(it =>
       it.id === itemId
-        ? { ...it, name: cennikItem.name, priceEst: cennikItem.price_pln ?? it.priceEst }
+        ? { ...it, name: cennikItem.name, priceEst: cennikItem.price_pln ?? it.priceEst, link: cennikItem.link || it.link }
         : it
     ));
     setSugg(prev => ({ ...prev, [itemId]: { show: false, list: [] } }));

@@ -79,7 +79,7 @@ function BOMTable({ items, onChange, cennik = [] }) {
   const selectSugg = useCallback((rowId, cennikItem) => {
     onChange(items.map(r =>
       r.id === rowId
-        ? { ...r, name: cennikItem.name, priceEst: cennikItem.price_pln ?? r.priceEst }
+        ? { ...r, name: cennikItem.name, priceEst: cennikItem.price_pln ?? r.priceEst, link: cennikItem.link || r.link }
         : r
     ));
     setSugg(prev => ({ ...prev, [rowId]: { show: false, list: [] } }));
