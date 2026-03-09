@@ -69,8 +69,10 @@ function AgendaRow({ task, project, onStatusChange, onEdit }) {
         }`}>
           {task.title}
         </span>
-        {project && (
-          <span className="text-xs text-slate-400 ml-2">{project.name}</span>
+        {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+          <span className="text-xs text-slate-400 ml-2">
+            {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+          </span>
         )}
       </div>
 
@@ -109,7 +111,11 @@ function OverdueRow({ task, project, onStatusChange, onEdit }) {
       />
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium text-slate-800">{task.title}</span>
-        {project && <span className="text-xs text-slate-400 ml-2">{project.name}</span>}
+        {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+          <span className="text-xs text-slate-400 ml-2">
+            {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
@@ -224,8 +230,10 @@ function UpcomingItem({ task, project, onClick }) {
       <span className={`flex-1 truncate font-medium ${isEvent ? "text-violet-700" : "text-slate-700"} group-hover:underline`}>
         {task.title}
       </span>
-      {project && (
-        <span className="text-slate-300 truncate max-w-[80px]">{project.name.split("–")[0].trim()}</span>
+      {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+        <span className="text-slate-300 truncate max-w-[80px]">
+          {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name.split("–")[0].trim()}
+        </span>
       )}
     </button>
   );

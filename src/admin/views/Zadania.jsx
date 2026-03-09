@@ -158,7 +158,7 @@ function TaskCard({ task, project, isSelected, onClick }) {
 
 // ─── DayColumn (pionowy pasek – widok tygodnia) ───────────────────────────────
 
-function DayColumn({ date, tasks, projects, selectedTaskId, onTaskClick }) {
+function DayColumn({ date, tasks, milestones, projects, selectedTaskId, onTaskClick }) {
   const dateStr   = formatYMD(date);
   const isToday   = dateStr === TODAY;
   const dayIndex  = date.getDay();
@@ -191,6 +191,23 @@ function DayColumn({ date, tasks, projects, selectedTaskId, onTaskClick }) {
           </div>
         )}
       </div>
+
+      {/* Kamienie milowe */}
+      {milestones && milestones.length > 0 && (
+        <div className="px-1 pt-1 space-y-0.5">
+          {milestones.map(ms => (
+            <div key={ms.id} title={ms.projectName}
+              className={`flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold border leading-none truncate ${
+                ms.type === "stage"     ? "bg-orange-50 text-orange-600 border-orange-200" :
+                ms.type === "stage-end" ? "bg-slate-100 text-slate-500 border-slate-200" :
+                                          "bg-blue-50 text-blue-600 border-blue-200"
+              }`}>
+              <Flag className="w-2 h-2 flex-shrink-0" />
+              <span className="truncate">{ms.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Zadania */}
       <div className="flex-1 p-1 space-y-1 overflow-y-auto">
@@ -256,9 +273,9 @@ function MonthDayCell({ date, tasks, milestones, isSelected, isCurrentMonth, onD
           {milestones.map(ms => (
             <span key={ms.id} title={`${ms.label} (${ms.projectName})`}
               className={`inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold border leading-none max-w-full truncate ${
-                ms.type === "stage"
-                  ? "bg-orange-50 text-orange-600 border-orange-200"
-                  : "bg-blue-50 text-blue-600 border-blue-200"
+                ms.type === "stage"     ? "bg-orange-50 text-orange-600 border-orange-200" :
+                ms.type === "stage-end" ? "bg-slate-100 text-slate-500 border-slate-200" :
+                                          "bg-blue-50 text-blue-600 border-blue-200"
               }`}>
               <Flag className="w-2 h-2 flex-shrink-0" />{ms.label}
             </span>
@@ -573,15 +590,24 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
         if (!ms.label || !ms.date) return;
         add(ms.date, { id: ms.id, label: ms.label, projectName: p.name, type: "manual" });
       });
-      // Początki etapów z harmonogramu
+      // Początki i zakończenia etapów z harmonogramu
       (p.stageSchedule ?? []).forEach((s, i) => {
-        if (!s.start) return;
-        add(s.start, {
-          id: `${p.id}-stage-${i}`,
-          label: s.name,
-          projectName: p.name,
-          type: "stage",
-        });
+        if (s.start) {
+          add(s.start, {
+            id: `${p.id}-stage-${i}-start`,
+            label: `▶ ${s.name}`,
+            projectName: p.name,
+            type: "stage",
+          });
+        }
+        if (s.end && s.end !== s.start) {
+          add(s.end, {
+            id: `${p.id}-stage-${i}-end`,
+            label: `◀ ${s.name}`,
+            projectName: p.name,
+            type: "stage-end",
+          });
+        }
       });
     });
     return map;
@@ -773,6 +799,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
                 key={formatYMD(day)}
                 date={day}
                 tasks={tasksByDate[formatYMD(day)] ?? []}
+                milestones={milestonesByDate[formatYMD(day)] ?? []}
                 projects={projects}
                 selectedTaskId={selectedTask?.id}
                 onTaskClick={handleWeekTaskClick}
