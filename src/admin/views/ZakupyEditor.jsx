@@ -47,8 +47,8 @@ export default function ZakupyEditor({ project, onClose }) {
   const [saving,   setSaving]  = useState(false);
   const [collapsed, setCollapsed] = useState({});
   const [cennik,   setCennik]  = useState([]);
-  // { [itemId]: { show: bool, list: [] } }
-  const [sugg, setSugg] = useState({});
+  const [sugg,     setSugg]    = useState({});
+  const [suggPos,  setSuggPos] = useState({});
   const suggRefs = useRef({});
 
   useEffect(() => {
@@ -101,6 +101,10 @@ export default function ZakupyEditor({ project, onClose }) {
       const matches = cennik
         .filter(c => (c.name != null && c.name.toLowerCase().includes(q)) || (c.sku != null && String(c.sku).toLowerCase().includes(q)))
         .slice(0, 8);
+      if (matches.length > 0 && suggRefs.current[id]) {
+        const rect = suggRefs.current[id].getBoundingClientRect();
+        setSuggPos(prev => ({ ...prev, [id]: { top: rect.bottom, left: rect.left, width: rect.width } }));
+      }
       setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
     } else {
       setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
@@ -215,8 +219,8 @@ export default function ZakupyEditor({ project, onClose }) {
                               placeholder="Nazwa produktu (min. 3 znaki)"
                               className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-400"
                             />
-                            {sugg[item.id]?.show && (
-                              <ul className="absolute left-0 top-full mt-0.5 z-50 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+                            {sugg[item.id]?.show && suggPos[item.id] && (
+                              <ul style={{ position: 'fixed', top: suggPos[item.id].top + 2, left: suggPos[item.id].left, width: Math.max(suggPos[item.id].width, 280), zIndex: 9999 }} className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
                                 {sugg[item.id].list.map(c => (
                                   <li
                                     key={c.sku}

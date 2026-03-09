@@ -35,6 +35,7 @@ const CATEGORIES = [
 function BOMTable({ items, onChange, cennik = [] }) {
   const total = items.reduce((s, r) => s + r.quantity * r.priceEst, 0);
   const [sugg, setSugg] = useState({});
+  const [suggPos, setSuggPos] = useState({});
   const suggRefs = useRef({});
 
   useEffect(() => {
@@ -65,6 +66,10 @@ function BOMTable({ items, onChange, cennik = [] }) {
       const matches = cennik
         .filter(c => (c.name != null && c.name.toLowerCase().includes(q)) || (c.sku != null && String(c.sku).toLowerCase().includes(q)))
         .slice(0, 8);
+      if (matches.length > 0 && suggRefs.current[id]) {
+        const rect = suggRefs.current[id].getBoundingClientRect();
+        setSuggPos(prev => ({ ...prev, [id]: { top: rect.bottom, left: rect.left, width: rect.width } }));
+      }
       setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
     } else {
       setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
@@ -127,8 +132,8 @@ function BOMTable({ items, onChange, cennik = [] }) {
                       className="w-full bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400/50 rounded px-1 py-0.5 text-slate-800 font-medium text-sm"
                       placeholder="Nazwa urządzenia…"
                     />
-                    {sugg[row.id]?.show && (
-                      <ul className="absolute left-0 top-full mt-0.5 z-50 w-72 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+                    {sugg[row.id]?.show && suggPos[row.id] && (
+                      <ul style={{ position: 'fixed', top: suggPos[row.id].top + 2, left: suggPos[row.id].left, width: Math.max(suggPos[row.id].width, 280), zIndex: 9999 }} className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
                         {sugg[row.id].list.map(c => (
                           <li
                             key={c.sku}
@@ -183,7 +188,6 @@ function BOMTable({ items, onChange, cennik = [] }) {
                     onChange={e => update(row.id, "priceEst", parseFloat(e.target.value) || 0)}
                     className="w-24 text-right border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 tabular-nums"
                   />
-                  <span className="text-xs text-slate-400 ml-1">zł</span>
                 </td>
                 {/* Wartość */}
                 <td className="px-3 py-2 text-right font-semibold text-slate-700 tabular-nums">

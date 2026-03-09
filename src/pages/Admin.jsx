@@ -9,6 +9,7 @@ import Zadania      from "../admin/views/Zadania";
 import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
+import MateriałyJson from "../admin/views/MateriałyJson";
 import Kalkulator   from "../admin/views/Kalkulator";
 import AddProjectModal from "../admin/AddProjectModal";
 import {
@@ -423,8 +424,10 @@ export default function Admin() {
             onAddChecklist={handleAddChecklist} onDeleteChecklist={handleDeleteChecklist}
           />
         );
-      case "materialy":
+      case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
+      case "materialy":
+        return <MateriałyJson />;
       case "analityka":
         return (
           <Analityka

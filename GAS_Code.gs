@@ -399,6 +399,25 @@ function doGet(e) {
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────
+      // Zwraca zawartość materialy.json z folderu Materiały na Drive
+      // GET ?action=getMaterialyJson
+      case "getMaterialyJson": {
+        var matJsonFolder = getOrCreateMaterialsFolder();
+        if (!matJsonFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var matJsonFiles = matJsonFolder.getFiles();
+        while (matJsonFiles.hasNext()) {
+          var mjf = matJsonFiles.next();
+          if (mjf.getName().toLowerCase() === "materialy.json") {
+            try {
+              return ok(JSON.parse(mjf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania materialy.json: " + ex.message);
+            }
+          }
+        }
+        return ok([]); // plik nie istnieje jeszcze – zwróć pustą tablicę
+      }
+
       // Zwraca zawartość cennik.json z folderu Materiały na Drive
       // GET ?action=getCennik
       case "getCennik": {
@@ -682,6 +701,27 @@ function doPost(e) {
         obj = findById(all, body.id);
         if (!obj) return err("Dokument nie znaleziony: " + body.id);
         return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: !obj.clientVisible })));
+
+      // ── Materiały JSON (edytor materialy.json na Drive) ───────────────────────
+      // Zapisuje (nadpisuje) plik materialy.json w folderze Materiały na Drive
+      // body: { items: [{ name, price_pln, link }, ...] }
+      case "saveMaterialyJson": {
+        if (!Array.isArray(body.items)) return err("Brak tablicy items");
+        var saveMatFolder = getOrCreateMaterialsFolder();
+        if (!saveMatFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        // Usuń stary plik (jeśli istnieje)
+        var oldMatFiles = saveMatFolder.getFiles();
+        while (oldMatFiles.hasNext()) {
+          var omf = oldMatFiles.next();
+          if (omf.getName().toLowerCase() === "materialy.json") {
+            omf.setTrashed(true);
+            break;
+          }
+        }
+        // Zapisz nowy
+        saveMatFolder.createFile("materialy.json", JSON.stringify(body.items, null, 2), "application/json");
+        return ok({ saved: true, count: body.items.length });
+      }
 
       // ── Leady (admin) ─────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
   BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
   ChevronRight, Users, Search, Plus, User, Calendar,
-  CheckCircle2, AlertCircle, RefreshCw, Calculator,
+  CheckCircle2, AlertCircle, RefreshCw, Calculator, BookOpen,
 } from "lucide-react";
 import { TODAY } from "./mockData";
 
@@ -15,9 +15,10 @@ const NAV_ITEMS = [
   { id: "projekty",   label: "Projekty",   icon: FolderKanban,   badge: "projekty" },
   { id: "klienci",    label: "Klienci",    icon: Users,          badge: "klienci" },
   { id: "zadania",    label: "Zadania",    icon: CheckSquare,    badge: "zadania" },
-  { id: "checklisty", label: "Checklisty", icon: ClipboardList },
-  { id: "materialy",  label: "Materiały",  icon: Package },
-  { id: "analityka",  label: "Analityka",  icon: BarChart2 },
+  { id: "checklisty",  label: "Checklisty",  icon: ClipboardList },
+  { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
+  { id: "materialy",   label: "Materiały",   icon: Package },
+  { id: "analityka",   label: "Analityka",   icon: BarChart2 },
   { id: "kalkulator", label: "Kalkulator", icon: Calculator },
 ];
 const NAV_BOTTOM = [{ id: "ustawienia", label: "Ustawienia", icon: Settings }];
