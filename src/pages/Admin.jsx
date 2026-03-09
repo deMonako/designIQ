@@ -240,6 +240,15 @@ export default function Admin() {
     });
   };
 
+  const handleDeleteTask = async (id) => {
+    const snap = tasks.find(x => x.id === id);
+    setTasks(prev => prev.filter(x => x.id !== id));
+    await gasSync(() => GAS.deleteTask(id), () => {
+      if (snap) setTasks(prev => [snap, ...prev]);
+      syncErr("Błąd usuwania zadania");
+    });
+  };
+
   // ── Checklists ────────────────────────────────────────────────────────────
   const handleToggleChecklistItem = async (clId, itemId) => {
     setChecklists(prev => prev.map(cl => cl.id !== clId ? cl : {
@@ -357,7 +366,7 @@ export default function Admin() {
         return (
           <Dashboard
             projects={projects} tasks={tasks} clients={clients}
-            onUpdateTask={handleUpdateTask}
+            onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask}
             onSelectProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />
         );
@@ -370,6 +379,7 @@ export default function Admin() {
             onDeleteProject={handleDeleteProject}
             onAddTask={handleAddTask}
             onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
             onAddChecklist={handleAddChecklist}
             onToggleChecklistItem={handleToggleChecklistItem}
             selectedProject={selectedProject}
@@ -394,7 +404,7 @@ export default function Admin() {
           />
         );
       case "zadania":
-        return <Zadania projects={projects} tasks={tasks} onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} />;
+        return <Zadania projects={projects} tasks={tasks} onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} />;
       case "checklisty":
         return (
           <Checklisty

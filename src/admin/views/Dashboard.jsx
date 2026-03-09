@@ -7,6 +7,7 @@ import {
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { TODAY, isOverdue } from "../mockData";
+import TaskModal, { projectLabel, DESIGNIQ_PROJECT_ID } from "../components/TaskModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -192,21 +193,24 @@ function ProjectCard({ project, client, onClick }) {
 
 // ─── UpcomingItem ─────────────────────────────────────────────────────────────
 
-function UpcomingItem({ task, project }) {
+function UpcomingItem({ task, project, onClick }) {
   const isEvent = task.type === "event";
   return (
-    <div className="flex items-center gap-2 py-1.5 text-xs">
+    <button
+      onClick={() => onClick(task)}
+      className="w-full flex items-center gap-2 py-1.5 text-xs text-left hover:bg-slate-50 rounded-md px-1 -mx-1 transition-colors group"
+    >
       {isEvent
         ? <Calendar className="w-3 h-3 text-violet-400 flex-shrink-0" />
         : <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
       }
-      <span className={`flex-1 truncate font-medium ${isEvent ? "text-violet-700" : "text-slate-700"}`}>
+      <span className={`flex-1 truncate font-medium ${isEvent ? "text-violet-700" : "text-slate-700"} group-hover:underline`}>
         {task.title}
       </span>
       {project && (
         <span className="text-slate-300 truncate max-w-[80px]">{project.name.split("–")[0].trim()}</span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -236,7 +240,7 @@ function QuickNotes() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSelectProject }) {
+export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -280,9 +284,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
 
   const fewTasksToday = todayItems.length <= 3;
 
+  const [editingTask, setEditingTask] = useState(null);
+
   const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find(t => t.id === taskId);
     if (task) onUpdateTask({ ...task, status: newStatus });
+  };
+
+  const handleSaveTask = (taskData) => {
+    if (taskData.id && tasks.find(t => t.id === taskData.id)) onUpdateTask(taskData);
+    else onAddTask?.(taskData);
   };
 
   // ── Stat chips ────────────────────────────────────────────────────────────
@@ -442,6 +453,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                             key={t.id}
                             task={t}
                             project={projects.find(p => p.id === t.projectId)}
+                            onClick={setEditingTask}
                           />
                         ))}
                       </div>
@@ -503,6 +515,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                             key={t.id}
                             task={t}
                             project={projects.find(p => p.id === t.projectId)}
+                            onClick={setEditingTask}
                           />
                         ))}
                       </div>
@@ -519,6 +532,19 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
 
       {/* ── Notatki ── */}
       <QuickNotes />
+
+      {/* ── Modal edycji zadania (nadchodzące) ── */}
+      <AnimatePresence>
+        {editingTask && (
+          <TaskModal
+            projects={projects}
+            task={editingTask}
+            onSave={handleSaveTask}
+            onDelete={onDeleteTask}
+            onClose={() => setEditingTask(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

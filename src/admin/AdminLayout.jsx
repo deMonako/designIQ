@@ -310,6 +310,7 @@ export default function AdminLayout({
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none"
                   >
                     <option value="">— bez projektu —</option>
+                    <option value="__designiq__">designIQ</option>
                     {projects.filter(p => p.status !== "Ukończony").map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}

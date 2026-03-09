@@ -196,7 +196,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
 
 function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
-  onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask,
+  onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask,
   onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible,
   onAddChecklist, onToggleChecklistItem,
 }) {
@@ -332,11 +332,18 @@ function ProjectDetail({
       : project.stages.map(s => ({ name: s, start: project.startDate || TODAY, end: project.deadline || TODAY }));
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleForm,    setScheduleForm]    = useState(buildScheduleForm);
-  useEffect(() => { if (!editingSchedule) setScheduleForm(buildScheduleForm()); }, [project]); // eslint-disable-line
+  const [milestoneForm,   setMilestoneForm]   = useState(() => project.milestones ?? []);
+  useEffect(() => { if (!editingSchedule) { setScheduleForm(buildScheduleForm()); setMilestoneForm(project.milestones ?? []); } }, [project]); // eslint-disable-line
   const setStageDate = (i, key, val) =>
     setScheduleForm(f => f.map((s, j) => j === i ? { ...s, [key]: val } : s));
+  const addMilestone = () =>
+    setMilestoneForm(f => [...f, { id: `ms-${Date.now()}`, label: "", date: TODAY }]);
+  const setMilestone = (id, key, val) =>
+    setMilestoneForm(f => f.map(m => m.id === id ? { ...m, [key]: val } : m));
+  const removeMilestone = (id) =>
+    setMilestoneForm(f => f.filter(m => m.id !== id));
   const saveSchedule = () => {
-    onUpdateProject({ ...project, stageSchedule: scheduleForm });
+    onUpdateProject({ ...project, stageSchedule: scheduleForm, milestones: milestoneForm.filter(m => m.label && m.date) });
     setEditingSchedule(false);
   };
 
@@ -366,7 +373,11 @@ function ProjectDetail({
       done:    i < project.stageIndex,
       current: i === project.stageIndex,
     }));
-    return { months, bars };
+    const milestones = (project.milestones ?? [])
+      .filter(m => m.label && m.date)
+      .map(m => ({ ...m, pct: pct(+new Date(m.date)) }))
+      .filter(m => m.pct >= 0 && m.pct <= 100);
+    return { months, bars, milestones };
   }, [scheduleForm, project.stageIndex]); // eslint-disable-line
   const totalExpected  = FINANCE_STAGES.reduce((s, st) => s + (project[st.profitKey] || 0), 0);
   const totalPaid      = FINANCE_STAGES.reduce((s, st) => s + (project[st.paidKey]   || 0), 0);
@@ -743,6 +754,10 @@ function ProjectDetail({
                                   <div style={{ left: `${todayPct}%` }}
                                     className="absolute top-0 bottom-0 border-l-2 border-orange-400/70 z-10 pointer-events-none" />
                                 )}
+                                {gantt.milestones?.map(ms => (
+                                  <div key={ms.id} style={{ left: `${ms.pct}%` }}
+                                    className="absolute top-0 bottom-0 border-l-2 border-blue-500 z-20 pointer-events-none" />
+                                ))}
                                 <div
                                   style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
                                   className={`absolute top-1 bottom-1 rounded flex items-center justify-center text-[10px] font-semibold ${
@@ -762,6 +777,21 @@ function ProjectDetail({
                       });
                     })()}
 
+                    {/* Kamienie milowe – wiersz etykiet pod wykresem */}
+                    {gantt?.milestones?.length > 0 && (
+                      <div className="flex items-start mb-1 pl-44">
+                        <div className="flex-1 relative h-5">
+                          {gantt.milestones.map(ms => (
+                            <div key={ms.id} style={{ left: `${ms.pct}%` }}
+                              className="absolute top-0 -translate-x-1/2 flex flex-col items-center">
+                              <div className="w-2 h-2 rounded-full bg-blue-500 border-2 border-white ring-1 ring-blue-400" />
+                              <span className="text-[9px] text-blue-600 font-semibold whitespace-nowrap mt-0.5 leading-none">{ms.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Legenda */}
                     {gantt ? (
                       <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-100 pl-44">
@@ -769,9 +799,13 @@ function ProjectDetail({
                           { cls: "bg-green-200 border-green-300", label: "Ukończony" },
                           { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
                           { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
-                        ].map(({ cls, label }) => (
+                          { cls: "bg-blue-500", label: "Kamień milowy", isDot: true },
+                        ].map(({ cls, label, isDot }) => (
                           <div key={label} className="flex items-center gap-1">
-                            <div className={`w-3 h-3 rounded border ${cls}`} />
+                            {isDot
+                              ? <div className={`w-2 h-2 rounded-full ${cls}`} />
+                              : <div className={`w-3 h-3 rounded border ${cls}`} />
+                            }
                             <span className="text-[10px] text-slate-400">{label}</span>
                           </div>
                         ))}
@@ -825,8 +859,46 @@ function ProjectDetail({
                           );
                         })}
                       </div>
+                      {/* Kamienie milowe */}
+                      <div className="pt-4 mt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            Kamienie milowe
+                          </span>
+                          <button onClick={addMilestone}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                            <Plus className="w-3 h-3" /> Dodaj
+                          </button>
+                        </div>
+                        {milestoneForm.length === 0 && (
+                          <p className="text-[11px] text-slate-400 italic">Brak kamieni milowych — kliknij Dodaj</p>
+                        )}
+                        <div className="space-y-1.5">
+                          {milestoneForm.map(ms => (
+                            <div key={ms.id} className="flex items-center gap-2">
+                              <input
+                                value={ms.label}
+                                onChange={e => setMilestone(ms.id, "label", e.target.value)}
+                                placeholder="Nazwa kamienia…"
+                                className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              />
+                              <input
+                                type="date" value={ms.date}
+                                onChange={e => setMilestone(ms.id, "date", e.target.value)}
+                                className="w-36 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              />
+                              <button onClick={() => removeMilestone(ms.id)}
+                                className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="flex gap-2 pt-1 border-t border-slate-100">
-                        <button onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); }}
+                        <button onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); setMilestoneForm(project.milestones ?? []); }}
                           className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">
                           Anuluj
                         </button>
@@ -985,6 +1057,15 @@ function ProjectDetail({
                                   </div>
                                 </div>
                                 <div className="flex gap-2">
+                                  {onDeleteTask && (
+                                    <button
+                                      onClick={() => { onDeleteTask(t.id); setEditingTaskId(null); }}
+                                      className="px-3 py-1.5 border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                      title="Usuń zadanie"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <button onClick={() => setEditingTaskId(null)} className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-white font-medium">Anuluj</button>
                                   <button onClick={saveTask} disabled={!editTaskForm.title.trim()}
                                     className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-bold hover:bg-orange-600 disabled:opacity-40 flex items-center justify-center gap-1">
@@ -1633,7 +1714,7 @@ function ProjectDetail({
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1664,6 +1745,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         onDeleteProject={onDeleteProject}
         onAddTask={onAddTask}
         onUpdateTask={onUpdateTask}
+        onDeleteTask={onDeleteTask}
         onAddChecklist={onAddChecklist}
         onToggleChecklistItem={onToggleChecklistItem}
         onAddProjectDoc={onAddProjectDoc}
