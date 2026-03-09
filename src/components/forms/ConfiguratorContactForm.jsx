@@ -6,7 +6,6 @@ import { gtmEvent } from "../analytics";
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 import { useGasSubmit } from "../../hooks/useGasSubmit";
 import { GAS_CONFIG } from "../../admin/api/gasConfig";
-import { createLead } from "../../admin/api/gasApi";
 // useGasSubmit używa GAS_CONFIG.scriptUrl jako domyślnego endpointu
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -64,7 +63,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
 
     const handleSuccess = () => {
       saveLead(contactData, estimatedPrice);
-      if (GAS_ON) createLead(newLead).catch(() => {});
+      // submitForm w GAS już wpisuje lead do arkusza Leady – nie wywołujemy createLead osobno
       setSubmitted(true);
     };
 

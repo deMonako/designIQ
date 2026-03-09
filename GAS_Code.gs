@@ -665,6 +665,34 @@ function doPost(e) {
         return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: !obj.clientVisible })));
 
       // ── Leady (admin) ─────────────────────────────────────────────────────────
+
+      // Tworzenie leada z formularza kontaktowego lub konfiguratora
+      // body: { lead: { id, name, email, phone, notes, pipelineStatus, status, source, date, ... } }
+      case "createLead": {
+        var newLeadObj = body.lead || {};
+        if (!newLeadObj.id) newLeadObj.id = "lead-" + Date.now();
+        if (!newLeadObj.date) newLeadObj.date = todayStr();
+        if (!newLeadObj.status) newLeadObj.status = "Nowy";
+        insertRow("Leady", newLeadObj);
+
+        if (ADMIN_EMAIL && newLeadObj.source) {
+          try {
+            GmailApp.sendEmail(
+              ADMIN_EMAIL,
+              "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""),
+              "Nowy lead z formularza: " + newLeadObj.source + "\n\n" +
+              "Imię: "    + (newLeadObj.name  || "") + "\n" +
+              "Email: "   + (newLeadObj.email || "") + "\n" +
+              "Telefon: " + (newLeadObj.phone || "") + "\n" +
+              (newLeadObj.notes ? "\nNotatki:\n" + newLeadObj.notes + "\n" : "") +
+              "\nData: " + newLeadObj.date
+            );
+          } catch(ex) {}
+        }
+
+        return ok({ id: newLeadObj.id, status: newLeadObj.status });
+      }
+
       case "updateLead":
         return ok(upsertRow("Leady", body.lead));
 
