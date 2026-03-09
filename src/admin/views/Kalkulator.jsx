@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calculator, FolderKanban,
@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle, FileText,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
+import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
 
@@ -155,13 +156,55 @@ const CATEGORIES = [
 // BOM TABLE — edytowalna tabela zestawienia materiałów
 // ─────────────────────────────────────────────────────────────────────────────
 
-function BOMTable({ items, onChange }) {
+function BOMTable({ items, onChange, cennik = [] }) {
   const total = items.reduce((s, r) => s + r.quantity * r.priceEst, 0);
+  // { [rowId]: { show: bool, list: [] } }
+  const [sugg, setSugg] = useState({});
+  const suggRefs = useRef({});
+
+  // Zamknij dropdown po kliknięciu poza
+  useEffect(() => {
+    const handler = (e) => {
+      setSugg(prev => {
+        const next = { ...prev };
+        Object.keys(suggRefs.current).forEach(id => {
+          if (suggRefs.current[id] && !suggRefs.current[id].contains(e.target)) {
+            if (next[id]?.show) next[id] = { ...next[id], show: false };
+          }
+        });
+        return next;
+      });
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const update = (id, key, val) =>
     onChange(items.map(r => r.id === id ? { ...r, [key]: val } : r));
 
   const remove = (id) => onChange(items.filter(r => r.id !== id));
+
+  const handleNameChange = useCallback((id, value) => {
+    onChange(items.map(r => r.id === id ? { ...r, name: value } : r));
+    if (value.length >= 3 && cennik.length > 0) {
+      const q = value.toLowerCase();
+      const matches = cennik
+        .filter(c => c.name.toLowerCase().includes(q) || String(c.sku).toLowerCase().includes(q))
+        .slice(0, 8);
+      setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
+    } else {
+      setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
+    }
+  }, [cennik, items, onChange]);
+
+  const selectSugg = useCallback((rowId, cennikItem) => {
+    onChange(items.map(r =>
+      r.id === rowId
+        ? { ...r, name: cennikItem.name, priceEst: cennikItem.price_pln ?? r.priceEst }
+        : r
+    ));
+    setSugg(prev => ({ ...prev, [rowId]: { show: false, list: [] } }));
+  }, [items, onChange]);
 
   const addRow = () => {
     onChange([...items, {
@@ -196,14 +239,35 @@ function BOMTable({ items, onChange }) {
           <tbody className="divide-y divide-slate-100">
             {items.map(row => (
               <tr key={row.id} className="hover:bg-slate-50/60 transition-colors group">
-                {/* Nazwa */}
+                {/* Nazwa z autocomplete */}
                 <td className="px-3 py-2">
-                  <input
-                    value={row.name}
-                    onChange={e => update(row.id, "name", e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400/50 rounded px-1 py-0.5 text-slate-800 font-medium text-sm"
-                    placeholder="Nazwa urządzenia…"
-                  />
+                  <div className="relative" ref={el => { suggRefs.current[row.id] = el; }}>
+                    <input
+                      value={row.name}
+                      onChange={e => handleNameChange(row.id, e.target.value)}
+                      className="w-full bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400/50 rounded px-1 py-0.5 text-slate-800 font-medium text-sm"
+                      placeholder="Nazwa urządzenia…"
+                    />
+                    {sugg[row.id]?.show && (
+                      <ul className="absolute left-0 top-full mt-0.5 z-50 w-72 bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+                        {sugg[row.id].list.map(c => (
+                          <li
+                            key={c.sku}
+                            onMouseDown={() => selectSugg(row.id, c)}
+                            className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-orange-50 gap-2"
+                          >
+                            <span className="truncate">{c.name}</span>
+                            <span className="shrink-0 text-xs text-slate-400 font-mono">{c.sku}</span>
+                            {c.price_pln != null && (
+                              <span className="shrink-0 text-xs font-semibold text-orange-600">
+                                {c.price_pln.toLocaleString("pl-PL")} zł
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   {row._pointCount > 0 && (
                     <div className="text-[10px] text-slate-400 px-1 mt-0.5">
                       {row._pointCount} pkt · {row._totalOutputs} wypustów
@@ -297,8 +361,16 @@ function BOMGenerator({ projects }) {
   const [showPoints, setShowPoints] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null); // "ok" | "err"
+  const [cennik, setCennik] = useState([]);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
+
+  useEffect(() => {
+    if (!GAS_ON) return;
+    gasGet("getCennik")
+      .then(data => { if (Array.isArray(data)) setCennik(data); })
+      .catch(() => {});
+  }, []);
 
   const generate = () => {
     if (!project) return;
@@ -313,25 +385,40 @@ function BOMGenerator({ projects }) {
     setSaving(true);
     setSaveResult(null);
 
-    const zakupy = {
-      projectId: project.id,
-      items: bom.map(r => ({
-        id:       r.id,
-        name:     r.name,
-        category: r.category,
-        quantity: r.quantity,
-        unit:     r.unit,
-        priceEst: r.priceEst,
-        link:     r.link ?? "",
-        status:   r.status ?? "Oczekuje",
-      })),
-      updatedDate: TODAY,
-    };
-
     try {
+      // Pobierz istniejące zakupy i dołącz nowe pozycje (nie nadpisuj)
+      let existingItems = [];
+      let existingId;
       if (GAS_ON) {
-        await GAS.upsertZakupy(zakupy);
+        const existing = await GAS.getZakupy(project.id).catch(() => null);
+        if (existing && Array.isArray(existing.items)) {
+          existingItems = existing.items;
+          existingId = existing.id;
+        }
       }
+
+      const existingIds = new Set(existingItems.map(i => i.id));
+      const newItems = bom
+        .filter(r => !existingIds.has(r.id))
+        .map(r => ({
+          id:       r.id,
+          name:     r.name,
+          category: r.category,
+          quantity: r.quantity,
+          unit:     r.unit,
+          priceEst: r.priceEst,
+          link:     r.link ?? "",
+          status:   r.status ?? "Oczekuje",
+        }));
+
+      const zakupy = {
+        id:          existingId,
+        projectId:   project.id,
+        items:       [...existingItems, ...newItems],
+        updatedDate: TODAY,
+      };
+
+      if (GAS_ON) await GAS.upsertZakupy(zakupy);
       setSaveResult("ok");
     } catch {
       setSaveResult("err");
@@ -478,7 +565,7 @@ function BOMGenerator({ projects }) {
                     edytowalne
                   </span>
                 </div>
-                <BOMTable items={bom} onChange={setBOM} />
+                <BOMTable items={bom} onChange={setBOM} cennik={cennik} />
               </div>
 
               {/* Footer: total + save button */}

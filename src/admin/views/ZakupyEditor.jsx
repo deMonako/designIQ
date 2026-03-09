@@ -63,7 +63,7 @@ export default function ZakupyEditor({ project, onClose }) {
       .catch(() => {})
       .finally(() => setLoading(false));
     gasGet("getCennik")
-      .then(res => { if (res.ok && Array.isArray(res.data)) setCennik(res.data); })
+      .then(data => { if (Array.isArray(data)) setCennik(data); })
       .catch(() => {});
   }, [project.id]);
 
