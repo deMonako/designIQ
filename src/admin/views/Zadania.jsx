@@ -194,16 +194,19 @@ function DayColumn({ date, tasks, milestones, projects, selectedTaskId, onTaskCl
 
       {/* Kamienie milowe */}
       {milestones && milestones.length > 0 && (
-        <div className="px-1 pt-1 space-y-0.5">
+        <div className="px-1 pt-1 space-y-1">
           {milestones.map(ms => (
-            <div key={ms.id} title={ms.projectName}
-              className={`flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold border leading-none truncate ${
-                ms.type === "stage"     ? "bg-orange-50 text-orange-600 border-orange-200" :
-                ms.type === "stage-end" ? "bg-slate-100 text-slate-500 border-slate-200" :
-                                          "bg-blue-50 text-blue-600 border-blue-200"
+            <div key={ms.id}
+              className={`flex items-start gap-1 px-1.5 py-1 rounded-md text-[10px] font-semibold border leading-tight ${
+                ms.type === "stage"     ? "bg-orange-50 text-orange-700 border-orange-300" :
+                ms.type === "stage-end" ? "bg-slate-100 text-slate-600 border-slate-300" :
+                                          "bg-blue-50 text-blue-700 border-blue-300"
               }`}>
-              <Flag className="w-2 h-2 flex-shrink-0" />
-              <span className="truncate">{ms.label}</span>
+              <Flag className="w-2.5 h-2.5 flex-shrink-0 mt-px" />
+              <span className="min-w-0">
+                <span className="block truncate">{ms.label}</span>
+                <span className="block truncate font-normal opacity-70">{ms.projectName}</span>
+              </span>
             </div>
           ))}
         </div>
@@ -269,15 +272,19 @@ function MonthDayCell({ date, tasks, milestones, isSelected, isCurrentMonth, onD
 
       {/* Kamienie milowe — etapy (pomarańczowe) i ręczne (niebieskie) */}
       {milestones && milestones.length > 0 && (
-        <div className="flex flex-wrap gap-0.5 mb-0.5">
+        <div className="flex flex-col gap-0.5 mb-1">
           {milestones.map(ms => (
-            <span key={ms.id} title={`${ms.label} (${ms.projectName})`}
-              className={`inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold border leading-none max-w-full truncate ${
-                ms.type === "stage"     ? "bg-orange-50 text-orange-600 border-orange-200" :
-                ms.type === "stage-end" ? "bg-slate-100 text-slate-500 border-slate-200" :
-                                          "bg-blue-50 text-blue-600 border-blue-200"
+            <span key={ms.id}
+              className={`flex items-start gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold border leading-tight ${
+                ms.type === "stage"     ? "bg-orange-50 text-orange-700 border-orange-300" :
+                ms.type === "stage-end" ? "bg-slate-100 text-slate-600 border-slate-300" :
+                                          "bg-blue-50 text-blue-700 border-blue-300"
               }`}>
-              <Flag className="w-2 h-2 flex-shrink-0" />{ms.label}
+              <Flag className="w-2.5 h-2.5 flex-shrink-0 mt-px" />
+              <span className="min-w-0">
+                <span className="block truncate">{ms.label}</span>
+                <span className="block truncate font-normal opacity-70">{ms.projectName}</span>
+              </span>
             </span>
           ))}
         </div>

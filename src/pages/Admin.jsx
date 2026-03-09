@@ -93,7 +93,7 @@ export default function Admin() {
   const [checklists,  setChecklists]  = useState(() => GAS_ON ? [] : ls("diq_checklists",  mockChecklists));
   const [materials,   setMaterials]   = useState(() => GAS_ON ? [] : ls("diq_materials",   mockMaterials));
   const [projectDocs, setProjectDocs] = useState(() => GAS_ON ? [] : ls("diq_projectDocs", mockProjectDocs));
-  const [leads,       setLeads]       = useState([]);
+  const [leads,       setLeads]       = useState(() => GAS_ON ? [] : ls("diq_leads", []));
 
   // ── Ładowanie danych z GAS (jednorazowo po zalogowaniu) ───────────────────
   useEffect(() => {
@@ -126,6 +126,7 @@ export default function Admin() {
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_checklists",  JSON.stringify(checklists));  }, [checklists]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_materials",   JSON.stringify(materials));   }, [materials]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_projectDocs", JSON.stringify(projectDocs)); }, [projectDocs]);
+  useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_leads",       JSON.stringify(leads));       }, [leads]);
 
   const handleLogout = () => {
     localStorage.removeItem("designiq_admin_auth");
