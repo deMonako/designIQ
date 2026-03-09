@@ -189,7 +189,7 @@ function BOMTable({ items, onChange, cennik = [] }) {
     if (value.length >= 3 && cennik.length > 0) {
       const q = value.toLowerCase();
       const matches = cennik
-        .filter(c => c.name.toLowerCase().includes(q) || String(c.sku).toLowerCase().includes(q))
+        .filter(c => (c.name != null && c.name.toLowerCase().includes(q)) || (c.sku != null && String(c.sku).toLowerCase().includes(q)))
         .slice(0, 8);
       setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
     } else {
