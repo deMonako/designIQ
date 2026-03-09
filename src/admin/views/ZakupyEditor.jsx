@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   X, Plus, Trash2, Save, Loader2, ShoppingCart, ChevronDown, ChevronUp,
   ExternalLink, Package
 } from "lucide-react";
 import { toast } from "sonner";
 import { getZakupy, upsertZakupy } from "../api/gasApi";
+import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -45,6 +46,10 @@ export default function ZakupyEditor({ project, onClose }) {
   const [loading,  setLoading] = useState(true);
   const [saving,   setSaving]  = useState(false);
   const [collapsed, setCollapsed] = useState({});
+  const [cennik,   setCennik]  = useState([]);
+  // { [itemId]: { show: bool, list: [] } }
+  const [sugg, setSugg] = useState({});
+  const suggRefs = useRef({});
 
   useEffect(() => {
     if (!GAS_ON) { setLoading(false); return; }
@@ -57,7 +62,27 @@ export default function ZakupyEditor({ project, onClose }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    gasGet("getCennik")
+      .then(res => { if (res.ok && Array.isArray(res.data)) setCennik(res.data); })
+      .catch(() => {});
   }, [project.id]);
+
+  // Zamknij podpowiedzi po kliknięciu poza
+  useEffect(() => {
+    const handler = (e) => {
+      setSugg(prev => {
+        const next = { ...prev };
+        Object.keys(suggRefs.current).forEach(id => {
+          if (suggRefs.current[id] && !suggRefs.current[id].contains(e.target)) {
+            if (next[id]) next[id] = { ...next[id], show: false };
+          }
+        });
+        return next;
+      });
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const addItem    = () => setItems(prev => [...prev, emptyItem()]);
   const removeItem = (id) => setItems(prev => prev.filter(it => it.id !== id));
@@ -68,6 +93,28 @@ export default function ZakupyEditor({ project, onClose }) {
         : it
     ));
   };
+
+  const handleNameChange = useCallback((id, value) => {
+    updateItem(id, "name", value);
+    if (value.length >= 3 && cennik.length > 0) {
+      const q = value.toLowerCase();
+      const matches = cennik
+        .filter(c => c.name.toLowerCase().includes(q) || String(c.sku).toLowerCase().includes(q))
+        .slice(0, 8);
+      setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
+    } else {
+      setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
+    }
+  }, [cennik]);
+
+  const selectSugg = useCallback((itemId, cennikItem) => {
+    setItems(prev => prev.map(it =>
+      it.id === itemId
+        ? { ...it, name: cennikItem.name, priceEst: cennikItem.price_pln ?? it.priceEst }
+        : it
+    ));
+    setSugg(prev => ({ ...prev, [itemId]: { show: false, list: [] } }));
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -158,12 +205,36 @@ export default function ZakupyEditor({ project, onClose }) {
                     {items.map(item => (
                       <tr key={item.id} className="hover:bg-slate-50/50">
                         <td className="p-2">
-                          <input
-                            value={item.name}
-                            onChange={e => updateItem(item.id, "name", e.target.value)}
-                            placeholder="Nazwa produktu"
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-400"
-                          />
+                          <div
+                            className="relative"
+                            ref={el => { suggRefs.current[item.id] = el; }}
+                          >
+                            <input
+                              value={item.name}
+                              onChange={e => handleNameChange(item.id, e.target.value)}
+                              placeholder="Nazwa produktu (min. 3 znaki)"
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-400"
+                            />
+                            {sugg[item.id]?.show && (
+                              <ul className="absolute left-0 top-full mt-0.5 z-50 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+                                {sugg[item.id].list.map(c => (
+                                  <li
+                                    key={c.sku}
+                                    onMouseDown={() => selectSugg(item.id, c)}
+                                    className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 gap-2"
+                                  >
+                                    <span className="truncate">{c.name}</span>
+                                    <span className="shrink-0 text-xs text-slate-400 font-mono">{c.sku}</span>
+                                    {c.price_pln != null && (
+                                      <span className="shrink-0 text-xs font-semibold text-green-600">
+                                        {c.price_pln.toLocaleString("pl-PL")} zł
+                                      </span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2">
                           <select

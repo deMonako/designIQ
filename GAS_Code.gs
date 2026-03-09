@@ -399,6 +399,25 @@ function doGet(e) {
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────
+      // Zwraca zawartość cennik.json z folderu Materiały na Drive
+      // GET ?action=getCennik
+      case "getCennik": {
+        var cennikFolder = getOrCreateMaterialsFolder();
+        if (!cennikFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var cennikFiles = cennikFolder.getFiles();
+        while (cennikFiles.hasNext()) {
+          var cf = cennikFiles.next();
+          if (cf.getName().toLowerCase() === "cennik.json") {
+            try {
+              return ok(JSON.parse(cf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania cennik.json: " + ex.message);
+            }
+          }
+        }
+        return err("Plik cennik.json nie znaleziony w folderze Materiały");
+      }
+
       case "getLeads":
         return ok(sheetToObjects("Leady"));
 
