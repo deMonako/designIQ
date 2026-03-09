@@ -866,15 +866,36 @@ function doPost(e) {
           } catch(ex) {}
         }
 
-        // Wyślij potwierdzenie do klienta
+        // Wyślij potwierdzenie do klienta z wycena i konfiguracja
         if (body.email) {
           try {
+            var clientQuote = lead.quoteValue
+              ? "Szacunkowa wycena: " + Number(lead.quoteValue).toLocaleString("pl-PL") + " zł netto\n"
+              : "";
+            var clientConfig = "";
+            if (lead.configData && typeof lead.configData === "object") {
+              var clientConfigLines = [];
+              var clientConfigKeys = Object.keys(lead.configData);
+              for (var cc = 0; cc < clientConfigKeys.length; cc++) {
+                var ck = clientConfigKeys[cc];
+                var cv = lead.configData[ck];
+                if (cv !== null && cv !== undefined && cv !== "") {
+                  clientConfigLines.push("  • " + ck + ": " + cv);
+                }
+              }
+              if (clientConfigLines.length > 0) {
+                clientConfig = "\nTwoja konfiguracja:\n" + clientConfigLines.join("\n") + "\n";
+              }
+            }
             GmailApp.sendEmail(
               body.email,
-              "Dziękujemy za zapytanie – designIQ",
+              "Potwierdzenie zapytania i szacunkowa wycena – designIQ",
               "Dzień dobry " + (body.name || "") + ",\n\n" +
               "Dziękujemy za skorzystanie z konfiguratora designIQ.\n" +
-              "Skontaktujemy się z Tobą wkrótce.\n\n" +
+              "Poniżej znajdziesz podsumowanie Twojego zapytania.\n\n" +
+              clientQuote +
+              clientConfig +
+              "\nNasz zespół skontaktuje się z Tobą wkrótce w celu omówienia szczegółów.\n\n" +
               "Pozdrawiamy,\nZespół designIQ"
             );
           } catch(ex) {}
