@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
-  StickyNote, FolderKanban, Phone, Mail,
+  StickyNote, FolderKanban, Phone, Mail, Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -29,7 +29,7 @@ function formatDayShort(dateStr) {
 
 // ─── AgendaRow (zadanie lub wydarzenie na dziś) ───────────────────────────────
 
-function AgendaRow({ task, project, onStatusChange }) {
+function AgendaRow({ task, project, onStatusChange, onEdit }) {
   const isDone  = task.status === "Zrobione";
   const isEvent = task.type === "event";
 
@@ -79,13 +79,23 @@ function AgendaRow({ task, project, onStatusChange }) {
       }`}>
         {isEvent ? "Wydarzenie" : task.priority}
       </span>
+
+      {!isEvent && (
+        <button
+          onClick={() => onEdit(task)}
+          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+          title="Edytuj zadanie"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      )}
     </motion.div>
   );
 }
 
 // ─── OverdueRow (zaległe zadanie) ─────────────────────────────────────────────
 
-function OverdueRow({ task, project, onStatusChange }) {
+function OverdueRow({ task, project, onStatusChange, onEdit }) {
   return (
     <motion.div
       layout
@@ -109,6 +119,13 @@ function OverdueRow({ task, project, onStatusChange }) {
           <AlertTriangle className="w-3 h-3" />
           {task.dueDate}
         </span>
+        <button
+          onClick={() => onEdit(task)}
+          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          title="Edytuj zadanie"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
       </div>
     </motion.div>
   );
@@ -385,6 +402,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
                       task={t}
                       project={projects.find(p => p.id === t.projectId)}
                       onStatusChange={handleStatusChange}
+                      onEdit={setEditingTask}
                     />
                   ))}
                 </div>
@@ -423,6 +441,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
                       task={t}
                       project={projects.find(p => p.id === t.projectId)}
                       onStatusChange={handleStatusChange}
+                      onEdit={setEditingTask}
                     />
                   ))}
                 </div>

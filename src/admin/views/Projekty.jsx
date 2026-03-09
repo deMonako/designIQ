@@ -373,10 +373,17 @@ function ProjectDetail({
       done:    i < project.stageIndex,
       current: i === project.stageIndex,
     }));
-    const milestones = (project.milestones ?? [])
+    // Auto-milestones: start date of each stage (orange)
+    const autoMilestones = scheduleForm
+      .map((s, i) => ({ id: `auto-${i}`, label: s.name, date: s.start, auto: true }))
+      .map(m => ({ ...m, pct: pct(+new Date(m.date)) }))
+      .filter(m => m.pct >= 0 && m.pct <= 100);
+    // Manual milestones from project.milestones (blue)
+    const manualMilestones = (project.milestones ?? [])
       .filter(m => m.label && m.date)
       .map(m => ({ ...m, pct: pct(+new Date(m.date)) }))
       .filter(m => m.pct >= 0 && m.pct <= 100);
+    const milestones = [...autoMilestones, ...manualMilestones];
     return { months, bars, milestones };
   }, [scheduleForm, project.stageIndex]); // eslint-disable-line
   const totalExpected  = FINANCE_STAGES.reduce((s, st) => s + (project[st.profitKey] || 0), 0);
@@ -756,7 +763,7 @@ function ProjectDetail({
                                 )}
                                 {gantt.milestones?.map(ms => (
                                   <div key={ms.id} style={{ left: `${ms.pct}%` }}
-                                    className="absolute top-0 bottom-0 border-l-2 border-blue-500 z-20 pointer-events-none" />
+                                    className={`absolute top-0 bottom-0 border-l-2 z-20 pointer-events-none ${ms.auto ? "border-orange-500/60 border-dashed" : "border-blue-500"}`} />
                                 ))}
                                 <div
                                   style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
@@ -784,8 +791,8 @@ function ProjectDetail({
                           {gantt.milestones.map(ms => (
                             <div key={ms.id} style={{ left: `${ms.pct}%` }}
                               className="absolute top-0 -translate-x-1/2 flex flex-col items-center">
-                              <div className="w-2 h-2 rounded-full bg-blue-500 border-2 border-white ring-1 ring-blue-400" />
-                              <span className="text-[9px] text-blue-600 font-semibold whitespace-nowrap mt-0.5 leading-none">{ms.label}</span>
+                              <div className={`w-2 h-2 rounded-full border-2 border-white ${ms.auto ? "bg-orange-400 ring-1 ring-orange-300" : "bg-blue-500 ring-1 ring-blue-400"}`} />
+                              <span className={`text-[9px] font-semibold whitespace-nowrap mt-0.5 leading-none ${ms.auto ? "text-orange-600" : "text-blue-600"}`}>{ms.label}</span>
                             </div>
                           ))}
                         </div>
@@ -799,6 +806,7 @@ function ProjectDetail({
                           { cls: "bg-green-200 border-green-300", label: "Ukończony" },
                           { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
                           { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
+                          { cls: "bg-orange-400", label: "Etap", isDot: true },
                           { cls: "bg-blue-500", label: "Kamień milowy", isDot: true },
                         ].map(({ cls, label, isDot }) => (
                           <div key={label} className="flex items-center gap-1">

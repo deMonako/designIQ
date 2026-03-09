@@ -9,6 +9,7 @@ import Zadania      from "../admin/views/Zadania";
 import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
+import Kalkulator   from "../admin/views/Kalkulator";
 import AddProjectModal from "../admin/AddProjectModal";
 import {
   mockProjects, mockTasks, mockChecklists, mockMaterials,
@@ -422,6 +423,8 @@ export default function Admin() {
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />
         );
+      case "kalkulator":
+        return <Kalkulator />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:
