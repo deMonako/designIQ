@@ -16,26 +16,11 @@ function buildTransform(meta, elements) {
     if (Math.abs(dx) < 1 || Math.abs(dy) < 1) return null;
     const sx = (c2.svgX - c1.svgX) / dx, sy = (c2.svgY - c1.svgY) / dy;
     const ox = c1.svgX - el1.X * sx, oy = c1.svgY - el1.Y * sy;
-    console.log(
-      "%c[DwgViewer · kalibracja]%c\n" +
-      "  punkt1: tag=%s  X=%s Y=%s  →  svgX=%s svgY=%s\n" +
-      "  punkt2: tag=%s  X=%s Y=%s  →  svgX=%s svgY=%s\n" +
-      "  skala:  sx=%s  sy=%s   offset: ox=%s  oy=%s",
-      "color:#8b5cf6;font-weight:bold", "color:#475569",
-      c1.tag, el1.X, el1.Y, c1.svgX, c1.svgY,
-      c2.tag, el2.X, el2.Y, c2.svgX, c2.svgY,
-      sx.toFixed(4), sy.toFixed(4), ox.toFixed(2), oy.toFixed(2)
-    );
     return (mx, my) => ({ svgX: mx * sx + ox, svgY: my * sy + oy });
   }
 
   const { scale, originX, originY, svgHeight, flipY = true } = meta;
   if (!scale || scale <= 0) return null;
-  console.log(
-    "%c[DwgViewer · skala generyczna]%c scale=%s originX=%s originY=%s svgHeight=%s flipY=%s",
-    "color:#8b5cf6;font-weight:bold", "color:#475569",
-    scale, originX, originY, svgHeight, flipY
-  );
   return (mx, my) => ({
     svgX: (mx - (originX ?? 0)) / scale,
     svgY: flipY
@@ -154,26 +139,6 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   const listeners = [];
 
   if (transform) {
-    // Diagnostyka: wypisz pierwsze kilka elementów (rzeczywiste → SVG coords)
-    const diagEntries = Object.entries(elements).filter(([,e]) => e.X != null).slice(0, 4);
-    if (diagEntries.length) {
-      console.log(
-        "%c[DwgViewer · overlay · viewBox]%c vbX=%s vbY=%s svgW=%s svgH=%s",
-        "color:#10b981;font-weight:bold", "color:#475569",
-        vbX, vbY, svgW, svgH
-      );
-      diagEntries.forEach(([key, el]) => {
-        const { svgX, svgY } = transform(el.X, el.Y);
-        // Oblicz gdzie kropka pojawi się w pikselach wrappera (bez pan/zoom)
-        const pxX = (svgX - vbX) / svgW;  // ułamek 0–1 szerokości overlay
-        const pxY = (svgY - vbY) / svgH;  // ułamek 0–1 wysokości overlay
-        console.log(
-          `  ${key}: realXY=(${el.X}, ${el.Y})  →  svgXY=(${svgX.toFixed(1)}, ${svgY.toFixed(1)})  ` +
-          `→  overlay_frac=(${(pxX*100).toFixed(1)}%, ${(pxY*100).toFixed(1)}%)`
-        );
-      });
-    }
-
     Object.entries(elements).forEach(([key, el]) => {
       if (el.X == null || el.Y == null) return;
       const { svgX, svgY } = transform(el.X, el.Y);
@@ -469,17 +434,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const offY = Math.round((contH - dispH) / 2);
     const layoutCss = `position:absolute;left:${offX}px;top:${offY}px;width:${dispW}px;height:${dispH}px;`;
 
-    console.log(
-      "%c[DwgViewer · layout]%c\n" +
-      "  SVG viewBox: x=%s y=%s w=%s h=%s\n" +
-      "  kontener:    %s × %s px\n" +
-      "  wyświetlany: %s × %s px  (offset %s,%s)\n" +
-      "  → kropka na 50%% overlay SVG powinna być w centrum rzutu",
-      "color:#f59e0b;font-weight:bold", "color:#475569",
-      vbX, vbY, svgW, svgH,
-      contW, contH,
-      dispW, dispH, offX, offY
-    );
 
     // ── Krok 2: rasteryzuj SVG → Canvas
     // rasterizeSvg wewnętrznie liczy rozdzielczość 3× viewBox (ostrość do 3× zooma)
@@ -509,65 +463,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
     setLoadProg({ pct: 80, label: "Nakładka…" });
 
-    // ── DEBUG: narysuj kółka bezpośrednio na canvas przy przewidywanych pozycjach.
-    // Cel: odróżnić błąd formuły od błędu renderowania overlay.
-    // • Kółko POKRYWA element na rzucie → formuła OK, problem leży w overlay SVG
-    // • Kółko MIJA element na rzucie    → błąd w danych kalibracyjnych (scale/origin)
-    if (m) {
-      const dbgTr = buildTransform(m, elems);
-      if (dbgTr) {
-        const ctx  = canvas.getContext("2d");
-        const kx   = canvas.width  / svgW;   // canvas px per SVG unit
-        const ky   = canvas.height / svgH;
-        const r    = Math.max(canvas.width, canvas.height) / 60; // ~2% wymiaru
-        const dbgList = Object.entries(elems).filter(([, e]) => e.X != null).slice(0, 6);
-        dbgList.forEach(([key, el]) => {
-          const { svgX, svgY } = dbgTr(el.X, el.Y);
-          if (!isFinite(svgX) || !isFinite(svgY)) return;
-          const cx = (svgX - vbX) * kx;
-          const cy = (svgY - vbY) * ky;
-          // Czerwone kółko z białą obwódką
-          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.strokeStyle = "#ff0000"; ctx.lineWidth = r * 0.25; ctx.stroke();
-          // Pionowa i pozioma linia (krzyżyk)
-          ctx.beginPath(); ctx.moveTo(cx - r, cy); ctx.lineTo(cx + r, cy);
-          ctx.moveTo(cx, cy - r);  ctx.lineTo(cx, cy + r);
-          ctx.strokeStyle = "#ff0000"; ctx.lineWidth = r * 0.15; ctx.stroke();
-          // Etykieta z kluczem elementu
-          ctx.fillStyle = "#ff0000";
-          ctx.font = `bold ${r * 0.9}px sans-serif`;
-          ctx.fillText(key, cx + r * 0.4, cy - r * 0.4);
-        });
-      }
-    }
-
     // ── Krok 3: dołącz canvas z letterbox CSS
     canvas.style.cssText += layoutCss;
     wrap.appendChild(canvas);
-
-    // ── DEBUG click: kliknij dowolne miejsce na rzucie → patrz w konsole ──
-    // Format: [KLIK] svgXY=(X,Y)  realXY=(X,Y)  frac=(X%,Y%)
-    // Kliknij na AUD1 → sprawdź czy realXY ≈ (11451.9, 4521.13)
-    canvas.addEventListener("click", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const px = (e.clientX - rect.left) / rect.width;
-      const py = (e.clientY - rect.top)  / rect.height;
-      const svgX = vbX + px * svgW;
-      const svgY = vbY + py * svgH;
-      const { scale: sc, originX: ox, originY: oy, svgHeight: sh, flipY: fy = true } = m ?? {};
-      let rX = "?", rY = "?";
-      if (sc && sc > 0) {
-        rX = (svgX * sc + (ox ?? 0)).toFixed(1);
-        rY = fy
-          ? (((sh ?? svgH) - svgY) * sc + (oy ?? 0)).toFixed(1)
-          : (svgY * sc + (oy ?? 0)).toFixed(1);
-      }
-      console.log(
-        `%c[DwgViewer · KLIK]%c svgXY=(${svgX.toFixed(1)}, ${svgY.toFixed(1)})  ` +
-        `realXY=(${rX}, ${rY})  frac=(${(px*100).toFixed(1)}%, ${(py*100).toFixed(1)}%)`,
-        "color:#e11d48;font-weight:bold", "color:#475569"
-      );
-    }, { capture: true });
 
     // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
     const hasCoords = m && Object.values(elems).some(e => e.X != null);
