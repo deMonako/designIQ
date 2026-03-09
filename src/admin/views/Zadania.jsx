@@ -250,12 +250,16 @@ function MonthDayCell({ date, tasks, milestones, isSelected, isCurrentMonth, onD
         {date.getDate()}
       </span>
 
-      {/* Kamienie milowe — niebieskie flagi */}
+      {/* Kamienie milowe — etapy (pomarańczowe) i ręczne (niebieskie) */}
       {milestones && milestones.length > 0 && (
         <div className="flex flex-wrap gap-0.5 mb-0.5">
           {milestones.map(ms => (
             <span key={ms.id} title={`${ms.label} (${ms.projectName})`}
-              className="inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 border border-blue-200 leading-none max-w-full truncate">
+              className={`inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold border leading-none max-w-full truncate ${
+                ms.type === "stage"
+                  ? "bg-orange-50 text-orange-600 border-orange-200"
+                  : "bg-blue-50 text-blue-600 border-blue-200"
+              }`}>
               <Flag className="w-2 h-2 flex-shrink-0" />{ms.label}
             </span>
           ))}
@@ -555,13 +559,29 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
   }, [tasks]);
 
   // Kamienie milowe pogrupowane wg daty (z projektów)
+  // Źródła: project.milestones (ręczne) + project.stageSchedule (początek każdego etapu)
   const milestonesByDate = useMemo(() => {
     const map = {};
+    const add = (date, entry) => {
+      if (!date) return;
+      if (!map[date]) map[date] = [];
+      map[date].push(entry);
+    };
     projects.forEach(p => {
+      // Ręczne kamienie milowe
       (p.milestones ?? []).forEach(ms => {
         if (!ms.label || !ms.date) return;
-        if (!map[ms.date]) map[ms.date] = [];
-        map[ms.date].push({ ...ms, projectName: p.name });
+        add(ms.date, { id: ms.id, label: ms.label, projectName: p.name, type: "manual" });
+      });
+      // Początki etapów z harmonogramu
+      (p.stageSchedule ?? []).forEach((s, i) => {
+        if (!s.start) return;
+        add(s.start, {
+          id: `${p.id}-stage-${i}`,
+          label: s.name,
+          projectName: p.name,
+          type: "stage",
+        });
       });
     });
     return map;
