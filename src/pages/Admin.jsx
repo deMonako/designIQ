@@ -424,7 +424,7 @@ export default function Admin() {
           />
         );
       case "kalkulator":
-        return <Kalkulator />;
+        return <Kalkulator projects={projects} />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:
