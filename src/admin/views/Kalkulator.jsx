@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calculator, FolderKanban,
-  RefreshCw, ChevronDown, ChevronUp, Trash2, Plus, ShoppingCart,
-  CheckCircle2, AlertCircle, FileText,
+  RefreshCw, Trash2, Plus, ShoppingCart,
+  CheckCircle2, AlertCircle,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
@@ -12,135 +12,11 @@ import { TODAY } from "../mockData";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// KATALOG LOXONE (symulacja LOXONE.xlsx z materiałów designIQ)
-// W produkcji: plik Excel fetchowany z Google Drive przez GAS.
-// Kolumny: device (nazwa urządzenia), outputs (ile wyjść/wejść na jednostkę),
-//          priceEst (cena jedn. netto PLN), category, unit.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const LOXONE_CATALOG = [
-  { device: "Loxone Miniserver Gen 2",       outputs: 1,  priceEst: 2490, category: "smart_home", unit: "szt." },
-  { device: "Loxone Relay Extension",         outputs: 12, priceEst: 1290, category: "smart_home", unit: "szt." },
-  { device: "Loxone Dimmer Extension",        outputs: 4,  priceEst: 1490, category: "smart_home", unit: "szt." },
-  { device: "Loxone RGBW 24V Dimmer",         outputs: 1,  priceEst: 490,  category: "smart_home", unit: "szt." },
-  { device: "Loxone Blind & AC Motor Ctrl.",   outputs: 2,  priceEst: 890,  category: "smart_home", unit: "szt." },
-  { device: "Loxone Extension",               outputs: 12, priceEst: 790,  category: "smart_home", unit: "szt." },
-  { device: "Loxone Analog Extension",        outputs: 8,  priceEst: 890,  category: "smart_home", unit: "szt." },
-];
+// SKU elementu dodawanego przy "Generuj" (tymczasowo, docelowo z projektu SVG/JSON)
+const DEFAULT_SKU = "100512";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SYMULACJA projekt_XXX.json
-// W produkcji: plik JSON fetchowany z Google Drive po wyborze projektu.
-// Format docelowy punktu instalacyjnego:
-//   { id: "OS1", device: "Loxone Relay Extension", output: 1 }
-//   — device: nazwa urządzenia z katalogu LOXONE
-//   — output: liczba wyjść/wejść zużywanych przez ten punkt na danym urządzeniu
-// ─────────────────────────────────────────────────────────────────────────────
-
-function simulateProjectPoints(project) {
-  // Deterministyczny seed z kodu projektu
-  const code = project.code || project.id;
-  let seed = 0;
-  for (let i = 0; i < code.length; i++) seed = (seed * 31 + code.charCodeAt(i)) >>> 0;
-
-  const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xFFFFFFFF; };
-
-  const sizes = { "Full house": 35, "Smart design+": 22, "Smart design": 14 };
-  const base = sizes[project.package] ?? 20;
-  const total = base + Math.floor(rng() * 10);
-
-  const DEVICE_WEIGHTS = [
-    { device: "Loxone Relay Extension",       weight: 0.35, outputRange: [1, 2] },
-    { device: "Loxone Dimmer Extension",      weight: 0.20, outputRange: [1, 1] },
-    { device: "Loxone RGBW 24V Dimmer",       weight: 0.12, outputRange: [1, 1] },
-    { device: "Loxone Blind & AC Motor Ctrl.", weight: 0.13, outputRange: [1, 2] },
-    { device: "Loxone Extension",             weight: 0.12, outputRange: [1, 1] },
-    { device: "Loxone Analog Extension",      weight: 0.08, outputRange: [1, 1] },
-  ];
-
-  const points = [];
-  for (let i = 0; i < total; i++) {
-    const r = rng();
-    let cum = 0;
-    let chosen = DEVICE_WEIGHTS[0];
-    for (const dw of DEVICE_WEIGHTS) {
-      cum += dw.weight;
-      if (r < cum) { chosen = dw; break; }
-    }
-    const outMin = chosen.outputRange[0];
-    const outMax = chosen.outputRange[1];
-    const output = outMin + Math.floor(rng() * (outMax - outMin + 1));
-    points.push({ id: `OS${i + 1}`, device: chosen.device, output });
-  }
-  return points;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AGREGACJA punktów → BOM
-// ─────────────────────────────────────────────────────────────────────────────
-
-function buildBOM(points) {
-  // 1. Miniserver — zawsze 1 szt.
-  const miniserver = LOXONE_CATALOG.find(c => c.device === "Loxone Miniserver Gen 2");
-
-  // 2. Agreguj pozostałe urządzenia
-  const demand = new Map();
-  for (const pt of points) {
-    const row = demand.get(pt.device) || { totalOutputs: 0, pointCount: 0 };
-    row.totalOutputs += pt.output;
-    row.pointCount += 1;
-    demand.set(pt.device, row);
-  }
-
-  const items = [];
-
-  // Miniserver first
-  if (miniserver) {
-    items.push({
-      id: `bom-miniserver`,
-      name: miniserver.device,
-      category: miniserver.category,
-      unit: miniserver.unit,
-      quantity: 1,
-      priceEst: miniserver.priceEst,
-      link: "",
-      status: "Oczekuje",
-      _totalOutputs: 1,
-      _pointCount: 0,
-    });
-  }
-
-  // Then aggregated devices
-  for (const [device, data] of demand) {
-    const catalog = LOXONE_CATALOG.find(c => c.device === device);
-    const quantity = catalog
-      ? Math.ceil(data.totalOutputs / catalog.outputs)
-      : data.pointCount;
-    items.push({
-      id: `bom-${device.replace(/\s+/g, "-").toLowerCase()}`,
-      name: device,
-      category: catalog?.category ?? "smart_home",
-      unit: catalog?.unit ?? "szt.",
-      quantity,
-      priceEst: catalog?.priceEst ?? 0,
-      link: "",
-      status: "Oczekuje",
-      _totalOutputs: data.totalOutputs,
-      _pointCount: data.pointCount,
-    });
-  }
-
-  // Sort: miniserver first, then by totalOutputs desc
-  return items.sort((a, b) => {
-    if (a.name.includes("Miniserver")) return -1;
-    if (b.name.includes("Miniserver")) return 1;
-    return b._totalOutputs - a._totalOutputs;
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// KATEGORIE zakupów (matching schema ZakupyEditor)
+// KATEGORIE zakupów
 // ─────────────────────────────────────────────────────────────────────────────
 
 const CATEGORIES = [
@@ -158,11 +34,9 @@ const CATEGORIES = [
 
 function BOMTable({ items, onChange, cennik = [] }) {
   const total = items.reduce((s, r) => s + r.quantity * r.priceEst, 0);
-  // { [rowId]: { show: bool, list: [] } }
   const [sugg, setSugg] = useState({});
   const suggRefs = useRef({});
 
-  // Zamknij dropdown po kliknięciu poza
   useEffect(() => {
     const handler = (e) => {
       setSugg(prev => {
@@ -208,16 +82,14 @@ function BOMTable({ items, onChange, cennik = [] }) {
 
   const addRow = () => {
     onChange([...items, {
-      id: `bom-custom-${Date.now()}`,
-      name: "",
+      id:       `bom-custom-${Date.now()}`,
+      name:     "",
       category: "smart_home",
-      unit: "szt.",
+      unit:     "szt.",
       quantity: 1,
       priceEst: 0,
-      link: "",
-      status: "Oczekuje",
-      _totalOutputs: 0,
-      _pointCount: 0,
+      link:     "",
+      status:   "Oczekuje",
     }]);
   };
 
@@ -227,7 +99,7 @@ function BOMTable({ items, onChange, cennik = [] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide">
-              <th className="text-left px-3 py-2.5 min-w-[220px]">Urządzenie / materiał</th>
+              <th className="text-left px-3 py-2.5 min-w-[260px]">Urządzenie / materiał</th>
               <th className="text-left px-3 py-2.5 w-36">Kategoria</th>
               <th className="text-center px-3 py-2.5 w-24">Ilość</th>
               <th className="text-left px-2 py-2.5 w-16">J.m.</th>
@@ -237,6 +109,13 @@ function BOMTable({ items, onChange, cennik = [] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={7} className="text-center py-10 text-slate-300 text-sm">
+                  Kliknij „Generuj" lub „Dodaj pozycję"
+                </td>
+              </tr>
+            )}
             {items.map(row => (
               <tr key={row.id} className="hover:bg-slate-50/60 transition-colors group">
                 {/* Nazwa z autocomplete */}
@@ -268,11 +147,6 @@ function BOMTable({ items, onChange, cennik = [] }) {
                       </ul>
                     )}
                   </div>
-                  {row._pointCount > 0 && (
-                    <div className="text-[10px] text-slate-400 px-1 mt-0.5">
-                      {row._pointCount} pkt · {row._totalOutputs} wypustów
-                    </div>
-                  )}
                 </td>
                 {/* Kategoria */}
                 <td className="px-3 py-2">
@@ -356,9 +230,7 @@ function BOMTable({ items, onChange, cennik = [] }) {
 
 function BOMGenerator({ projects }) {
   const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [bom, setBOM] = useState(null);
-  const [points, setPoints] = useState([]);
-  const [showPoints, setShowPoints] = useState(false);
+  const [bom, setBOM] = useState([]);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null); // "ok" | "err"
   const [cennik, setCennik] = useState([]);
@@ -374,19 +246,27 @@ function BOMGenerator({ projects }) {
 
   const generate = () => {
     if (!project) return;
-    const pts = simulateProjectPoints(project);
-    setPoints(pts);
-    setBOM(buildBOM(pts));
     setSaveResult(null);
+    const cennikItem = cennik.find(c => String(c.sku) === DEFAULT_SKU);
+    const newItem = {
+      id:       `bom-${DEFAULT_SKU}-${Date.now()}`,
+      name:     cennikItem?.name ?? `SKU ${DEFAULT_SKU}`,
+      category: "smart_home",
+      unit:     "szt.",
+      quantity: 1,
+      priceEst: cennikItem?.price_pln ?? 0,
+      link:     "",
+      status:   "Oczekuje",
+    };
+    setBOM(prev => [...prev, newItem]);
   };
 
   const handleSave = async () => {
-    if (!project || !bom) return;
+    if (!project || !bom.length) return;
     setSaving(true);
     setSaveResult(null);
 
     try {
-      // Pobierz istniejące zakupy i dołącz nowe pozycje (nie nadpisuj)
       let existingItems = [];
       let existingId;
       if (GAS_ON) {
@@ -400,15 +280,10 @@ function BOMGenerator({ projects }) {
       const existingIds = new Set(existingItems.map(i => i.id));
       const newItems = bom
         .filter(r => !existingIds.has(r.id))
-        .map(r => ({
-          id:       r.id,
-          name:     r.name,
-          category: r.category,
-          quantity: r.quantity,
-          unit:     r.unit,
-          priceEst: r.priceEst,
-          link:     r.link ?? "",
-          status:   r.status ?? "Oczekuje",
+        .map(({ id, name, category, quantity, unit, priceEst, link, status }) => ({
+          id, name, category, quantity, unit, priceEst,
+          link: link ?? "",
+          status: status ?? "Oczekuje",
         }));
 
       const zakupy = {
@@ -428,21 +303,9 @@ function BOMGenerator({ projects }) {
   };
 
   const totalValue = useMemo(
-    () => (bom ?? []).reduce((s, r) => s + r.quantity * r.priceEst, 0),
+    () => bom.reduce((s, r) => s + r.quantity * r.priceEst, 0),
     [bom],
   );
-
-  // Group points by device for summary
-  const pointsSummary = useMemo(() => {
-    const map = new Map();
-    for (const pt of points) {
-      const row = map.get(pt.device) || { device: pt.device, count: 0, outputs: 0 };
-      row.count++;
-      row.outputs += pt.output;
-      map.set(pt.device, row);
-    }
-    return [...map.values()].sort((a, b) => b.outputs - a.outputs);
-  }, [points]);
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -454,29 +317,14 @@ function BOMGenerator({ projects }) {
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-slate-800">Generator listy zakupów</div>
           <div className="text-xs text-slate-400 mt-0.5">
-            Czyta punkty instalacyjne projektu → oblicza potrzebne moduły Loxone → tworzy listę zakupów
+            Wybierz projekt, kliknij Generuj — edytuj zestawienie i zapisz do zakupów projektu
           </div>
         </div>
       </div>
 
       <div className="p-5 space-y-5">
 
-        {/* Nota o formacie JSON */}
-        <div className="flex items-start gap-2.5 bg-blue-50 border border-blue-100 rounded-xl p-3.5">
-          <FileText className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-          <div className="text-xs text-blue-700 leading-relaxed">
-            <span className="font-semibold">Format projekt_XXX.json</span> (docelowy, teraz symulowany):
-            każdy punkt instalacyjny to{" "}
-            <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[10px]">
-              {"{ id: \"OS1\", device: \"Loxone Relay Extension\", output: 1 }"}
-            </code>{" "}
-            — <code className="font-mono text-[10px] bg-blue-100 px-1 rounded">output</code> = liczba wyjść zużywanych przez dany punkt.
-            Dane katalogu (wypusty/szt., ceny) z{" "}
-            <span className="font-semibold">LOXONE.xlsx</span> w materiałach designIQ.
-          </div>
-        </div>
-
-        {/* Step 1: wybór projektu */}
+        {/* Wybór projektu + przycisk Generuj */}
         <div className="flex items-end gap-3">
           <div className="flex-1">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
@@ -486,7 +334,7 @@ function BOMGenerator({ projects }) {
               <FolderKanban className="w-4 h-4 text-slate-300 flex-shrink-0" />
               <select
                 value={selectedProjectId}
-                onChange={e => { setSelectedProjectId(e.target.value); setBOM(null); setPoints([]); setSaveResult(null); }}
+                onChange={e => { setSelectedProjectId(e.target.value); setBOM([]); setSaveResult(null); }}
                 className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
               >
                 <option value="">— wybierz projekt —</option>
@@ -499,7 +347,7 @@ function BOMGenerator({ projects }) {
 
           <button
             onClick={generate}
-            disabled={!selectedProjectId}
+            disabled={!selectedProjectId || cennik.length === 0}
             className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
           >
             <RefreshCw className="w-4 h-4" />
@@ -507,110 +355,65 @@ function BOMGenerator({ projects }) {
           </button>
         </div>
 
-        {/* Step 2+3: wyniki */}
+        {/* Tabela BOM */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm font-semibold text-slate-700">Zestawienie materiałów</span>
+            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+              edytowalne
+            </span>
+          </div>
+          <BOMTable items={bom} onChange={setBOM} cennik={cennik} />
+        </div>
+
+        {/* Footer: łączna wartość + zapis */}
         <AnimatePresence>
-          {bom && (
+          {bom.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-4"
+              className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100"
             >
-              {/* Podsumowanie punktów */}
-              <div className="rounded-xl border border-slate-100 bg-slate-50 overflow-hidden">
-                <button
-                  onClick={() => setShowPoints(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-sm hover:bg-slate-100/60 transition-colors"
-                >
-                  <div className="flex items-center gap-2 font-semibold text-slate-700">
-                    <span className="w-5 h-5 bg-orange-500 text-white rounded-full text-[10px] font-bold flex items-center justify-center">
-                      {points.length}
-                    </span>
-                    Punkty instalacyjne (symulowane) · {pointsSummary.length} typów urządzeń
+              <div>
+                <div className="text-xs text-slate-400">Łączna wartość zestawienia</div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {totalValue.toLocaleString("pl-PL")} zł
+                </div>
+                <div className="text-xs text-slate-400">netto</div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {saveResult === "ok" && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="flex items-center gap-1.5 text-green-600 text-sm font-medium"
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> Zapisano w zakupach projektu
+                  </motion.div>
+                )}
+                {saveResult === "err" && (
+                  <div className="flex items-center gap-1.5 text-red-500 text-sm">
+                    <AlertCircle className="w-4 h-4" /> Błąd zapisu
                   </div>
-                  {showPoints
-                    ? <ChevronUp className="w-4 h-4 text-slate-400" />
-                    : <ChevronDown className="w-4 h-4 text-slate-400" />
+                )}
+
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !project}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl text-sm font-bold hover:from-slate-900 hover:to-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
+                >
+                  {saving
+                    ? <><RefreshCw className="w-4 h-4 animate-spin" /> Zapisuję…</>
+                    : <><ShoppingCart className="w-4 h-4" /> Zapisz do zakupów projektu</>
                   }
                 </button>
-
-                <AnimatePresence>
-                  {showPoints && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-4 pb-3 space-y-1.5">
-                        {pointsSummary.map(row => (
-                          <div key={row.device} className="flex items-center gap-3 text-xs">
-                            <span className="flex-1 text-slate-700 font-medium">{row.device}</span>
-                            <span className="text-slate-400">{row.count} pkt</span>
-                            <span className="text-slate-500 font-semibold w-20 text-right">
-                              {row.outputs} wypustów
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              {/* BOM table */}
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm font-semibold text-slate-700">Zestawienie materiałów</span>
-                  <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-                    edytowalne
-                  </span>
-                </div>
-                <BOMTable items={bom} onChange={setBOM} cennik={cennik} />
-              </div>
-
-              {/* Footer: total + save button */}
-              <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
-                <div>
-                  <div className="text-xs text-slate-400">Łączna wartość zestawienia</div>
-                  <div className="text-2xl font-bold text-orange-600">
-                    {totalValue.toLocaleString("pl-PL")} zł
-                  </div>
-                  <div className="text-xs text-slate-400">netto · bez robocizny i okablowania</div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {saveResult === "ok" && (
-                    <motion.div
-                      initial={{ opacity: 0, x: 8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center gap-1.5 text-green-600 text-sm font-medium"
-                    >
-                      <CheckCircle2 className="w-4 h-4" /> Zapisano w zakupach projektu
-                    </motion.div>
-                  )}
-                  {saveResult === "err" && (
-                    <div className="flex items-center gap-1.5 text-red-500 text-sm">
-                      <AlertCircle className="w-4 h-4" /> Błąd zapisu
-                    </div>
-                  )}
-
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !bom?.length}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl text-sm font-bold hover:from-slate-900 hover:to-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md"
-                  >
-                    {saving
-                      ? <><RefreshCw className="w-4 h-4 animate-spin" /> Zapisuję…</>
-                      : <><ShoppingCart className="w-4 h-4" /> Stwórz listę zakupów</>
-                    }
-                  </button>
-                </div>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {!bom && !selectedProjectId && (
+        {!selectedProjectId && bom.length === 0 && (
           <div className="text-center py-8 text-slate-300 text-sm">
             Wybierz projekt i kliknij Generuj
           </div>
@@ -626,19 +429,17 @@ function BOMGenerator({ projects }) {
 
 export default function Kalkulator({ projects = [] }) {
   return (
-    <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
-      {/* Nagłówek */}
+    <div className="p-4 lg:p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
           <Calculator className="w-4 h-4 text-orange-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-900">Kalkulator</h2>
-          <p className="text-xs text-slate-400">Generator listy zakupów Loxone</p>
+          <p className="text-xs text-slate-400">Generator listy zakupów</p>
         </div>
       </div>
 
-      {/* Generator BOM */}
       <BOMGenerator projects={projects} />
     </div>
   );
