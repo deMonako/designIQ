@@ -215,7 +215,7 @@ function DayColumn({ date, tasks, projects, selectedTaskId, onTaskClick }) {
 
 const MAX_TASK_DOTS = 5;
 
-function MonthDayCell({ date, tasks, isSelected, isCurrentMonth, onDayClick }) {
+function MonthDayCell({ date, tasks, milestones, isSelected, isCurrentMonth, onDayClick }) {
   const dateStr   = formatYMD(date);
   const isToday   = dateStr === TODAY;
   const dayIndex  = date.getDay();
@@ -250,6 +250,18 @@ function MonthDayCell({ date, tasks, isSelected, isCurrentMonth, onDayClick }) {
         {date.getDate()}
       </span>
 
+      {/* Kamienie milowe — niebieskie flagi */}
+      {milestones && milestones.length > 0 && (
+        <div className="flex flex-wrap gap-0.5 mb-0.5">
+          {milestones.map(ms => (
+            <span key={ms.id} title={`${ms.label} (${ms.projectName})`}
+              className="inline-flex items-center gap-0.5 px-1 py-px rounded text-[9px] font-semibold bg-blue-50 text-blue-600 border border-blue-200 leading-none max-w-full truncate">
+              <Flag className="w-2 h-2 flex-shrink-0" />{ms.label}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Kropki zadań — zawsze pomarańczowe (priorytet nie zmienia koloru) */}
       {dotsToShow.length > 0 && (
         <div className="flex flex-wrap gap-0.5 mb-0.5">
@@ -283,7 +295,7 @@ function MonthDayCell({ date, tasks, isSelected, isCurrentMonth, onDayClick }) {
 
 // ─── MonthGrid (siatka miesiąca) ──────────────────────────────────────────────
 
-function MonthGrid({ year, month, tasksByDate, selectedDay, onDayClick }) {
+function MonthGrid({ year, month, tasksByDate, milestonesByDate, selectedDay, onDayClick }) {
   const grid = getMonthGrid(year, month);
 
   return (
@@ -307,6 +319,7 @@ function MonthGrid({ year, month, tasksByDate, selectedDay, onDayClick }) {
               key={dateStr}
               date={date}
               tasks={tasksByDate[dateStr] ?? []}
+              milestones={milestonesByDate[dateStr] ?? []}
               isSelected={selectedDay === dateStr}
               isCurrentMonth={date.getMonth() === month}
               onDayClick={onDayClick}
@@ -320,7 +333,7 @@ function MonthGrid({ year, month, tasksByDate, selectedDay, onDayClick }) {
 
 // ─── DayDetailPanel (panel dnia – widok miesiąca) ─────────────────────────────
 
-function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd }) {
+function DayDetailPanel({ dateStr, tasks, milestones, projects, onTaskClick, onClose, onAdd }) {
   const events       = tasks.filter(t => t.type === "event");
   const regularTasks = [...tasks.filter(t => t.type !== "event")]
     .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
@@ -338,6 +351,11 @@ function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd 
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-slate-800">{formatDayLabel(dateStr)}</span>
+          {milestones && milestones.length > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 font-medium px-2 py-0.5 rounded-full">
+              <Flag className="w-3 h-3" />{milestones.length} {milestones.length === 1 ? "kamień milowy" : "kamienie milowe"}
+            </span>
+          )}
           {events.length > 0 && (
             <span className="inline-flex items-center gap-1 text-xs bg-violet-50 text-violet-600 font-medium px-2 py-0.5 rounded-full">
               <Calendar className="w-3 h-3" />{events.length} {events.length === 1 ? "wydarzenie" : "wydarzenia"}
@@ -359,6 +377,19 @@ function DayDetailPanel({ dateStr, tasks, projects, onTaskClick, onClose, onAdd 
           </button>
         </div>
       </div>
+
+      {/* Kamienie milowe */}
+      {milestones && milestones.length > 0 && (
+        <div className="px-3 pt-2.5 pb-1 flex flex-wrap gap-2 border-b border-slate-100">
+          {milestones.map(ms => (
+            <div key={ms.id} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-xs">
+              <Flag className="w-3 h-3 text-blue-500 flex-shrink-0" />
+              <span className="font-semibold text-blue-800">{ms.label}</span>
+              <span className="text-blue-500 truncate max-w-[120px]">{ms.projectName}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Lista */}
       {all.length === 0 ? (
@@ -522,6 +553,19 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
     });
     return map;
   }, [tasks]);
+
+  // Kamienie milowe pogrupowane wg daty (z projektów)
+  const milestonesByDate = useMemo(() => {
+    const map = {};
+    projects.forEach(p => {
+      (p.milestones ?? []).forEach(ms => {
+        if (!ms.label || !ms.date) return;
+        if (!map[ms.date]) map[ms.date] = [];
+        map[ms.date].push({ ...ms, projectName: p.name });
+      });
+    });
+    return map;
+  }, [projects]);
 
   // Statystyki
   const allTasksOnly = tasks.filter(t => t.type !== "event");
@@ -695,6 +739,9 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
         <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium">
           <Calendar className="w-3 h-3" /> Wydarzenie
         </span>
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+          <Flag className="w-3 h-3" /> Kamień milowy
+        </span>
       </div>
 
       {/* ── Widok tygodnia ── */}
@@ -721,6 +768,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
           year={currentMonth.getFullYear()}
           month={currentMonth.getMonth()}
           tasksByDate={tasksByDate}
+          milestonesByDate={milestonesByDate}
           selectedDay={selectedDay}
           onDayClick={handleDayClick}
         />
@@ -733,6 +781,7 @@ export default function Zadania({ projects, tasks, onUpdateTask, onAddTask, onDe
             key={`day-${selectedDay}`}
             dateStr={selectedDay}
             tasks={tasksByDate[selectedDay] ?? []}
+            milestones={milestonesByDate[selectedDay] ?? []}
             projects={projects}
             onTaskClick={handleDayPanelTaskClick}
             onClose={() => setSelectedDay(null)}

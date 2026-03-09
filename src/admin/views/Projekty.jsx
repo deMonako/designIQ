@@ -761,10 +761,6 @@ function ProjectDetail({
                                   <div style={{ left: `${todayPct}%` }}
                                     className="absolute top-0 bottom-0 border-l-2 border-orange-400/70 z-10 pointer-events-none" />
                                 )}
-                                {gantt.milestones?.map(ms => (
-                                  <div key={ms.id} style={{ left: `${ms.pct}%` }}
-                                    className={`absolute top-0 bottom-0 border-l-2 z-20 pointer-events-none ${ms.auto ? "border-orange-500/60 border-dashed" : "border-blue-500"}`} />
-                                ))}
                                 <div
                                   style={{ left: `${bar.left}%`, width: `${bar.width}%` }}
                                   className={`absolute top-1 bottom-1 rounded flex items-center justify-center text-[10px] font-semibold ${
@@ -784,21 +780,6 @@ function ProjectDetail({
                       });
                     })()}
 
-                    {/* Kamienie milowe – wiersz etykiet pod wykresem */}
-                    {gantt?.milestones?.length > 0 && (
-                      <div className="flex items-start mb-1 pl-44">
-                        <div className="flex-1 relative h-5">
-                          {gantt.milestones.map(ms => (
-                            <div key={ms.id} style={{ left: `${ms.pct}%` }}
-                              className="absolute top-0 -translate-x-1/2 flex flex-col items-center">
-                              <div className={`w-2 h-2 rounded-full border-2 border-white ${ms.auto ? "bg-orange-400 ring-1 ring-orange-300" : "bg-blue-500 ring-1 ring-blue-400"}`} />
-                              <span className={`text-[9px] font-semibold whitespace-nowrap mt-0.5 leading-none ${ms.auto ? "text-orange-600" : "text-blue-600"}`}>{ms.label}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Legenda */}
                     {gantt ? (
                       <div className="flex items-center gap-3 mt-3 pt-2 border-t border-slate-100 pl-44">
@@ -806,8 +787,6 @@ function ProjectDetail({
                           { cls: "bg-green-200 border-green-300", label: "Ukończony" },
                           { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
                           { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
-                          { cls: "bg-orange-400", label: "Etap", isDot: true },
-                          { cls: "bg-blue-500", label: "Kamień milowy", isDot: true },
                         ].map(({ cls, label, isDot }) => (
                           <div key={label} className="flex items-center gap-1">
                             {isDot

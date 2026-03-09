@@ -1,7 +1,7 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { Card, CardContent } from "../ui/card";
-import { Calendar, DollarSign, ShoppingCart, Map, Cpu } from "lucide-react";
+import { Calendar, DollarSign, ShoppingCart, Map, FileText } from "lucide-react";
 import { motion } from "framer-motion";
 // Bezpieczna konwersja daty – obsługuje ISO strings z timezone (np. "2025-03-31T22:00:00.000Z")
 function safeDate(dateStr) {
@@ -18,7 +18,10 @@ import FileUploadSection from "./FileUploadSection";
 
 export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
   const getProgressPercentage = () => {
-    if (!investment || !investment.stages) return 0;
+    if (!investment) return 0;
+    // Używaj progress z admina jeśli ustawiony, w przeciwnym razie licz na podstawie etapów
+    if (typeof investment.progress === "number" && investment.progress > 0) return investment.progress;
+    if (!investment.stages || investment.stages.length === 0) return 0;
     return Math.round((investment.current_stage / investment.stages.length) * 100);
   };
 
@@ -118,18 +121,21 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
           </CardContent>
         </Card>
 
-        {/* 4. SZAFA STEROWNICZA */}
-        <Card 
+        {/* 4. DOKUMENTY */}
+        <Card
           className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-          onClick={() => onNavigate("szafa")}
+          onClick={() => {
+            const el = document.getElementById("dokumenty-section");
+            if (el) el.scrollIntoView({ behavior: "smooth" });
+          }}
         >
           <CardContent className="p-6 flex items-center gap-4">
             <div className="w-14 h-14 bg-purple-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-purple-200">
-              <Cpu className="w-7 h-7 text-white" />
+              <FileText className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Szafa sterownicza</h3>
-              <p className="text-sm text-slate-600">Widok rozdzielnicy i modułów</p>
+              <h3 className="text-lg font-bold text-slate-900">Dokumenty</h3>
+              <p className="text-sm text-slate-600">Pliki i dokumentacja projektu</p>
             </div>
           </CardContent>
         </Card>
@@ -148,7 +154,8 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
       </div>
 
       {/* Pliki i Dokumenty */}
-      <FileUploadSection 
+      <div id="dokumenty-section" />
+      <FileUploadSection
         investment={investment}
         onFileUploaded={onRefresh}
         isReadOnly={investment.investment_code === "DEMO" || investment.investment_code === "MATERIAŁY"}

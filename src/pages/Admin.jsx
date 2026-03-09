@@ -9,7 +9,6 @@ import Zadania      from "../admin/views/Zadania";
 import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
-import Kalkulator   from "../admin/views/Kalkulator";
 import AddProjectModal from "../admin/AddProjectModal";
 import {
   mockProjects, mockTasks, mockChecklists, mockMaterials,
@@ -189,14 +188,22 @@ export default function Admin() {
   };
 
   const handleDeleteProject = async (id) => {
+    const snapProject    = projects.find(p  => p.id        === id);
+    const snapDocs       = projectDocs.filter(d  => d.projectId === id);
+    const snapTasks      = tasks.filter(t  => t.projectId === id);
+    const snapChecklists = checklists.filter(cl => cl.projectId === id);
     setProjects(prev    => prev.filter(p  => p.id        !== id));
     setProjectDocs(prev => prev.filter(d  => d.projectId !== id));
     setTasks(prev       => prev.filter(t  => t.projectId !== id));
     setChecklists(prev  => prev.filter(cl => cl.projectId !== id));
     if (selectedProject?.id === id) setSelectedProject(null);
-    await gasSync(() => GAS.deleteProject(id), () =>
-      syncErr("Błąd usuwania projektu – odśwież stronę aby zsynchronizować")
-    );
+    await gasSync(() => GAS.deleteProject(id), () => {
+      if (snapProject) setProjects(prev => [snapProject, ...prev]);
+      setProjectDocs(prev => [...prev, ...snapDocs]);
+      setTasks(prev       => [...prev, ...snapTasks]);
+      setChecklists(prev  => [...prev, ...snapChecklists]);
+      syncErr("Błąd usuwania projektu – przywrócono dane lokalnie");
+    });
   };
 
   const handleAddProject = async (project, newClientData) => {
@@ -423,8 +430,6 @@ export default function Admin() {
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />
         );
-      case "kalkulator":
-        return <Kalkulator projects={projects} />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:

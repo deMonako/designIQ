@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
   BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
   ChevronRight, Users, Search, Plus, User, Calendar,
-  CheckCircle2, AlertCircle, RefreshCw, Calculator,
+  CheckCircle2, AlertCircle, RefreshCw,
 } from "lucide-react";
 import { TODAY } from "./mockData";
 
@@ -18,7 +18,6 @@ const NAV_ITEMS = [
   { id: "checklisty", label: "Checklisty", icon: ClipboardList },
   { id: "materialy",  label: "Materiały",  icon: Package },
   { id: "analityka",  label: "Analityka",  icon: BarChart2 },
-  { id: "kalkulator", label: "Kalkulator", icon: Calculator },
 ];
 const NAV_BOTTOM = [{ id: "ustawienia", label: "Ustawienia", icon: Settings }];
 
@@ -119,7 +118,7 @@ export default function AdminLayout({
   const VIEW_TITLES = {
     dashboard: "Dashboard", projekty: "Projekty", klienci: "Klienci",
     zadania: "Zadania", checklisty: "Checklisty", materialy: "Materiały",
-    analityka: "Analityka", kalkulator: "Kalkulator", ustawienia: "Ustawienia",
+    analityka: "Analityka", ustawienia: "Ustawienia",
   };
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
