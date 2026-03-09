@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { createPageUrl } from "./utils";
-import { Menu, X, Home, Cpu, Calculator, Package, Users, Mail, ChevronDown } from "lucide-react";
+import { Menu, X, Home, Cpu, Calculator, Package, Users, Mail, ChevronDown, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import SEOHead from "./components/SEOHead";
 import CookieConsent from "./components/CookieConsent";
@@ -138,6 +138,23 @@ export default function Layout({ children }) {
               ))}
             </div>
 
+            {/* Desktop: Phone + CTA */}
+            <div className="hidden lg:flex items-center gap-3 ml-2">
+              <a
+                href={`tel:${COMPANY.phone}`}
+                className="flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-orange-600 transition-colors px-3 py-2 rounded-xl hover:bg-slate-100"
+              >
+                <Phone className="w-4 h-4" />
+                {COMPANY.phoneDisplay}
+              </a>
+              <Link
+                to={createPageUrl("Konfigurator")}
+                className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-orange-500/40 hover:scale-105 transition-all duration-300"
+              >
+                Bezpłatna wycena
+              </Link>
+            </div>
+
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -234,7 +251,7 @@ export default function Layout({ children }) {
         </AnimatePresence>
       </header>
 
-      <main className="flex-1 pt-20">{children}</main>
+      <main className="flex-1 pt-20 pb-16 lg:pb-0">{children}</main>
 
       <footer className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="container mx-auto px-4 lg:px-8 py-12 lg:py-16">
@@ -294,6 +311,25 @@ export default function Layout({ children }) {
         </div>
       </footer>
       <CookieConsent />
+
+      {/* Sticky mobile bottom bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex">
+        <a
+          href={`tel:${COMPANY.phone}`}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 text-slate-700 font-semibold text-sm active:bg-slate-100 transition-colors"
+        >
+          <Phone className="w-5 h-5 text-orange-600" />
+          Zadzwoń
+        </a>
+        <div className="w-px bg-slate-200" />
+        <Link
+          to={createPageUrl("Konfigurator")}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white font-semibold text-sm active:opacity-90 transition-opacity"
+        >
+          <Calculator className="w-5 h-5" />
+          Bezpłatna wycena
+        </Link>
+      </div>
     </div>
   );
 }

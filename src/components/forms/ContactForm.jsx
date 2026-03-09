@@ -5,6 +5,10 @@ import { Label } from "../ui/label";
 import { Send, Loader2, CheckCircle, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useGasSubmit } from "../../hooks/useGasSubmit";
+import { GAS_CONFIG } from "../../admin/api/gasConfig";
+import { createLead } from "../../admin/api/gasApi";
+
+const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
 export default function ContactForm() {
   const [submitted, setSubmitted] = useState(false);
@@ -35,8 +39,41 @@ export default function ContactForm() {
       timestamp: new Date().toLocaleString('pl-PL'),
     };
 
+    const handleSuccess = () => {
+      if (GAS_ON) {
+        createLead({
+          id:             `lead-${Date.now()}`,
+          name:           formData.imie_nazwisko,
+          email:          formData.email,
+          phone:          formData.telefon,
+          notes:          [formData.temat, formData.wiadomosc].filter(Boolean).join(" · "),
+          pipelineStatus: "Lead",
+          status:         "Nowy",
+          source:         "Kontakt",
+          date:           new Date().toISOString().slice(0, 10),
+        }).catch(() => {});
+      } else {
+        try {
+          const lead = {
+            id:             `lead-${Date.now()}`,
+            name:           formData.imie_nazwisko,
+            email:          formData.email,
+            phone:          formData.telefon,
+            notes:          [formData.temat, formData.wiadomosc].filter(Boolean).join(" · "),
+            pipelineStatus: "Lead",
+            status:         "Nowy",
+            source:         "Kontakt",
+            date:           new Date().toISOString().slice(0, 10),
+          };
+          const existing = JSON.parse(localStorage.getItem("diq_leads") || "[]");
+          localStorage.setItem("diq_leads", JSON.stringify([lead, ...existing]));
+        } catch {}
+      }
+      setSubmitted(true);
+    };
+
     await submit(payload, {
-      onSuccess: () => setSubmitted(true),
+      onSuccess: handleSuccess,
     });
   };
 

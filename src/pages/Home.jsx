@@ -2,12 +2,12 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "../utils";
 import { motion } from "framer-motion";
-import { 
-  Home as HomeIcon, 
-  Plug, 
-  Shield, 
-  Radio, 
-  Camera, 
+import {
+  Home as HomeIcon,
+  Plug,
+  Shield,
+  Radio,
+  Camera,
   Wifi,
   Terminal,
   ArrowRight,
@@ -15,10 +15,14 @@ import {
   Zap,
   Lock,
   Activity,
+  LayoutDashboard,
+  Bell,
+  FileText,
+  MessageSquare,
 } from "lucide-react";
 
 
-const PARTICLES = [...Array(20)].map((_, i) => ({
+const PARTICLES = [...Array(8)].map((_, i) => ({
   id: i,
   x: Math.random() * 100 - 50,
   duration: 5 + Math.random() * 5,
@@ -352,7 +356,105 @@ export default function Home() {
         </div>
       </section>
 
-{/* SEKCJA LIVE DEMO - Naprawiona szerokość kontenera */}
+{/* Panel Klienta USP */}
+      <section className="py-20 bg-gradient-to-br from-slate-50 to-orange-50">
+        <div className="container mx-auto px-4 lg:px-8">
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col lg:flex-row items-center gap-12">
+              {/* Text */}
+              <div className="flex-1 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest mb-6">
+                  <LayoutDashboard className="w-4 h-4" />
+                  Panel Klienta
+                </div>
+                <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-6 leading-tight">
+                  Twój projekt zawsze<br />
+                  <span className="bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
+                    pod kontrolą
+                  </span>
+                </h2>
+                <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                  Każdy nasz klient otrzymuje dostęp do dedykowanego panelu, w którym może na bieżąco śledzić postęp prac, przeglądać dokumenty i komunikować się z zespołem – bez e-maili i telefonów.
+                </p>
+                <ul className="space-y-4 mb-8 text-left">
+                  {[
+                    { icon: LayoutDashboard, text: "Status etapów realizacji w czasie rzeczywistym" },
+                    { icon: Bell,            text: "Powiadomienia o zmianach i aktualizacjach" },
+                    { icon: FileText,        text: "Dokumentacja, schematy i faktury w jednym miejscu" },
+                    { icon: MessageSquare,   text: "Bezpośredni czat z ekipą projektową" },
+                  ].map(({ icon: Icon, text }) => (
+                    <li key={text} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <span className="text-slate-700">{text}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link
+                  to={createPageUrl("StatusInwestycji")}
+                  className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-8 py-4 rounded-2xl font-semibold text-lg hover:shadow-2xl hover:shadow-orange-500/50 hover:scale-105 transition-all duration-300"
+                >
+                  <LayoutDashboard className="w-5 h-5" />
+                  Zobacz panel demo
+                  <ArrowRight className="w-5 h-5" />
+                </Link>
+              </div>
+
+              {/* Mock panel card */}
+              <div className="flex-1 w-full max-w-md">
+                <motion.div
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6 }}
+                  className="bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden"
+                >
+                  {/* Mock header */}
+                  <div className="bg-gradient-to-r from-orange-600 to-orange-500 px-6 py-4 flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white/20 rounded-xl flex items-center justify-center">
+                      <LayoutDashboard className="w-4 h-4 text-white" />
+                    </div>
+                    <div>
+                      <div className="text-white font-bold text-sm">Panel Klienta – designiQ</div>
+                      <div className="text-orange-200 text-xs">Dom Kowalskich · Bydgoszcz</div>
+                    </div>
+                  </div>
+                  {/* Mock stages */}
+                  <div className="p-6 space-y-3">
+                    {[
+                      { label: "Projekt automatyki",    done: true  },
+                      { label: "Projekt elektryki",     done: true  },
+                      { label: "Prefabrykacja szafy",   done: false },
+                      { label: "Programowanie Loxone",  done: false },
+                      { label: "Uruchomienie systemu",  done: false },
+                    ].map(({ label, done }) => (
+                      <div key={label} className="flex items-center gap-3">
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${done ? "bg-green-500" : "bg-slate-200"}`}>
+                          {done && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                        </div>
+                        <span className={`text-sm ${done ? "text-slate-700 font-medium" : "text-slate-400"}`}>{label}</span>
+                        {!done && label === "Prefabrykacja szafy" && (
+                          <span className="ml-auto text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">W toku</span>
+                        )}
+                      </div>
+                    ))}
+                    <div className="mt-4 pt-4 border-t border-slate-100">
+                      <div className="text-xs text-slate-500 mb-1.5">Postęp realizacji</div>
+                      <div className="w-full bg-slate-100 rounded-full h-2">
+                        <div className="bg-gradient-to-r from-orange-500 to-orange-400 h-2 rounded-full" style={{ width: "40%" }} />
+                      </div>
+                      <div className="text-right text-xs text-orange-600 font-semibold mt-1">40%</div>
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SEKCJA LIVE DEMO - Naprawiona szerokość kontenera */}
       <section className="pb-24">
         <div className="container mx-auto px-4 lg:px-8">
           <div className="bg-slate-900 rounded-[3rem] p-8 lg:p-12 overflow-hidden relative group border border-slate-800 shadow-2xl">

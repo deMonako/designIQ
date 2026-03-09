@@ -217,6 +217,11 @@ export async function getLeads() {
   return gasGet("getLeads");
 }
 
+/** Tworzy nowy lead (z konfiguratora lub formularza kontaktowego) */
+export async function createLead(lead) {
+  return gasPost("createLead", { lead });
+}
+
 /** Aktualizuje lead (status, notatki) */
 export async function updateLead(lead) {
   return gasPost("updateLead", { lead });

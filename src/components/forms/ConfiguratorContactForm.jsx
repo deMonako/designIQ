@@ -6,6 +6,7 @@ import { gtmEvent } from "../analytics";
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 import { useGasSubmit } from "../../hooks/useGasSubmit";
 import { GAS_CONFIG } from "../../admin/api/gasConfig";
+import { createLead } from "../../admin/api/gasApi";
 // useGasSubmit używa GAS_CONFIG.scriptUrl jako domyślnego endpointu
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -47,8 +48,23 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
+    const newLead = {
+      id:             `lead-${Date.now()}`,
+      name:           contactData.imie_nazwisko,
+      email:          contactData.email,
+      phone:          contactData.telefon,
+      quoteValue:     estimatedPrice,
+      notes:          [contactData.miasto, contactData.wiadomosc].filter(Boolean).join(" · "),
+      pipelineStatus: "Lead",
+      status:         "Nowy",
+      source:         "Konfigurator",
+      date:           new Date().toISOString().slice(0, 10),
+      configData:     { ...formData, miasto: contactData.miasto || '', uwagi: contactData.wiadomosc || '' },
+    };
+
     const handleSuccess = () => {
       saveLead(contactData, estimatedPrice);
+      if (GAS_ON) createLead(newLead).catch(() => {});
       setSubmitted(true);
     };
 
@@ -58,16 +74,12 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     }
 
     const payload = {
-      action: 'submitForm',
+      action:     'submitForm',
       name:       contactData.imie_nazwisko,
       email:      contactData.email,
       phone:      contactData.telefon,
       quoteValue: estimatedPrice,
-      configData: {
-        ...formData,
-        miasto: contactData.miasto || '',
-        uwagi:  contactData.wiadomosc || '',
-      },
+      configData: newLead.configData,
     };
 
     await submit(payload, {
