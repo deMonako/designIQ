@@ -30,67 +30,96 @@ function formatDayShort(dateStr) {
 // ─── AgendaRow (zadanie lub wydarzenie na dziś) ───────────────────────────────
 
 function AgendaRow({ task, project, onStatusChange, onEdit }) {
+  const [expanded, setExpanded] = React.useState(false);
   const isDone  = task.status === "Zrobione";
   const isEvent = task.type === "event";
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -4 }}
-      animate={{ opacity: 1, x: 0 }}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
-        isDone  ? "bg-slate-50 border-slate-100 opacity-60" :
-        isEvent ? "bg-violet-50 border-violet-100" :
-                  "bg-white border-slate-100 shadow-sm"
-      }`}
-    >
-      {isEvent ? (
-        <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-          <Calendar className="w-3 h-3 text-violet-500" />
-        </div>
-      ) : (
-        <button
-          onClick={() => onStatusChange(task.id, isDone ? "Niezrobione" : "Zrobione")}
-          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-            isDone
-              ? "bg-green-500 border-green-500"
-              : "border-slate-300 hover:border-orange-400"
-          }`}
-        >
-          {isDone && <CheckCircle2 className="w-3 h-3 text-white" />}
-        </button>
-      )}
+    <motion.div layout initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}>
+      <div
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
+          isDone  ? "bg-slate-50 border-slate-100 opacity-60" :
+          isEvent ? "bg-violet-50 border-violet-100" :
+                    "bg-white border-slate-100 shadow-sm"
+        } ${expanded ? "rounded-b-none border-b-0" : ""}`}
+      >
+        {isEvent ? (
+          <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <Calendar className="w-3 h-3 text-violet-500" />
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, isDone ? "Niezrobione" : "Zrobione"); }}
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+              isDone
+                ? "bg-green-500 border-green-500"
+                : "border-slate-300 hover:border-orange-400"
+            }`}
+          >
+            {isDone && <CheckCircle2 className="w-3 h-3 text-white" />}
+          </button>
+        )}
 
-      <div className="flex-1 min-w-0">
-        <span className={`text-sm font-medium ${
-          isDone ? "line-through text-slate-400" :
-          isEvent ? "text-violet-800" :
-                    "text-slate-800"
-        }`}>
-          {task.title}
-        </span>
-        {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
-          <span className="text-xs text-slate-400 ml-2">
-            {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="flex-1 min-w-0 text-left"
+        >
+          <span className={`text-sm font-medium ${
+            isDone ? "line-through text-slate-400" :
+            isEvent ? "text-violet-800" :
+                      "text-slate-800"
+          }`}>
+            {task.title}
           </span>
+          {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+            <span className="text-xs text-slate-400 ml-2">
+              {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+            </span>
+          )}
+        </button>
+
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+          isEvent ? "bg-violet-100 text-violet-600" : "bg-orange-50 text-orange-600"
+        }`}>
+          {isEvent ? "Wydarzenie" : task.priority}
+        </span>
+
+        {!isEvent && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+            className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+            title="Edytuj zadanie"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
 
-      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-        isEvent ? "bg-violet-100 text-violet-600" : "bg-orange-50 text-orange-600"
-      }`}>
-        {isEvent ? "Wydarzenie" : task.priority}
-      </span>
-
-      {!isEvent && (
-        <button
-          onClick={() => onEdit(task)}
-          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
-          title="Edytuj zadanie"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-      )}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className={`px-3 py-2.5 rounded-b-lg border border-t-0 text-xs text-slate-600 space-y-1 ${
+              isEvent ? "bg-violet-50 border-violet-100" : "bg-slate-50 border-slate-100"
+            }`}>
+              {task.description && (
+                <p className="text-slate-700 leading-relaxed">{task.description}</p>
+              )}
+              {!task.description && <p className="text-slate-400 italic">Brak opisu</p>}
+              {task.dueDate && (
+                <p className="text-slate-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Termin: {String(task.dueDate).substring(0, 10)}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

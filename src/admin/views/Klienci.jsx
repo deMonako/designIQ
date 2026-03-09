@@ -96,7 +96,7 @@ function PipelineColumn({ stage, clients, projects, onDrop, onDragOver, onDragLe
 
   return (
     <div
-      className="flex-1 min-w-[210px] max-w-[280px] flex flex-col"
+      className="flex-1 min-w-[210px] flex flex-col"
       onDragOver={(e) => { e.preventDefault(); onDragOver(stage); }}
       onDragLeave={onDragLeave}
       onDrop={(e) => { e.preventDefault(); onDrop(stage); }}
@@ -871,7 +871,7 @@ export default function Klienci({ clients, projects, leads = [], onUpdateClient,
 
       {/* ── Pipeline view ── */}
       {viewMode === "pipeline" && (
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+        <div className="flex gap-3 pb-2">
           {STAGES.map(stage => (
             <PipelineColumn
               key={stage}
