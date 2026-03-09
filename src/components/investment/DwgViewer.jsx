@@ -545,6 +545,30 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     canvas.style.cssText += layoutCss;
     wrap.appendChild(canvas);
 
+    // ── DEBUG click: kliknij dowolne miejsce na rzucie → patrz w konsole ──
+    // Format: [KLIK] svgXY=(X,Y)  realXY=(X,Y)  frac=(X%,Y%)
+    // Kliknij na AUD1 → sprawdź czy realXY ≈ (11451.9, 4521.13)
+    canvas.addEventListener("click", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const px = (e.clientX - rect.left) / rect.width;
+      const py = (e.clientY - rect.top)  / rect.height;
+      const svgX = vbX + px * svgW;
+      const svgY = vbY + py * svgH;
+      const { scale: sc, originX: ox, originY: oy, svgHeight: sh, flipY: fy = true } = m ?? {};
+      let rX = "?", rY = "?";
+      if (sc && sc > 0) {
+        rX = (svgX * sc + (ox ?? 0)).toFixed(1);
+        rY = fy
+          ? (((sh ?? svgH) - svgY) * sc + (oy ?? 0)).toFixed(1)
+          : (svgY * sc + (oy ?? 0)).toFixed(1);
+      }
+      console.log(
+        `%c[DwgViewer · KLIK]%c svgXY=(${svgX.toFixed(1)}, ${svgY.toFixed(1)})  ` +
+        `realXY=(${rX}, ${rY})  frac=(${(px*100).toFixed(1)}%, ${(py*100).toFixed(1)}%)`,
+        "color:#e11d48;font-weight:bold", "color:#475569"
+      );
+    }, { capture: true });
+
     // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
     const hasCoords = m && Object.values(elems).some(e => e.X != null);
     if (hasCoords) {
