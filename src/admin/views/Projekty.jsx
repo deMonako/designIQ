@@ -8,7 +8,7 @@ import {
   ChevronUp, ChevronDown,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
-import { uploadFile } from "../api/gasApi";
+import { uploadFile, getProjectFiles } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
 import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -211,6 +211,14 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
+  const [driveFiles,        setDriveFiles]        = useState([]);
+
+  useEffect(() => {
+    if (!GAS_ON) return;
+    getProjectFiles(project.id, project.code)
+      .then(files => setDriveFiles(Array.isArray(files) ? files : []))
+      .catch(() => {});
+  }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -392,12 +400,19 @@ function ProjectDetail({
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
   const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  const sheetDocUrls      = new Set(projectDocList.map(d => d.url).filter(Boolean));
+  const SYSTEM_FILES      = new Set(["projekt.svg", "projekt.json"]);
+  const driveOnlyFiles    = driveFiles.filter(f =>
+    !SYSTEM_FILES.has(f.name.toLowerCase()) &&
+    !sheetDocUrls.has(f.webViewLink) &&
+    !sheetDocUrls.has(f.webContentLink)
+  );
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
+    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -1315,44 +1330,87 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {projectDocList.length === 0 && !showAddDoc ? (
+              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" /> Brak dokumentów dla tego projektu
                 </div>
               ) : (
-                projectDocList.map(doc => (
-                  <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
-                    <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                      <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
-                      {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span className="text-xs text-slate-400">{doc.date}</span>
-                        <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
-                        {doc.clientVisible
-                          ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
-                          : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
-                        }
+                <>
+                  {projectDocList.map(doc => (
+                    <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                        <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
+                        {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className="text-xs text-slate-400">{doc.date}</span>
+                          <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
+                          {doc.clientVisible
+                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
+                            : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
+                          }
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {doc.url && doc.url !== "#" && (
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                        <button onClick={() => onToggleDocClientVisible(doc.id)}
+                          className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
+                          {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => onDeleteProjectDoc(doc.id)} className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {doc.url && doc.url !== "#" && (
-                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                  ))}
+
+                  {driveOnlyFiles.length > 0 && (
+                    <>
+                      {projectDocList.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 border-t border-slate-200" />
+                          <span className="text-xs text-slate-400 font-medium">Pliki na dysku (widoczne dla klienta)</span>
+                          <div className="flex-1 border-t border-slate-200" />
+                        </div>
                       )}
-                      <button onClick={() => onToggleDocClientVisible(doc.id)}
-                        className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
-                        {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => onDeleteProjectDoc(doc.id)} className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                      {driveOnlyFiles.map(f => (
+                        <div key={f.id} className="bg-blue-50/40 rounded-xl border border-blue-200/60 p-4 flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {f.modifiedTime && (
+                                <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>
+                              )}
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> Widoczny dla klienta
+                              </span>
+                              <span className="text-xs text-slate-400">Dysk Google</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                            {f.webContentLink && (
+                              <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
+                                <Download className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
           )}

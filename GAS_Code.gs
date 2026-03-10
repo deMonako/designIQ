@@ -335,7 +335,7 @@ function doGet(e) {
         return ok(all);
 
       case "getProjectFiles":
-        return ok(getDriveFiles(e.parameter.projectId));
+        return ok(getDriveFiles(e.parameter.projectCode || e.parameter.projectId));
 
       // ── DWG Viewer — projekt.svg + projekt.json z folderu projektu ────────────
       // Obsługuje pliki pojedyncze (projekt.svg / projekt.json) oraz wielopiętrowe:

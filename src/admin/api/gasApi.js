@@ -170,8 +170,8 @@ export async function toggleDocClientVisible(id) {
  * Pobiera listę plików z podfolderu projektu na Google Drive.
  * @param {string} projectId - id projektu, np. "proj-1749123456789"
  */
-export async function getProjectFiles(projectId) {
-  return gasGet("getProjectFiles", { projectId });
+export async function getProjectFiles(projectId, projectCode) {
+  return gasGet("getProjectFiles", { projectId, projectCode });
 }
 
 /**
