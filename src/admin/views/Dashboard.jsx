@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
-  StickyNote, FolderKanban, Phone, Mail, Pencil,
+  StickyNote, FolderKanban, Phone, Mail, Pencil, Plus,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -282,17 +282,17 @@ function QuickNotes() {
   const save = (v) => { setNotes(v); localStorage.setItem("diq_notes", v); };
 
   return (
-    <div className="bg-amber-50 rounded-xl border border-amber-100 shadow-sm p-4 flex flex-col h-full">
+    <div className="bg-white rounded-xl border border-slate-200 border-l-4 border-l-orange-300 shadow-sm p-4 flex flex-col h-full">
       <div className="flex items-center gap-2 mb-3">
-        <StickyNote className="w-4 h-4 text-amber-500" />
+        <StickyNote className="w-4 h-4 text-orange-400" />
         <span className="text-sm font-semibold text-slate-700">Szybkie notatki</span>
-        {notes && <span className="ml-auto text-xs text-amber-300">zapisano lokalnie</span>}
+        {notes && <span className="ml-auto text-xs text-slate-300">zapisano lokalnie</span>}
       </div>
       <textarea
         value={notes}
         onChange={e => save(e.target.value)}
         placeholder="Wpisz notatkę, numer telefonu, przypomnienie…"
-        className="flex-1 min-h-[100px] text-sm text-slate-700 resize-none outline-none placeholder-amber-300 leading-relaxed bg-transparent"
+        className="flex-1 min-h-[100px] text-sm text-slate-700 resize-none outline-none placeholder-slate-300 leading-relaxed bg-transparent"
       />
     </div>
   );
@@ -421,27 +421,27 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
       <div className="h-px bg-slate-200" />
 
       {/* ── Postęp na dziś ── */}
-      {(todayItems.length + todayDone) > 0 && (
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400 shrink-0">Dziś:</span>
-          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden max-w-[180px]">
+      <div className="flex items-center gap-2.5">
+        <span className="text-xs text-slate-400 shrink-0">Dziś:</span>
+        <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
+          {(todayItems.length + todayDone) > 0 && (
             <motion.div
               className="h-full bg-orange-400 rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${Math.round((todayDone / (todayItems.length + todayDone)) * 100)}%` }}
               transition={{ duration: 0.6, ease: "easeOut" }}
             />
-          </div>
-          <span className="text-xs text-slate-400 tabular-nums">
-            {todayDone}/{todayItems.length + todayDone}
-          </span>
-          {todayDone === todayItems.length + todayDone && todayDone > 0 && (
-            <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Wszystko gotowe
-            </span>
           )}
         </div>
-      )}
+        <span className="text-xs text-slate-400 tabular-nums">
+          {todayDone}/{todayItems.length + todayDone}
+        </span>
+        {todayDone > 0 && todayDone === todayItems.length + todayDone && (
+          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Wszystko gotowe
+          </span>
+        )}
+      </div>
 
       {/* ── Główna siatka (2 kolumny) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -455,10 +455,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
               <span className="w-1 h-5 rounded-full bg-orange-500 flex-shrink-0" />
               <span className="text-sm font-bold text-slate-800">Agenda dnia</span>
               {todayDone > 0 && (
-                <span className="ml-auto text-xs text-green-600 font-medium flex items-center gap-1">
+                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {todayDone} zrobione
                 </span>
               )}
+              <button
+                onClick={() => setEditingTask({ dueDate: TODAY, status: "Niezrobione", priority: "Normalny", type: "task" })}
+                className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 border border-orange-200 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Dodaj
+              </button>
             </div>
             <AnimatePresence>
               {todayItems.length > 0 ? (
