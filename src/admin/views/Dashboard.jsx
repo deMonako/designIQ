@@ -420,29 +420,6 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
 
       <div className="h-px bg-slate-200" />
 
-      {/* ── Postęp na dziś ── */}
-      <div className="flex items-center gap-2.5">
-        <span className="text-xs text-slate-400 shrink-0">Dziś:</span>
-        <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
-          {(todayItems.length + todayDone) > 0 && (
-            <motion.div
-              className="h-full bg-orange-400 rounded-full"
-              initial={{ width: 0 }}
-              animate={{ width: `${Math.round((todayDone / (todayItems.length + todayDone)) * 100)}%` }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-            />
-          )}
-        </div>
-        <span className="text-xs text-slate-400 tabular-nums">
-          {todayDone}/{todayItems.length + todayDone}
-        </span>
-        {todayDone > 0 && todayDone === todayItems.length + todayDone && (
-          <span className="text-xs text-green-600 font-medium flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" /> Wszystko gotowe
-          </span>
-        )}
-      </div>
-
       {/* ── Główna siatka (2 kolumny) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
