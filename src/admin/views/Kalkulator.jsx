@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Calculator, FolderKanban, RefreshCw, Trash2, Plus,
+  Calculator, FolderKanban, RefreshCw, Plus,
   ShoppingCart, CheckCircle2, AlertCircle, ChevronDown,
   ChevronRight, X, Cpu, BarChart3, Package,
 } from "lucide-react";
@@ -14,10 +14,31 @@ import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
-const CATALOG = loadProductCatalog();
+// Katalog awaryjny (hardcoded) — używany gdy brak loxone.json na Drive
+const FALLBACK_CATALOG = loadProductCatalog();
 
-// Domyślne urządzenie sterujące dla każdego typu zasobu
-const DEFAULT_CONTROL = {
+// Mapowanie `typ` z projekt.json na resourceType
+const TYP_TO_RESOURCE = [
+  { match: ["włącz", "przycisk", "panel doty"],          resource: "digital_input"  },
+  { match: ["czujnik obecn", "pir", "ruch"],              resource: "digital_input"  },
+  { match: ["czujnik temper", "czujnik wilg", "analog"],  resource: "analog_input"   },
+  { match: ["led", "rgbw", "rgb", "listwa"],              resource: "rgbw_output"    },
+  { match: ["12v", "dimmer", "ściemn", "pwm"],            resource: "dimmer_output"  },
+  { match: ["rolet", "żaluz", "motor", "napęd"],          resource: "motor_output"   },
+  { match: ["230v", "oświetl", "gniazd", "relay"],        resource: "relay_output"   },
+];
+
+function mapTypToResource(typ) {
+  const t = (typ ?? "").toLowerCase();
+  for (const { match, resource } of TYP_TO_RESOURCE) {
+    if (match.some(m => t.includes(m))) return resource;
+  }
+  return "relay_output"; // domyślnie przekaźnik
+}
+
+// Domyślny produkt sterujący dla każdego resourceType (po id z katalogu)
+// Klucze muszą pasować do `id` produktów w FALLBACK_CATALOG lub loxone.json
+const DEFAULT_CONTROL_BY_RESOURCE = {
   relay_output:  "lox-relay-ext",
   dimmer_output: "lox-dimmer-ext",
   rgbw_output:   "lox-rgbw-dimmer",
@@ -44,11 +65,14 @@ const RESOURCE_LABEL = {
   analog_input:  "We. analog.",
 };
 
-function buildDefaultAssignments(points) {
+function buildDefaultAssignments(points, catalog) {
   const result = {};
   for (const pt of points) {
+    const defaultId = DEFAULT_CONTROL_BY_RESOURCE[pt.resourceType];
+    // Sprawdź czy domyślny produkt istnieje w katalogu
+    const exists = catalog.some(p => p.id === defaultId);
     result[pt.id] = {
-      controlDevice: DEFAULT_CONTROL[pt.resourceType] ?? "uncontrolled",
+      controlDevice: exists ? defaultId : "uncontrolled",
       ioCount: 1,
       materials: [],
     };
@@ -56,9 +80,9 @@ function buildDefaultAssignments(points) {
   return result;
 }
 
-function calculateSummary(points, assignments, matList, cennik) {
-  const deviceIO = {};    // productId -> totalIO
-  const matCount = {};    // matName -> qty
+function calculateSummary(points, assignments, catalog, matList, cennik) {
+  const deviceIO = {};  // productId -> totalIO
+  const matCount = {};  // matName -> qty
 
   for (const pt of points) {
     const a = assignments[pt.id];
@@ -77,7 +101,7 @@ function calculateSummary(points, assignments, matList, cennik) {
   ];
 
   const deviceItems = Object.entries(deviceIO).map(([productId, totalIO]) => {
-    const product = CATALOG.find(p => p.id === productId);
+    const product = catalog.find(p => p.id === productId);
     if (!product) return null;
     return {
       id: `dev-${productId}`,
@@ -86,7 +110,7 @@ function calculateSummary(points, assignments, matList, cennik) {
       totalIO,
       outputsPerUnit: product.outputsPerUnit,
       quantity: Math.ceil(totalIO / product.outputsPerUnit),
-      unit: product.unit,
+      unit: product.unit ?? "szt.",
       category: "smart_home",
       priceEst: allPrices.find(c => String(c.sku) === product.partNumber)?.price_pln ?? 0,
     };
@@ -107,24 +131,13 @@ function calculateSummary(points, assignments, matList, cennik) {
   return { deviceItems, materialItems };
 }
 
-// Próba odgadnięcia resourceType z nazwy warstwy DWG
-function guessResourceType(layer) {
-  const l = layer.toLowerCase();
-  if (l.includes("dim"))                              return "dimmer_output";
-  if (l.includes("rgb") || l.includes("led"))         return "rgbw_output";
-  if (l.includes("bld") || l.includes("motor") || l.includes("rol")) return "motor_output";
-  if (l.includes("tmp") || l.includes("analog"))      return "analog_input";
-  if (l.includes("btn") || l.includes("dig"))         return "digital_input";
-  return "relay_output";
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // MaterialRow — jeden wiersz materiału przypisanego do punktu
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MaterialRow({ mat, onQtyChange, onRemove }) {
   return (
-    <div className="flex items-center gap-2 py-1">
+    <div className="flex items-center gap-2 py-0.5">
       <span className="flex-1 text-xs text-slate-700 truncate">{mat.name}</span>
       <input
         type="number" min="1" value={mat.qty}
@@ -132,7 +145,7 @@ function MaterialRow({ mat, onQtyChange, onRemove }) {
         className="w-12 text-center border border-slate-200 rounded px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-400"
       />
       <span className="text-xs text-slate-400">szt.</span>
-      <button onClick={onRemove} className="p-0.5 text-slate-300 hover:text-red-500 rounded">
+      <button onClick={onRemove} className="p-0.5 text-slate-300 hover:text-red-500 rounded flex-shrink-0">
         <X className="w-3 h-3" />
       </button>
     </div>
@@ -172,7 +185,7 @@ function AddMaterialRow({ matOptions, onAdd }) {
   };
 
   return (
-    <div className="flex items-center gap-2 pt-1 border-t border-slate-100 mt-1" ref={ref}>
+    <div className="flex items-center gap-2 pt-1.5 mt-1" ref={ref}>
       <div className="relative flex-1">
         <input
           value={search}
@@ -217,15 +230,20 @@ function AddMaterialRow({ matOptions, onAdd }) {
 // PointRow — jeden wiersz punktu instalacyjnego
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpanded, onToggleExpand }) {
+function PointRow({ point, assignment, onAssignmentChange, matOptions, catalog, isExpanded, onToggleExpand }) {
+  // Niezależny stan zwijania listy dodanych materiałów
+  const [matsOpen, setMatsOpen] = useState(true);
+
   const updateControl = (deviceId) =>
     onAssignmentChange({ ...assignment, controlDevice: deviceId });
 
   const updateIoCount = (count) =>
     onAssignmentChange({ ...assignment, ioCount: count });
 
-  const addMaterial = (mat) =>
+  const addMaterial = (mat) => {
     onAssignmentChange({ ...assignment, materials: [...(assignment.materials ?? []), mat] });
+    setMatsOpen(true); // rozwiń przy dodawaniu
+  };
 
   const updateMaterialQty = (idx, qty) => {
     const mats = [...(assignment.materials ?? [])];
@@ -254,7 +272,7 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
             {RESOURCE_LABEL[point.resourceType] ?? point.resourceType}
           </span>
         </td>
-        {/* Element sterujący */}
+        {/* Element sterujący z loxone.json */}
         <td className="px-3 py-2">
           <select
             value={assignment.controlDevice ?? "uncontrolled"}
@@ -262,7 +280,7 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
             className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[190px] w-full"
           >
             <option value="uncontrolled">— niesterowane —</option>
-            {CATALOG.map(p => (
+            {catalog.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
@@ -271,7 +289,7 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
         <td className="px-3 py-2 text-center">
           {assignment.controlDevice !== "uncontrolled" ? (
             <input
-              type="number" min="1" max="12" value={assignment.ioCount ?? 1}
+              type="number" min="1" max="32" value={assignment.ioCount ?? 1}
               onChange={e => updateIoCount(Math.max(1, parseInt(e.target.value) || 1))}
               className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
             />
@@ -279,7 +297,7 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
             <span className="text-xs text-slate-300">—</span>
           )}
         </td>
-        {/* Materiały — przycisk otwierający inline panel */}
+        {/* Materiały — przycisk toggle */}
         <td className="px-3 py-2">
           <button
             onClick={onToggleExpand}
@@ -302,19 +320,43 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
           </button>
         </td>
       </tr>
+
       {/* Rozwijany panel materiałów */}
       {isExpanded && (
         <tr className="bg-orange-50/40 border-b border-orange-100/60">
-          <td colSpan={6} className="px-6 py-2">
-            <div className="max-w-sm">
-              {(assignment.materials ?? []).map((mat, idx) => (
-                <MaterialRow
-                  key={mat.id ?? idx}
-                  mat={mat}
-                  onQtyChange={qty => updateMaterialQty(idx, qty)}
-                  onRemove={() => removeMaterial(idx)}
-                />
-              ))}
+          <td colSpan={6} className="px-6 py-2.5">
+            <div className="max-w-md space-y-1">
+
+              {/* Lista dodanych materiałów z możliwością zwinięcia */}
+              {matCount > 0 && (
+                <div>
+                  <button
+                    onClick={() => setMatsOpen(v => !v)}
+                    className="flex items-center gap-1 text-[11px] text-slate-500 font-medium hover:text-slate-700 mb-1"
+                  >
+                    {matsOpen
+                      ? <ChevronDown className="w-3 h-3" />
+                      : <ChevronRight className="w-3 h-3" />
+                    }
+                    Dodane materiały ({matCount})
+                  </button>
+
+                  {matsOpen && (
+                    <div className="pl-1 border-l-2 border-orange-200 space-y-0.5 mb-2">
+                      {assignment.materials.map((mat, idx) => (
+                        <MaterialRow
+                          key={mat.id ?? idx}
+                          mat={mat}
+                          onQtyChange={qty => updateMaterialQty(idx, qty)}
+                          onRemove={() => removeMaterial(idx)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Formularz dodawania */}
               <AddMaterialRow matOptions={matOptions} onAdd={addMaterial} />
             </div>
           </td>
@@ -325,10 +367,10 @@ function PointRow({ point, assignment, onAssignmentChange, matOptions, isExpande
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RoomGroup — sekcja z punktami z jednego pomieszczenia
+// RoomGroup — sekcja z punktami z jednego pomieszczenia / piętra
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RoomGroup({ room, points, assignments, onAssignmentChange, matOptions, expandedRows, onToggleRow }) {
+function RoomGroup({ room, points, assignments, onAssignmentChange, matOptions, catalog, expandedRows, onToggleRow }) {
   const [open, setOpen] = useState(true);
 
   return (
@@ -355,6 +397,7 @@ function RoomGroup({ room, points, assignments, onAssignmentChange, matOptions, 
           assignment={assignments[pt.id] ?? { controlDevice: "uncontrolled", ioCount: 1, materials: [] }}
           onAssignmentChange={a => onAssignmentChange(pt.id, a)}
           matOptions={matOptions}
+          catalog={catalog}
           isExpanded={expandedRows.has(pt.id)}
           onToggleExpand={() => onToggleRow(pt.id)}
         />
@@ -448,7 +491,6 @@ function SummaryTable({ deviceItems, materialItems }) {
         </div>
       )}
 
-      {/* Suma */}
       {total > 0 && (
         <div className="flex justify-end pt-2 border-t border-slate-100">
           <div className="text-right">
@@ -478,8 +520,12 @@ function PointCalculator({ projects }) {
   const [assignments, setAssignments] = useState({});
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [view, setView] = useState("points"); // "points" | "summary"
+
+  // Dane zewnętrzne
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);  // loxone.json lub fallback
   const [cennik, setCennik] = useState([]);
   const [matList, setMatList] = useState([]);
+
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -487,19 +533,21 @@ function PointCalculator({ projects }) {
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
-  // Wczytaj cennik i listę materiałów
+  // Wczytaj katalog Loxone + cennik + listę materiałów przy starcie
   useEffect(() => {
     if (!GAS_ON) return;
     Promise.all([
+      GAS.getLoxoneJson().catch(() => []),
       gasGet("getCennik").catch(() => []),
       gasGet("getMaterialyJson").catch(() => []),
-    ]).then(([cennikData, matData]) => {
+    ]).then(([loxData, cennikData, matData]) => {
+      if (Array.isArray(loxData) && loxData.length > 0) setCatalog(loxData);
       setCennik(Array.isArray(cennikData) ? cennikData : []);
       setMatList(Array.isArray(matData) ? matData : []);
     });
   }, []);
 
-  // Połączona lista do autocomplete materiałów
+  // Połączona lista do autocomplete materiałów (cennik + materialy.json)
   const matOptions = useMemo(() => {
     const all = [
       ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln })),
@@ -509,7 +557,7 @@ function PointCalculator({ projects }) {
     return all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name));
   }, [cennik, matList]);
 
-  // Wczytaj punkty dla wybranego projektu
+  // Wczytaj punkty — PRIORYTET: projekt.json z Google Drive
   const handleLoadPoints = useCallback(async () => {
     if (!project) return;
     setLoading(true);
@@ -522,52 +570,71 @@ function PointCalculator({ projects }) {
     try {
       let pts = [];
 
-      // Najpierw próbujemy danych testowych (po kodzie projektu)
-      try {
-        pts = loadInstallationPoints(project.code);
-      } catch {
-        // Jeśli brak hardcoded danych — próbujemy GAS (plik projekt.json)
-        if (GAS_ON) {
-          const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
-          if (result?.attribs) {
-            pts = Object.entries(result.attribs).map(([handle, a]) => ({
-              id: a.tag ?? handle,
-              room: a.floor ?? a.layer ?? "—",
-              function: a.desc ?? a.tag ?? handle,
-              resourceType: guessResourceType(a.layer ?? ""),
-              outputCount: 1,
-            }));
+      // 1. Próba wczytania z Google Drive (projekt.json / projekt_Piętro.json)
+      if (GAS_ON) {
+        const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
+        if (result?.floors?.length > 0) {
+          for (const floor of result.floors) {
+            const { attribs, name: floorName } = floor;
+            if (!attribs || typeof attribs !== "object") continue;
+            for (const [handle, a] of Object.entries(attribs)) {
+              if (handle === "_meta" || !a || typeof a !== "object") continue;
+              pts.push({
+                id:           a.tag   ?? handle,
+                room:         a.pomieszczenie  ?? "—",
+                floor:        a.kondygnacja    ?? floorName ?? "—",
+                function:     a.uwagi ?? a.rola ?? a.tag ?? handle,
+                resourceType: mapTypToResource(a.typ ?? ""),
+                outputCount:  1,
+              });
+            }
           }
         }
       }
 
+      // 2. Fallback: dane testowe (DOKTOR) — gdy GAS wyłączony lub brak pliku na Drive
       if (pts.length === 0) {
-        setLoadError("Brak danych instalacyjnych dla tego projektu. Wgraj plik projekt.json do Google Drive.");
+        try {
+          pts = loadInstallationPoints(project.code).map(p => ({ ...p, floor: "—" }));
+        } catch {
+          // projekt bez danych testowych
+        }
+      }
+
+      if (pts.length === 0) {
+        setLoadError(
+          GAS_ON
+            ? "Brak danych instalacyjnych. Wgraj plik projekt.json do folderu projektu na Google Drive."
+            : "Brak danych testowych dla tego projektu."
+        );
       } else {
         setPoints(pts);
-        setAssignments(buildDefaultAssignments(pts));
+        setAssignments(buildDefaultAssignments(pts, catalog));
       }
     } catch (e) {
-      setLoadError("Błąd ładowania punktów: " + (e?.message ?? "nieznany błąd"));
+      setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
     } finally {
       setLoading(false);
     }
-  }, [project]);
+  }, [project, catalog]);
 
-  // Grupowanie punktów po pomieszczeniu
+  // Grupowanie punktów: kondygnacja → pomieszczenie
   const rooms = useMemo(() => {
     const map = {};
     for (const pt of points) {
-      const r = pt.room ?? "—";
-      if (!map[r]) map[r] = [];
-      map[r].push(pt);
+      const key =
+        pt.floor && pt.floor !== "—"
+          ? `${pt.floor} — ${pt.room}`
+          : (pt.room ?? "—");
+      if (!map[key]) map[key] = [];
+      map[key].push(pt);
     }
     return map;
   }, [points]);
 
   const summary = useMemo(
-    () => calculateSummary(points, assignments, matList, cennik),
-    [points, assignments, matList, cennik],
+    () => calculateSummary(points, assignments, catalog, matList, cennik),
+    [points, assignments, catalog, matList, cennik],
   );
 
   const handleToggleRow = useCallback((id) => {
@@ -637,6 +704,7 @@ function PointCalculator({ projects }) {
             Przypisz urządzenia i materiały do punktów — system wyliczy zestawienie
           </div>
         </div>
+        {/* Przełącznik widoku — widoczny po wczytaniu punktów */}
         {points.length > 0 && (
           <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 shrink-0">
             <button
@@ -742,6 +810,7 @@ function PointCalculator({ projects }) {
                       assignments={assignments}
                       onAssignmentChange={handleAssignmentChange}
                       matOptions={matOptions}
+                      catalog={catalog}
                       expandedRows={expandedRows}
                       onToggleRow={handleToggleRow}
                     />

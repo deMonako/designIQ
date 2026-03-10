@@ -418,6 +418,25 @@ function doGet(e) {
         return ok([]); // plik nie istnieje jeszcze – zwróć pustą tablicę
       }
 
+      // Zwraca zawartość loxone.json z folderu Materiały na Drive
+      // GET ?action=getLoxoneJson
+      case "getLoxoneJson": {
+        var loxFolder = getOrCreateMaterialsFolder();
+        if (!loxFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var loxFiles = loxFolder.getFiles();
+        while (loxFiles.hasNext()) {
+          var lf = loxFiles.next();
+          if (lf.getName().toLowerCase() === "loxone.json") {
+            try {
+              return ok(JSON.parse(lf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania loxone.json: " + ex.message);
+            }
+          }
+        }
+        return ok([]); // plik nie istnieje jeszcze – zwróć pustą tablicę
+      }
+
       // Zwraca zawartość cennik.json z folderu Materiały na Drive
       // GET ?action=getCennik
       case "getCennik": {

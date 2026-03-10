@@ -264,6 +264,11 @@ export async function upsertWycena(wycena) {
 // ZAKUPY
 // ────────────────────────────────────────────────────────────────────────────────
 
+/** Pobiera katalog urządzeń Loxone z pliku loxone.json na Drive */
+export async function getLoxoneJson() {
+  return gasGet("getLoxoneJson");
+}
+
 /** Pobiera listę zakupów projektu po projectId */
 export async function getZakupy(projectId) {
   return gasGet("getZakupy", { projectId });
