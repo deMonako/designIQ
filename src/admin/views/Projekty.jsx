@@ -10,7 +10,6 @@ import {
 import { isOverdue, TODAY } from "../mockData";
 import { uploadFile } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
-import ZakupyEditor from "./ZakupyEditor";
 import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
 
@@ -198,7 +197,7 @@ function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
   onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask,
   onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible,
-  onAddChecklist, onToggleChecklistItem,
+  onAddChecklist, onToggleChecklistItem, onNavigateToZakupy,
 }) {
   const [activeTab,     setActiveTab]     = useState("tasks");
   const [editingNote,   setEditingNote]   = useState(false);
@@ -212,7 +211,6 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
-  const [showZakupy,        setShowZakupy]        = useState(false);
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -1430,7 +1428,7 @@ function ProjectDetail({
                     <List className="w-4 h-4 text-green-600" /> Lista zakupów
                   </h3>
                   <button
-                    onClick={() => setShowZakupy(true)}
+                    onClick={() => onNavigateToZakupy?.(project)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-semibold hover:bg-green-100 transition-colors"
                   >
                     <List className="w-3.5 h-3.5" /> Edytuj zakupy
@@ -1691,17 +1689,11 @@ function ProjectDetail({
         />
       )}
 
-      {showZakupy && (
-        <ZakupyEditor
-          project={project}
-          onClose={() => setShowZakupy(false)}
-        />
-      )}
     </div>
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject, onNavigateToZakupy }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1738,6 +1730,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         onAddProjectDoc={onAddProjectDoc}
         onDeleteProjectDoc={onDeleteProjectDoc}
         onToggleDocClientVisible={onToggleDocClientVisible}
+        onNavigateToZakupy={onNavigateToZakupy}
       />
     );
   }

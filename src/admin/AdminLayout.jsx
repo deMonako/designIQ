@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
   BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
   ChevronRight, Users, Search, Plus, User, Calendar,
-  CheckCircle2, AlertCircle, RefreshCw, Calculator, BookOpen,
+  CheckCircle2, AlertCircle, RefreshCw, Calculator, BookOpen, ShoppingCart,
 } from "lucide-react";
 import { TODAY } from "./mockData";
 
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { id: "klienci",    label: "Klienci",    icon: Users,          badge: "klienci" },
   { id: "zadania",    label: "Zadania",    icon: CheckSquare,    badge: "zadania" },
   { id: "checklisty",  label: "Checklisty",  icon: ClipboardList },
+  { id: "zakupy",      label: "Zakupy",      icon: ShoppingCart },
   { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
   { id: "materialy",   label: "Materiały",   icon: Package },
   { id: "analityka",   label: "Analityka",   icon: BarChart2 },
@@ -119,7 +120,8 @@ export default function AdminLayout({
 
   const VIEW_TITLES = {
     dashboard: "Dashboard", projekty: "Projekty", klienci: "Klienci",
-    zadania: "Zadania", checklisty: "Checklisty", materialy: "Materiały",
+    zadania: "Zadania", checklisty: "Checklisty", zakupy: "Zakupy",
+    baza_wiedzy: "Baza wiedzy", materialy: "Materiały",
     analityka: "Analityka", kalkulator: "Kalkulator", ustawienia: "Ustawienia",
   };
 

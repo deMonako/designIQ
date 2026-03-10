@@ -10,6 +10,7 @@ import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
 import MateriałyJson from "../admin/views/MateriałyJson";
+import ZakupyView   from "../admin/views/Zakupy";
 import Kalkulator   from "../admin/views/Kalkulator";
 import AddProjectModal from "../admin/AddProjectModal";
 import {
@@ -73,6 +74,7 @@ export default function Admin() {
   const [loading,            setLoading]            = useState(GAS_ON);
   const [syncError,          setSyncError]          = useState(null);
   const [syncStatus,         setSyncStatus]         = useState("synced"); // "synced" | "syncing" | "error"
+  const [zakupyInitProjectId, setZakupyInitProjectId] = useState(null);
 
   // ── State (inicjalizacja zależy od trybu) ──────────────────────────────────
   const [clients, setClients] = useState(() =>
@@ -366,6 +368,11 @@ export default function Admin() {
   // ── Nawigacja ─────────────────────────────────────────────────────────────
   const openProject      = (project) => { setSelectedProject(project); setCurrentView("projekty"); };
   const navigateToClient = () => setCurrentView("klienci");
+  const navigateToZakupy = (project) => {
+    setZakupyInitProjectId(project?.id ?? null);
+    setSelectedProject(null);
+    setCurrentView("zakupy");
+  };
 
   // ── Guard ─────────────────────────────────────────────────────────────────
   if (!isAuthenticated) return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
@@ -400,6 +407,7 @@ export default function Admin() {
             onDeleteProjectDoc={handleDeleteProjectDoc}
             onToggleDocClientVisible={handleToggleDocClientVisible}
             onOpenAddProject={openAddProject}
+            onNavigateToZakupy={navigateToZakupy}
           />
         );
       case "klienci":
@@ -424,6 +432,8 @@ export default function Admin() {
             onAddChecklist={handleAddChecklist} onDeleteChecklist={handleDeleteChecklist}
           />
         );
+      case "zakupy":
+        return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} />;
       case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
       case "materialy":
