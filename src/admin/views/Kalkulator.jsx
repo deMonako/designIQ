@@ -49,15 +49,6 @@ const DEFAULT_CONTROL = {
   analog_input:  "lox-analog-ext",
 };
 
-const RESOURCE_BADGE = {
-  relay_output:  "bg-blue-100 text-blue-700",
-  dimmer_output: "bg-purple-100 text-purple-700",
-  rgbw_output:   "bg-pink-100 text-pink-700",
-  motor_output:  "bg-green-100 text-green-700",
-  digital_input: "bg-yellow-100 text-yellow-700",
-  analog_input:  "bg-orange-100 text-orange-700",
-};
-
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
 
 const COLS = [
@@ -84,7 +75,7 @@ function attribsToRows(attribs, floorName, catalog) {
     const defaultId = DEFAULT_CONTROL[resourceType];
     const exists = catalog.some(p => p.id === defaultId);
     rows.push({
-      _id:          a.tag ?? handle,
+      _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",
@@ -294,7 +285,7 @@ function MaterialsPanel({ row, onRowChange, matOptions, colSpan }) {
 
   return (
     <tr className="bg-orange-50/50 border-b border-orange-100">
-      <td colSpan={colSpan} className="px-4 py-3">
+      <td colSpan={colSpan} className="px-4 py-2">
         <div className="max-w-lg">
           {row.materials.length > 0 && (
             <div className="mb-2">
@@ -445,6 +436,9 @@ function PointCalculator({ projects }) {
   const [filterFloor, setFilterFloor] = useState("all");
   const [filterRoom, setFilterRoom] = useState("all");
 
+  // Filtr master
+  const [filterMasterOnly, setFilterMasterOnly] = useState(false);
+
   // Sortowanie
   const [sortKey, setSortKey] = useState("pomieszczenie");
   const [sortDir, setSortDir] = useState("asc");
@@ -519,11 +513,18 @@ function PointCalculator({ projects }) {
   }, [project, catalog]);
 
   // Filtrowanie i sortowanie
-  const { uniqueTypy, uniqueFloors, uniqueRooms } = useMemo(() => ({
+  const { uniqueTypy, uniqueFloors } = useMemo(() => ({
     uniqueTypy:  [...new Set(rows.map(r => r.typ).filter(Boolean))].sort(),
     uniqueFloors:[...new Set(rows.map(r => r.kondygnacja).filter(Boolean))].sort(),
-    uniqueRooms: [...new Set(rows.map(r => r.pomieszczenie).filter(Boolean))].sort(),
   }), [rows]);
+
+  const uniqueRooms = useMemo(() => {
+    const base = filterFloor === "all" ? rows : rows.filter(r => r.kondygnacja === filterFloor);
+    return [...new Set(base.map(r => r.pomieszczenie).filter(Boolean))].sort();
+  }, [rows, filterFloor]);
+
+  // Reset filtra pomieszczenia gdy zmieni się kondygnacja
+  useEffect(() => { setFilterRoom("all"); }, [filterFloor]);
 
   const filteredRows = useMemo(() => {
     const q = search.toLowerCase();
@@ -532,6 +533,7 @@ function PointCalculator({ projects }) {
         if (filterTyp   !== "all" && r.typ          !== filterTyp)   return false;
         if (filterFloor !== "all" && r.kondygnacja  !== filterFloor) return false;
         if (filterRoom  !== "all" && r.pomieszczenie !== filterRoom)  return false;
+        if (filterMasterOnly && !(r.rola ?? "").toLowerCase().includes("master")) return false;
         if (q && !["tag","rola","pomieszczenie","uwagi","typ","wariant"].some(k => (r[k] ?? "").toLowerCase().includes(q))) return false;
         return true;
       })
@@ -695,6 +697,17 @@ function PointCalculator({ projects }) {
                 {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
 
+              {/* Filtr: tylko master */}
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap border border-slate-200 rounded-lg px-2.5 py-2 hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  checked={filterMasterOnly}
+                  onChange={e => setFilterMasterOnly(e.target.checked)}
+                  className="rounded accent-orange-500"
+                />
+                Tylko master
+              </label>
+
               {/* Licznik */}
               <span className="text-xs text-slate-400 whitespace-nowrap">
                 {filteredRows.length} / {rows.length} pkt.
@@ -747,7 +760,7 @@ function PointCalculator({ projects }) {
                     {activeCols.map(col => (
                       <th
                         key={col.key}
-                        className={`text-left px-3 py-2.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
+                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
                         onClick={() => col.sortable && handleSort(col.key)}
                       >
                         <div className="flex items-center gap-1">
@@ -756,9 +769,9 @@ function PointCalculator({ projects }) {
                       </th>
                     ))}
                     {/* Stałe kolumny kalkulatora */}
-                    <th className="text-left px-3 py-2.5 w-48">Element sterujący</th>
-                    <th className="text-center px-3 py-2.5 w-14">I/O</th>
-                    <th className="text-left px-3 py-2.5 w-24">Materiały</th>
+                    <th className="text-left px-3 py-1.5 w-48">Element sterujący</th>
+                    <th className="text-center px-3 py-1.5 w-14">I/O</th>
+                    <th className="text-left px-3 py-1.5 w-24">Materiały</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -769,19 +782,14 @@ function PointCalculator({ projects }) {
                       <tr className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${expandedId === row._id ? "bg-orange-50/30" : ""}`}>
                         {/* Edytowalne kolumny z JSON */}
                         {activeCols.map(col => (
-                          <td key={col.key} className="px-3 py-1.5">
+                          <td key={col.key} className="px-3 py-0.5">
                             {col.key === "kolor" ? (
                               <div className="flex items-center gap-1.5">
                                 {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
                                 <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
                               </div>
                             ) : col.key === "typ" ? (
-                              <div className="space-y-1">
-                                <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
-                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full inline-block ${RESOURCE_BADGE[row.resourceType] ?? "bg-slate-100 text-slate-500"}`}>
-                                  {row.resourceType?.replace("_", " ") ?? ""}
-                                </span>
-                              </div>
+                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
                             ) : (
                               <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
                             )}
@@ -789,7 +797,7 @@ function PointCalculator({ projects }) {
                         ))}
 
                         {/* Element sterujący */}
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-0.5">
                           <select
                             value={row.controlDevice ?? "uncontrolled"}
                             onChange={e => updateRow(row._id, { controlDevice: e.target.value })}
@@ -801,7 +809,7 @@ function PointCalculator({ projects }) {
                         </td>
 
                         {/* I/O */}
-                        <td className="px-3 py-1.5 text-center">
+                        <td className="px-3 py-0.5 text-center">
                           {row.controlDevice !== "uncontrolled" ? (
                             <input
                               type="number" min="1" max="32" value={row.ioCount ?? 1}
@@ -812,7 +820,7 @@ function PointCalculator({ projects }) {
                         </td>
 
                         {/* Materiały */}
-                        <td className="px-3 py-1.5">
+                        <td className="px-3 py-0.5">
                           <button
                             onClick={() => setExpandedId(id => id === row._id ? null : row._id)}
                             className={`flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1 transition-colors ${
