@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import * as XLSX from "xlsx";
 import {
   Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
   ShoppingCart, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-  X, ChevronUp, SlidersHorizontal, Eye, EyeOff, BarChart3, Package, Cpu,
+  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
@@ -140,57 +139,53 @@ function calculateSummary(rows, catalog, matList, cennik) {
   return { deviceItems, materialItems };
 }
 
-// ── XLSX export ───────────────────────────────────────────────────────────────
+// ── CSV export (bez zewnętrznych zależności, otwieralny w Excelu) ─────────────
+
+function toCsvRow(cells) {
+  return cells.map(v => {
+    const s = String(v ?? "").replace(/"/g, '""');
+    return `"${s}"`;
+  }).join(",");
+}
+
+function downloadCsv(content, filename) {
+  // BOM UTF-8 — Excel wyświetla polskie znaki poprawnie
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
 
 function exportXLSX(rows, catalog, summary) {
-  const wb = XLSX.utils.book_new();
+  // Arkusz 1 — Punkty instalacyjne
+  const headers1 = ["ID/Tag","Kondygnacja","Pomieszczenie","Typ","Rola","Uwagi","Przewód","Wysokosc","Wariant","Kolor","El. sterujacy","I/O","Materialy"];
+  const data1 = rows.map(r => [
+    r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
+    r.przewód, r.wysokość, r.wariant, r.kolor,
+    r.controlDevice === "uncontrolled" ? "niesterowane" : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
+    r.controlDevice !== "uncontrolled" ? r.ioCount : "",
+    (r.materials ?? []).map(m => `${m.name} x${m.qty}`).join("; "),
+  ]);
+  const csv1 = [toCsvRow(headers1), ...data1.map(toCsvRow)].join("\n");
+  downloadCsv(csv1, "punkty_instalacyjne.csv");
 
-  // Arkusz 1: Punkty instalacyjne
-  const punktyData = rows.map(r => ({
-    "ID/Tag":        r.tag,
-    "Kondygnacja":   r.kondygnacja,
-    "Pomieszczenie": r.pomieszczenie,
-    "Typ":           r.typ,
-    "Rola":          r.rola,
-    "Uwagi":         r.uwagi,
-    "Przewód":       r.przewód,
-    "Wysokość":      r.wysokość,
-    "Wariant":       r.wariant,
-    "Kolor":         r.kolor,
-    "El. sterujący": r.controlDevice === "uncontrolled"
-      ? "niesterowane"
-      : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
-    "I/O":           r.controlDevice !== "uncontrolled" ? r.ioCount : "",
-    "Materiały":     (r.materials ?? []).map(m => `${m.name} ×${m.qty}`).join("; "),
-  }));
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(punktyData), "Punkty");
-
-  // Arkusz 2: Zestawienie urządzeń
-  if (summary.deviceItems.length > 0) {
-    const devData = summary.deviceItems.map(d => ({
-      "Urządzenie":   d.name,
-      "Nr kat.":      d.partNumber,
-      "Zajęte I/O":  d.totalIO,
-      "Dost. I/O":   d.quantity * d.outputsPerUnit,
-      "Ilość (szt.)": d.quantity,
-      "Cena jedn.":   d.priceEst || "",
-      "Wartość":      d.priceEst ? d.quantity * d.priceEst : "",
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(devData), "Urządzenia");
+  // Arkusz 2 — Zestawienie (osobny plik)
+  if (summary.deviceItems.length > 0 || summary.materialItems.length > 0) {
+    const headers2 = ["Kategoria","Nazwa","Nr kat.","Ilosc","Jednostka","Cena jedn.","Wartosc"];
+    const data2 = [
+      ...summary.deviceItems.map(d => [
+        "Urz\u0105dzenie", d.name, d.partNumber, d.quantity, d.unit,
+        d.priceEst || "", d.priceEst ? d.quantity * d.priceEst : "",
+      ]),
+      ...summary.materialItems.map(m => [
+        "Materia\u0142", m.name, "", m.quantity, m.unit,
+        m.priceEst || "", m.priceEst ? m.quantity * m.priceEst : "",
+      ]),
+    ];
+    const csv2 = [toCsvRow(headers2), ...data2.map(toCsvRow)].join("\n");
+    downloadCsv(csv2, "zestawienie.csv");
   }
-
-  // Arkusz 3: Zestawienie materiałów
-  if (summary.materialItems.length > 0) {
-    const matData = summary.materialItems.map(m => ({
-      "Materiał":     m.name,
-      "Ilość (szt.)": m.quantity,
-      "Cena jedn.":   m.priceEst || "",
-      "Wartość":      m.priceEst ? m.quantity * m.priceEst : "",
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matData), "Materiały");
-  }
-
-  XLSX.writeFile(wb, "zestawienie_instalacji.xlsx");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
