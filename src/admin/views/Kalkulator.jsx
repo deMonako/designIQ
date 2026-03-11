@@ -908,7 +908,7 @@ function PointCalculator({ projects }) {
         {/* Empty state */}
         {rows.length === 0 && !loadError && (
           <div className="text-center py-10 text-slate-300 text-sm">
-            {selectedProjectId ? "Kliknij „Wczytaj punkty" aby załadować dane" : "Wybierz projekt aby rozpocząć"}
+            {selectedProjectId ? "Kliknij \u201eWczytaj punkty\u201c aby za\u0142adowa\u0107 dane" : "Wybierz projekt aby rozpocz\u0105\u0107"}
           </div>
         )}
 
