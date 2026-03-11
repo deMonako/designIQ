@@ -9,34 +9,47 @@ import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
-import { loadInstallationPoints } from "../../lib/shoppingList/installationData";
 import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
+import MOCK_PARTER from "../../../mock/projekt_Parter.json";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
 // Katalog awaryjny (hardcoded) — używany gdy brak loxone.json na Drive
 const FALLBACK_CATALOG = loadProductCatalog();
 
-// Mapowanie `typ` z projekt.json na resourceType
-const TYP_TO_RESOURCE = [
-  { match: ["włącz", "przycisk", "panel doty"],          resource: "digital_input"  },
-  { match: ["czujnik obecn", "pir", "ruch"],              resource: "digital_input"  },
-  { match: ["czujnik temper", "czujnik wilg", "analog"],  resource: "analog_input"   },
-  { match: ["led", "rgbw", "rgb", "listwa"],              resource: "rgbw_output"    },
-  { match: ["12v", "dimmer", "ściemn", "pwm"],            resource: "dimmer_output"  },
-  { match: ["rolet", "żaluz", "motor", "napęd"],          resource: "motor_output"   },
-  { match: ["230v", "oświetl", "gniazd", "relay"],        resource: "relay_output"   },
-];
+// Typy które domyślnie trafiają jako "niesterowane" (bez elementu sterującego)
+const UNCONTROLLED_TYPES = new Set([
+  "Gniazda niesterowane",
+  "Sieć internetowa",
+  "Inne",
+]);
+
+// Precyzyjne mapowanie `typ` z projekt.json na resourceType
+const TYP_MAP = {
+  "Włączniki LOXONE":         "digital_input",
+  "Czujniki obecności LOXONE":"digital_input",
+  "Kontaktrony":              "digital_input",
+  "Monitoring":               "digital_input",
+  "Sterowanie":               "digital_input",
+  "Sieć internetowa":         "digital_input",
+  "Oświetlenie 24V":          "dimmer_output",
+  "Oświetlenie zewn. 24V":    "dimmer_output",
+  "Rolety":                   "motor_output",
+  "Audio":                    "relay_output",
+  "Oświetlenie 230V":         "relay_output",
+  "Oświetlenie zewn. 230V":   "relay_output",
+  "Gniazda sterowane":        "relay_output",
+  "Gniazda niesterowane":     "relay_output",
+  "Gniazda 3F":               "relay_output",
+  "Zasilanie":                "relay_output",
+  "Inne":                     "relay_output",
+};
 
 function mapTypToResource(typ) {
-  const t = (typ ?? "").toLowerCase();
-  for (const { match, resource } of TYP_TO_RESOURCE) {
-    if (match.some(m => t.includes(m))) return resource;
-  }
-  return "relay_output"; // domyślnie przekaźnik
+  return TYP_MAP[typ] ?? "relay_output";
 }
 
-// Domyślny produkt sterujący dla każdego resourceType (po id z katalogu)
+// Domyślny produkt sterujący dla każdego resourceType
 // Klucze muszą pasować do `id` produktów w FALLBACK_CATALOG lub loxone.json
 const DEFAULT_CONTROL_BY_RESOURCE = {
   relay_output:  "lox-relay-ext",
@@ -68,11 +81,11 @@ const RESOURCE_LABEL = {
 function buildDefaultAssignments(points, catalog) {
   const result = {};
   for (const pt of points) {
+    const forceUncontrolled = UNCONTROLLED_TYPES.has(pt.rawTyp ?? "");
     const defaultId = DEFAULT_CONTROL_BY_RESOURCE[pt.resourceType];
-    // Sprawdź czy domyślny produkt istnieje w katalogu
     const exists = catalog.some(p => p.id === defaultId);
     result[pt.id] = {
-      controlDevice: exists ? defaultId : "uncontrolled",
+      controlDevice: (forceUncontrolled || !exists) ? "uncontrolled" : defaultId,
       ioCount: 1,
       materials: [],
     };
@@ -570,43 +583,42 @@ function PointCalculator({ projects }) {
     try {
       let pts = [];
 
+      // Pomocnicza konwersja attribs → InstallationPoint[]
+      const attribsToPoints = (attribs, floorName) => {
+        const result = [];
+        for (const [handle, a] of Object.entries(attribs)) {
+          if (handle === "_meta" || !a || typeof a !== "object") continue;
+          result.push({
+            id:           a.tag ?? handle,
+            room:         a.pomieszczenie ?? "—",
+            floor:        a.kondygnacja   ?? floorName ?? "—",
+            function:     a.uwagi ?? a.rola ?? a.tag ?? handle,
+            rawTyp:       a.typ ?? "",
+            resourceType: mapTypToResource(a.typ ?? ""),
+            outputCount:  1,
+          });
+        }
+        return result;
+      };
+
       // 1. Próba wczytania z Google Drive (projekt.json / projekt_Piętro.json)
       if (GAS_ON) {
         const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
-            const { attribs, name: floorName } = floor;
-            if (!attribs || typeof attribs !== "object") continue;
-            for (const [handle, a] of Object.entries(attribs)) {
-              if (handle === "_meta" || !a || typeof a !== "object") continue;
-              pts.push({
-                id:           a.tag   ?? handle,
-                room:         a.pomieszczenie  ?? "—",
-                floor:        a.kondygnacja    ?? floorName ?? "—",
-                function:     a.uwagi ?? a.rola ?? a.tag ?? handle,
-                resourceType: mapTypToResource(a.typ ?? ""),
-                outputCount:  1,
-              });
-            }
+            if (!floor.attribs || typeof floor.attribs !== "object") continue;
+            pts.push(...attribsToPoints(floor.attribs, floor.name));
           }
         }
       }
 
-      // 2. Fallback: dane testowe (DOKTOR) — gdy GAS wyłączony lub brak pliku na Drive
+      // 2. Fallback: lokalny mock (projekt_Parter.json) — gdy GAS wyłączony lub brak pliku
       if (pts.length === 0) {
-        try {
-          pts = loadInstallationPoints(project.code).map(p => ({ ...p, floor: "—" }));
-        } catch {
-          // projekt bez danych testowych
-        }
+        pts = attribsToPoints(MOCK_PARTER, "Parter");
       }
 
       if (pts.length === 0) {
-        setLoadError(
-          GAS_ON
-            ? "Brak danych instalacyjnych. Wgraj plik projekt.json do folderu projektu na Google Drive."
-            : "Brak danych testowych dla tego projektu."
-        );
+        setLoadError("Brak danych instalacyjnych dla tego projektu.");
       } else {
         setPoints(pts);
         setAssignments(buildDefaultAssignments(pts, catalog));
