@@ -1,57 +1,47 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import * as XLSX from "xlsx";
 import {
-  Calculator, FolderKanban, RefreshCw, Plus,
-  ShoppingCart, CheckCircle2, AlertCircle, ChevronDown,
-  ChevronRight, X, Cpu, BarChart3, Package,
+  Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
+  ShoppingCart, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
+  X, ChevronUp, SlidersHorizontal, Eye, EyeOff, BarChart3, Package, Cpu,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
 import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
-import MOCK_PARTER from "../../../mock/projekt_Parter.json";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-
-// Katalog awaryjny (hardcoded) — używany gdy brak loxone.json na Drive
 const FALLBACK_CATALOG = loadProductCatalog();
 
-// Typy które domyślnie trafiają jako "niesterowane" (bez elementu sterującego)
+// ── Mapowania ────────────────────────────────────────────────────────────────
+
 const UNCONTROLLED_TYPES = new Set([
-  "Gniazda niesterowane",
-  "Sieć internetowa",
-  "Inne",
+  "Gniazda niesterowane", "Sieć internetowa", "Inne",
 ]);
 
-// Precyzyjne mapowanie `typ` z projekt.json na resourceType
 const TYP_MAP = {
-  "Włączniki LOXONE":         "digital_input",
-  "Czujniki obecności LOXONE":"digital_input",
-  "Kontaktrony":              "digital_input",
-  "Monitoring":               "digital_input",
-  "Sterowanie":               "digital_input",
-  "Sieć internetowa":         "digital_input",
-  "Oświetlenie 24V":          "dimmer_output",
-  "Oświetlenie zewn. 24V":    "dimmer_output",
-  "Rolety":                   "motor_output",
-  "Audio":                    "relay_output",
-  "Oświetlenie 230V":         "relay_output",
-  "Oświetlenie zewn. 230V":   "relay_output",
-  "Gniazda sterowane":        "relay_output",
-  "Gniazda niesterowane":     "relay_output",
-  "Gniazda 3F":               "relay_output",
-  "Zasilanie":                "relay_output",
-  "Inne":                     "relay_output",
+  "Włączniki LOXONE":          "digital_input",
+  "Czujniki obecności LOXONE": "digital_input",
+  "Kontaktrony":               "digital_input",
+  "Monitoring":                "digital_input",
+  "Sterowanie":                "digital_input",
+  "Sieć internetowa":          "digital_input",
+  "Oświetlenie 24V":           "dimmer_output",
+  "Oświetlenie zewn. 24V":     "dimmer_output",
+  "Rolety":                    "motor_output",
+  "Audio":                     "relay_output",
+  "Oświetlenie 230V":          "relay_output",
+  "Oświetlenie zewn. 230V":    "relay_output",
+  "Gniazda sterowane":         "relay_output",
+  "Gniazda niesterowane":      "relay_output",
+  "Gniazda 3F":                "relay_output",
+  "Zasilanie":                 "relay_output",
+  "Inne":                      "relay_output",
 };
 
-function mapTypToResource(typ) {
-  return TYP_MAP[typ] ?? "relay_output";
-}
-
-// Domyślny produkt sterujący dla każdego resourceType
-// Klucze muszą pasować do `id` produktów w FALLBACK_CATALOG lub loxone.json
-const DEFAULT_CONTROL_BY_RESOURCE = {
+const DEFAULT_CONTROL = {
   relay_output:  "lox-relay-ext",
   dimmer_output: "lox-dimmer-ext",
   rgbw_output:   "lox-rgbw-dimmer",
@@ -60,7 +50,7 @@ const DEFAULT_CONTROL_BY_RESOURCE = {
   analog_input:  "lox-analog-ext",
 };
 
-const RESOURCE_BADGE_COLOR = {
+const RESOURCE_BADGE = {
   relay_output:  "bg-blue-100 text-blue-700",
   dimmer_output: "bg-purple-100 text-purple-700",
   rgbw_output:   "bg-pink-100 text-pink-700",
@@ -69,104 +59,158 @@ const RESOURCE_BADGE_COLOR = {
   analog_input:  "bg-orange-100 text-orange-700",
 };
 
-const RESOURCE_LABEL = {
-  relay_output:  "Przekaźnik",
-  dimmer_output: "Dimmer",
-  rgbw_output:   "RGBW",
-  motor_output:  "Napęd",
-  digital_input: "We. cyt.",
-  analog_input:  "We. analog.",
-};
+// ── Definicje kolumn ─────────────────────────────────────────────────────────
 
-function buildDefaultAssignments(points, catalog) {
-  const result = {};
-  for (const pt of points) {
-    const forceUncontrolled = UNCONTROLLED_TYPES.has(pt.rawTyp ?? "");
-    const defaultId = DEFAULT_CONTROL_BY_RESOURCE[pt.resourceType];
+const COLS = [
+  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true  },
+  { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true  },
+  { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
+  { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
+  { key: "rola",          label: "Rola",           sortable: true,  defaultVisible: true  },
+  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: true  },
+  { key: "przewód",       label: "Przewód",        sortable: false, defaultVisible: false },
+  { key: "wysokość",      label: "Wysokość",       sortable: false, defaultVisible: false },
+  { key: "wariant",       label: "Wariant",        sortable: false, defaultVisible: false },
+  { key: "kolor",         label: "Kolor",          sortable: false, defaultVisible: false },
+];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function attribsToRows(attribs, floorName, catalog) {
+  const rows = [];
+  for (const [handle, a] of Object.entries(attribs)) {
+    if (handle === "_meta" || !a || typeof a !== "object") continue;
+    const rawTyp = a.typ ?? "";
+    const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
+    const defaultId = DEFAULT_CONTROL[resourceType];
     const exists = catalog.some(p => p.id === defaultId);
-    result[pt.id] = {
-      controlDevice: (forceUncontrolled || !exists) ? "uncontrolled" : defaultId,
-      ioCount: 1,
-      materials: [],
-    };
+    rows.push({
+      _id:          a.tag ?? handle,
+      tag:          a.tag          ?? handle,
+      kondygnacja:  a.kondygnacja  ?? floorName ?? "",
+      pomieszczenie:a.pomieszczenie?? "",
+      typ:          rawTyp,
+      rola:         a.rola         ?? "",
+      uwagi:        a.uwagi        ?? "",
+      przewód:      a.przewód      ?? "",
+      wysokość:     a.wysokość     ?? "",
+      wariant:      a.wariant      ?? "",
+      kolor:        a.kolor        ?? "",
+      // kalkulatorowe
+      resourceType,
+      rawTyp,
+      controlDevice: (UNCONTROLLED_TYPES.has(rawTyp) || !exists) ? "uncontrolled" : defaultId,
+      ioCount:       1,
+      materials:     [],
+    });
   }
-  return result;
+  return rows;
 }
 
-function calculateSummary(points, assignments, catalog, matList, cennik) {
-  const deviceIO = {};  // productId -> totalIO
-  const matCount = {};  // matName -> qty
-
-  for (const pt of points) {
-    const a = assignments[pt.id];
-    if (!a) continue;
-    if (a.controlDevice && a.controlDevice !== "uncontrolled") {
-      deviceIO[a.controlDevice] = (deviceIO[a.controlDevice] ?? 0) + (a.ioCount ?? 1);
+function calculateSummary(rows, catalog, matList, cennik) {
+  const deviceIO = {};
+  const matCount = {};
+  for (const r of rows) {
+    if (r.controlDevice && r.controlDevice !== "uncontrolled") {
+      deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
     }
-    for (const m of (a.materials ?? [])) {
+    for (const m of r.materials ?? []) {
       matCount[m.name] = (matCount[m.name] ?? 0) + m.qty;
     }
   }
-
   const allPrices = [
     ...(cennik ?? []),
     ...(matList ?? []).map(m => ({ name: m.name, price_pln: m.price_pln, sku: null })),
   ];
-
   const deviceItems = Object.entries(deviceIO).map(([productId, totalIO]) => {
     const product = catalog.find(p => p.id === productId);
     if (!product) return null;
     return {
-      id: `dev-${productId}`,
-      name: product.name,
-      partNumber: product.partNumber,
-      totalIO,
-      outputsPerUnit: product.outputsPerUnit,
+      id: `dev-${productId}`, name: product.name, partNumber: product.partNumber,
+      totalIO, outputsPerUnit: product.outputsPerUnit,
       quantity: Math.ceil(totalIO / product.outputsPerUnit),
       unit: product.unit ?? "szt.",
-      category: "smart_home",
       priceEst: allPrices.find(c => String(c.sku) === product.partNumber)?.price_pln ?? 0,
     };
   }).filter(Boolean);
-
-  const materialItems = Object.entries(matCount).map(([name, qty]) => {
-    const price = allPrices.find(c => c.name === name)?.price_pln ?? 0;
-    return {
-      id: `mat-${name}`,
-      name,
-      quantity: qty,
-      unit: "szt.",
-      category: "cables",
-      priceEst: price,
-    };
-  });
-
+  const materialItems = Object.entries(matCount).map(([name, qty]) => ({
+    id: `mat-${name}`, name, quantity: qty, unit: "szt.",
+    priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
+  }));
   return { deviceItems, materialItems };
 }
 
+// ── XLSX export ───────────────────────────────────────────────────────────────
+
+function exportXLSX(rows, catalog, summary) {
+  const wb = XLSX.utils.book_new();
+
+  // Arkusz 1: Punkty instalacyjne
+  const punktyData = rows.map(r => ({
+    "ID/Tag":        r.tag,
+    "Kondygnacja":   r.kondygnacja,
+    "Pomieszczenie": r.pomieszczenie,
+    "Typ":           r.typ,
+    "Rola":          r.rola,
+    "Uwagi":         r.uwagi,
+    "Przewód":       r.przewód,
+    "Wysokość":      r.wysokość,
+    "Wariant":       r.wariant,
+    "Kolor":         r.kolor,
+    "El. sterujący": r.controlDevice === "uncontrolled"
+      ? "niesterowane"
+      : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
+    "I/O":           r.controlDevice !== "uncontrolled" ? r.ioCount : "",
+    "Materiały":     (r.materials ?? []).map(m => `${m.name} ×${m.qty}`).join("; "),
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(punktyData), "Punkty");
+
+  // Arkusz 2: Zestawienie urządzeń
+  if (summary.deviceItems.length > 0) {
+    const devData = summary.deviceItems.map(d => ({
+      "Urządzenie":   d.name,
+      "Nr kat.":      d.partNumber,
+      "Zajęte I/O":  d.totalIO,
+      "Dost. I/O":   d.quantity * d.outputsPerUnit,
+      "Ilość (szt.)": d.quantity,
+      "Cena jedn.":   d.priceEst || "",
+      "Wartość":      d.priceEst ? d.quantity * d.priceEst : "",
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(devData), "Urządzenia");
+  }
+
+  // Arkusz 3: Zestawienie materiałów
+  if (summary.materialItems.length > 0) {
+    const matData = summary.materialItems.map(m => ({
+      "Materiał":     m.name,
+      "Ilość (szt.)": m.quantity,
+      "Cena jedn.":   m.priceEst || "",
+      "Wartość":      m.priceEst ? m.quantity * m.priceEst : "",
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(matData), "Materiały");
+  }
+
+  XLSX.writeFile(wb, "zestawienie_instalacji.xlsx");
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// MaterialRow — jeden wiersz materiału przypisanego do punktu
+// EditableCell — komórka z edycją inline
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MaterialRow({ mat, onQtyChange, onRemove }) {
+function EditableCell({ value, onChange, type = "text", placeholder = "—" }) {
   return (
-    <div className="flex items-center gap-2 py-0.5">
-      <span className="flex-1 text-xs text-slate-700 truncate">{mat.name}</span>
-      <input
-        type="number" min="1" value={mat.qty}
-        onChange={e => onQtyChange(Math.max(1, parseInt(e.target.value) || 1))}
-        className="w-12 text-center border border-slate-200 rounded px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-400"
-      />
-      <span className="text-xs text-slate-400">szt.</span>
-      <button onClick={onRemove} className="p-0.5 text-slate-300 hover:text-red-500 rounded flex-shrink-0">
-        <X className="w-3 h-3" />
-      </button>
-    </div>
+    <input
+      type={type}
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full bg-transparent text-sm text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400 rounded px-1 -mx-1 py-0.5 min-w-0 placeholder:text-slate-300"
+    />
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AddMaterialRow — formularz dodawania materiału z autocomplete
+// AddMaterialRow — autocomplete do dodania materiału
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AddMaterialRow({ matOptions, onAdd }) {
@@ -182,43 +226,38 @@ function AddMaterialRow({ matOptions, onAdd }) {
   }, [search, matOptions]);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setShowSugg(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShowSugg(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const handleAdd = (name = search) => {
+  const commit = (name = search) => {
     if (!name.trim()) return;
     onAdd({ id: `m-${Date.now()}`, name: name.trim(), qty });
-    setSearch("");
-    setQty(1);
-    setShowSugg(false);
+    setSearch(""); setQty(1); setShowSugg(false);
   };
 
   return (
-    <div className="flex items-center gap-2 pt-1.5 mt-1" ref={ref}>
+    <div className="flex items-center gap-2" ref={ref}>
       <div className="relative flex-1">
         <input
           value={search}
           onChange={e => { setSearch(e.target.value); setShowSugg(true); }}
           onFocus={() => setShowSugg(true)}
+          onKeyDown={e => e.key === "Enter" && commit()}
           placeholder="Szukaj materiału…"
           className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
         />
         {showSugg && suggestions.length > 0 && (
-          <ul className="absolute left-0 top-full mt-0.5 w-64 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-40 overflow-y-auto">
+          <ul className="absolute left-0 top-full mt-0.5 w-64 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-36 overflow-y-auto">
             {suggestions.map(m => (
               <li
                 key={m.name}
                 onMouseDown={() => { setSearch(m.name); setShowSugg(false); }}
-                className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex items-center justify-between"
+                className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex justify-between"
               >
                 <span className="truncate">{m.name}</span>
-                {m.price_pln != null && (
-                  <span className="text-orange-600 ml-2 shrink-0">{m.price_pln} zł</span>
-                )}
+                {m.price_pln != null && <span className="text-orange-600 ml-2 shrink-0">{m.price_pln} zł</span>}
               </li>
             ))}
           </ul>
@@ -229,10 +268,7 @@ function AddMaterialRow({ matOptions, onAdd }) {
         onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
         className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400"
       />
-      <button
-        onMouseDown={() => handleAdd()}
-        className="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600 transition-colors"
-      >
+      <button onMouseDown={() => commit()} className="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">
         <Plus className="w-3 h-3" />
       </button>
     </div>
@@ -240,227 +276,102 @@ function AddMaterialRow({ matOptions, onAdd }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PointRow — jeden wiersz punktu instalacyjnego
+// MaterialsPanel — rozwijany panel materiałów dla jednego wiersza
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PointRow({ point, assignment, onAssignmentChange, matOptions, catalog, isExpanded, onToggleExpand }) {
-  // Niezależny stan zwijania listy dodanych materiałów
+function MaterialsPanel({ row, onRowChange, matOptions, colSpan }) {
   const [matsOpen, setMatsOpen] = useState(true);
 
-  const updateControl = (deviceId) =>
-    onAssignmentChange({ ...assignment, controlDevice: deviceId });
-
-  const updateIoCount = (count) =>
-    onAssignmentChange({ ...assignment, ioCount: count });
-
-  const addMaterial = (mat) => {
-    onAssignmentChange({ ...assignment, materials: [...(assignment.materials ?? []), mat] });
-    setMatsOpen(true); // rozwiń przy dodawaniu
-  };
-
-  const updateMaterialQty = (idx, qty) => {
-    const mats = [...(assignment.materials ?? [])];
+  const updateMat = (idx, qty) => {
+    const mats = [...row.materials];
     mats[idx] = { ...mats[idx], qty };
-    onAssignmentChange({ ...assignment, materials: mats });
+    onRowChange({ ...row, materials: mats });
   };
-
-  const removeMaterial = (idx) => {
-    const mats = [...(assignment.materials ?? [])];
+  const removeMat = (idx) => {
+    const mats = [...row.materials];
     mats.splice(idx, 1);
-    onAssignmentChange({ ...assignment, materials: mats });
+    onRowChange({ ...row, materials: mats });
   };
-
-  const matCount = assignment.materials?.length ?? 0;
+  const addMat = (mat) => {
+    onRowChange({ ...row, materials: [...row.materials, mat] });
+    setMatsOpen(true);
+  };
 
   return (
-    <>
-      <tr className="hover:bg-slate-50/60 transition-colors border-b border-slate-100">
-        {/* ID */}
-        <td className="px-3 py-2 font-mono text-xs text-slate-400 whitespace-nowrap">{point.id}</td>
-        {/* Funkcja */}
-        <td className="px-3 py-2 text-sm text-slate-800">{point.function}</td>
-        {/* Typ zasobu */}
-        <td className="px-3 py-2">
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${RESOURCE_BADGE_COLOR[point.resourceType] ?? "bg-slate-100 text-slate-500"}`}>
-            {RESOURCE_LABEL[point.resourceType] ?? point.resourceType}
-          </span>
-        </td>
-        {/* Element sterujący z loxone.json */}
-        <td className="px-3 py-2">
-          <select
-            value={assignment.controlDevice ?? "uncontrolled"}
-            onChange={e => updateControl(e.target.value)}
-            className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[190px] w-full"
-          >
-            <option value="uncontrolled">— niesterowane —</option>
-            {catalog.map(p => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </td>
-        {/* I/O */}
-        <td className="px-3 py-2 text-center">
-          {assignment.controlDevice !== "uncontrolled" ? (
-            <input
-              type="number" min="1" max="32" value={assignment.ioCount ?? 1}
-              onChange={e => updateIoCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
-            />
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-        {/* Materiały — przycisk toggle */}
-        <td className="px-3 py-2">
-          <button
-            onClick={onToggleExpand}
-            className={`flex items-center gap-1.5 text-xs font-medium rounded-lg px-2 py-1 transition-colors ${
-              isExpanded
-                ? "bg-orange-100 text-orange-700"
-                : matCount > 0
-                  ? "bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-orange-600"
-                  : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"
-            }`}
-          >
-            {matCount > 0 ? (
-              <>
-                <span className="w-4 h-4 bg-orange-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold">{matCount}</span>
-                mat.
-              </>
-            ) : (
-              <><Plus className="w-3 h-3" /> dodaj</>
-            )}
-          </button>
-        </td>
-      </tr>
-
-      {/* Rozwijany panel materiałów */}
-      {isExpanded && (
-        <tr className="bg-orange-50/40 border-b border-orange-100/60">
-          <td colSpan={6} className="px-6 py-2.5">
-            <div className="max-w-md space-y-1">
-
-              {/* Lista dodanych materiałów z możliwością zwinięcia */}
-              {matCount > 0 && (
-                <div>
-                  <button
-                    onClick={() => setMatsOpen(v => !v)}
-                    className="flex items-center gap-1 text-[11px] text-slate-500 font-medium hover:text-slate-700 mb-1"
-                  >
-                    {matsOpen
-                      ? <ChevronDown className="w-3 h-3" />
-                      : <ChevronRight className="w-3 h-3" />
-                    }
-                    Dodane materiały ({matCount})
-                  </button>
-
-                  {matsOpen && (
-                    <div className="pl-1 border-l-2 border-orange-200 space-y-0.5 mb-2">
-                      {assignment.materials.map((mat, idx) => (
-                        <MaterialRow
-                          key={mat.id ?? idx}
-                          mat={mat}
-                          onQtyChange={qty => updateMaterialQty(idx, qty)}
-                          onRemove={() => removeMaterial(idx)}
-                        />
-                      ))}
+    <tr className="bg-orange-50/50 border-b border-orange-100">
+      <td colSpan={colSpan} className="px-4 py-3">
+        <div className="max-w-lg">
+          {row.materials.length > 0 && (
+            <div className="mb-2">
+              <button
+                onClick={() => setMatsOpen(v => !v)}
+                className="flex items-center gap-1 text-xs text-slate-500 font-medium hover:text-slate-700 mb-1.5"
+              >
+                {matsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                Dodane materiały ({row.materials.length})
+              </button>
+              {matsOpen && (
+                <div className="space-y-0.5 pl-1 border-l-2 border-orange-200 mb-2">
+                  {row.materials.map((m, i) => (
+                    <div key={m.id ?? i} className="flex items-center gap-2 py-0.5">
+                      <span className="flex-1 text-xs text-slate-700 truncate">{m.name}</span>
+                      <input
+                        type="number" min="1" value={m.qty}
+                        onChange={e => updateMat(i, Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-12 text-center border border-slate-200 rounded px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                      <span className="text-xs text-slate-400">szt.</span>
+                      <button onClick={() => removeMat(i)} className="p-0.5 text-slate-300 hover:text-red-500">
+                        <X className="w-3 h-3" />
+                      </button>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
-
-              {/* Formularz dodawania */}
-              <AddMaterialRow matOptions={matOptions} onAdd={addMaterial} />
             </div>
-          </td>
-        </tr>
-      )}
-    </>
+          )}
+          <AddMaterialRow matOptions={matOptions} onAdd={addMat} />
+        </div>
+      </td>
+    </tr>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// RoomGroup — sekcja z punktami z jednego pomieszczenia / piętra
+// SummaryPanel — zestawienie urządzeń i materiałów
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RoomGroup({ room, points, assignments, onAssignmentChange, matOptions, catalog, expandedRows, onToggleRow }) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <>
-      <tr
-        className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
-        onClick={() => setOpen(v => !v)}
-      >
-        <td colSpan={6} className="px-3 py-2">
-          <div className="flex items-center gap-2">
-            {open
-              ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-            }
-            <span className="text-xs font-bold text-slate-600 uppercase tracking-wide">{room}</span>
-            <span className="text-[10px] text-slate-400">({points.length} pkt.)</span>
-          </div>
-        </td>
-      </tr>
-      {open && points.map(pt => (
-        <PointRow
-          key={pt.id}
-          point={pt}
-          assignment={assignments[pt.id] ?? { controlDevice: "uncontrolled", ioCount: 1, materials: [] }}
-          onAssignmentChange={a => onAssignmentChange(pt.id, a)}
-          matOptions={matOptions}
-          catalog={catalog}
-          isExpanded={expandedRows.has(pt.id)}
-          onToggleExpand={() => onToggleRow(pt.id)}
-        />
-      ))}
-    </>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SummaryTable — zestawienie obliczone z przypisań
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SummaryTable({ deviceItems, materialItems }) {
+function SummaryPanel({ deviceItems, materialItems }) {
   const total = [...deviceItems, ...materialItems].reduce((s, i) => s + i.quantity * (i.priceEst ?? 0), 0);
 
   return (
-    <div className="space-y-5">
-      {/* Urządzenia sterujące */}
+    <div className="space-y-4">
       {deviceItems.length > 0 && (
         <div>
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
             <Cpu className="w-3.5 h-3.5" /> Urządzenia sterujące
           </div>
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                  <th className="text-left px-3 py-2.5">Urządzenie</th>
-                  <th className="text-left px-3 py-2.5 w-24">Nr kat.</th>
-                  <th className="text-center px-3 py-2.5 w-28">Zajęte / dostępne I/O</th>
-                  <th className="text-center px-3 py-2.5 w-20">Ilość</th>
-                  <th className="text-right px-3 py-2.5 w-28">Cena jedn.</th>
-                  <th className="text-right px-3 py-2.5 w-28">Wartość</th>
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
+                  <th className="text-left px-3 py-2">Urządzenie</th>
+                  <th className="text-left px-3 py-2 w-24">Nr kat.</th>
+                  <th className="text-center px-3 py-2 w-28">Zajęte / dost. I/O</th>
+                  <th className="text-center px-3 py-2 w-16">Ilość</th>
+                  <th className="text-right px-3 py-2 w-24">Cena</th>
+                  <th className="text-right px-3 py-2 w-24">Wartość</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {deviceItems.map(item => (
-                  <tr key={item.id}>
-                    <td className="px-3 py-2 font-medium text-slate-800">{item.name}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-slate-400">{item.partNumber}</td>
-                    <td className="px-3 py-2 text-center text-xs text-slate-500 tabular-nums">
-                      {item.totalIO} / {item.quantity * item.outputsPerUnit}
-                    </td>
-                    <td className="px-3 py-2 text-center font-bold text-orange-600">{item.quantity}</td>
-                    <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">
-                      {item.priceEst > 0 ? `${item.priceEst.toLocaleString("pl-PL")} zł` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700 tabular-nums">
-                      {item.priceEst > 0 ? `${(item.quantity * item.priceEst).toLocaleString("pl-PL")} zł` : "—"}
-                    </td>
+                {deviceItems.map(d => (
+                  <tr key={d.id}>
+                    <td className="px-3 py-2 font-medium text-slate-800">{d.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-400">{d.partNumber}</td>
+                    <td className="px-3 py-2 text-center text-xs text-slate-500 tabular-nums">{d.totalIO} / {d.quantity * d.outputsPerUnit}</td>
+                    <td className="px-3 py-2 text-center font-bold text-orange-600">{d.quantity}</td>
+                    <td className="px-3 py-2 text-right text-xs text-slate-500">{d.priceEst > 0 ? `${d.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{d.priceEst > 0 ? `${(d.quantity * d.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -468,34 +379,28 @@ function SummaryTable({ deviceItems, materialItems }) {
           </div>
         </div>
       )}
-
-      {/* Materiały */}
       {materialItems.length > 0 && (
         <div>
-          <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-2">
-            <Package className="w-3.5 h-3.5" /> Materiały
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+            <Package className="w-3.5 h-3.5" /> Materiały dodatkowe
           </div>
           <div className="border border-slate-200 rounded-xl overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                  <th className="text-left px-3 py-2.5">Materiał</th>
-                  <th className="text-center px-3 py-2.5 w-20">Ilość</th>
-                  <th className="text-right px-3 py-2.5 w-28">Cena jedn.</th>
-                  <th className="text-right px-3 py-2.5 w-28">Wartość</th>
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
+                  <th className="text-left px-3 py-2">Materiał</th>
+                  <th className="text-center px-3 py-2 w-16">Ilość</th>
+                  <th className="text-right px-3 py-2 w-24">Cena</th>
+                  <th className="text-right px-3 py-2 w-24">Wartość</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {materialItems.map(item => (
-                  <tr key={item.id}>
-                    <td className="px-3 py-2 text-slate-800">{item.name}</td>
-                    <td className="px-3 py-2 text-center font-bold text-orange-600 tabular-nums">{item.quantity}</td>
-                    <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">
-                      {item.priceEst > 0 ? `${item.priceEst.toLocaleString("pl-PL")} zł` : "—"}
-                    </td>
-                    <td className="px-3 py-2 text-right font-semibold text-slate-700 tabular-nums">
-                      {item.priceEst > 0 ? `${(item.quantity * item.priceEst).toLocaleString("pl-PL")} zł` : "—"}
-                    </td>
+                {materialItems.map(m => (
+                  <tr key={m.id}>
+                    <td className="px-3 py-2 text-slate-800">{m.name}</td>
+                    <td className="px-3 py-2 text-center font-bold text-orange-600">{m.quantity}</td>
+                    <td className="px-3 py-2 text-right text-xs text-slate-500">{m.priceEst > 0 ? `${m.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{m.priceEst > 0 ? `${(m.quantity * m.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -503,9 +408,8 @@ function SummaryTable({ deviceItems, materialItems }) {
           </div>
         </div>
       )}
-
       {total > 0 && (
-        <div className="flex justify-end pt-2 border-t border-slate-100">
+        <div className="flex justify-end border-t border-slate-100 pt-3">
           <div className="text-right">
             <div className="text-xs text-slate-400">Łączna wartość zestawienia</div>
             <div className="text-2xl font-bold text-orange-600">{total.toLocaleString("pl-PL")} zł</div>
@@ -513,11 +417,8 @@ function SummaryTable({ deviceItems, materialItems }) {
           </div>
         </div>
       )}
-
       {deviceItems.length === 0 && materialItems.length === 0 && (
-        <div className="text-center py-8 text-slate-300 text-sm">
-          Brak przypisanych urządzeń ani materiałów
-        </div>
+        <div className="text-center py-8 text-slate-300 text-sm">Brak przypisanych urządzeń ani materiałów</div>
       )}
     </div>
   );
@@ -528,25 +429,44 @@ function SummaryTable({ deviceItems, materialItems }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function PointCalculator({ projects }) {
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [points, setPoints] = useState([]);
-  const [assignments, setAssignments] = useState({});
-  const [expandedRows, setExpandedRows] = useState(new Set());
-  const [view, setView] = useState("points"); // "points" | "summary"
-
-  // Dane zewnętrzne
-  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);  // loxone.json lub fallback
+  // Dane
+  const [rows, setRows] = useState([]);
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
   const [cennik, setCennik] = useState([]);
   const [matList, setMatList] = useState([]);
 
+  // Selekcja projektu
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
+
+  // Widok
+  const [activeTab, setActiveTab] = useState("table"); // "table" | "summary"
+  const [expandedId, setExpandedId] = useState(null);
+
+  // Filtrowanie
+  const [search, setSearch] = useState("");
+  const [filterTyp, setFilterTyp] = useState("all");
+  const [filterFloor, setFilterFloor] = useState("all");
+  const [filterRoom, setFilterRoom] = useState("all");
+
+  // Sortowanie
+  const [sortKey, setSortKey] = useState("pomieszczenie");
+  const [sortDir, setSortDir] = useState("asc");
+
+  // Widoczność kolumn
+  const [visibleCols, setVisibleCols] = useState(
+    () => new Set(COLS.filter(c => c.defaultVisible).map(c => c.key))
+  );
+  const [showColPicker, setShowColPicker] = useState(false);
+
+  // Zapis
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
-  // Wczytaj katalog Loxone + cennik + listę materiałów przy starcie
+  // Wczytaj katalog Loxone + cennik + materiały
   useEffect(() => {
     if (!GAS_ON) return;
     Promise.all([
@@ -560,7 +480,6 @@ function PointCalculator({ projects }) {
     });
   }, []);
 
-  // Połączona lista do autocomplete materiałów (cennik + materialy.json)
   const matOptions = useMemo(() => {
     const all = [
       ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln })),
@@ -570,58 +489,32 @@ function PointCalculator({ projects }) {
     return all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name));
   }, [cennik, matList]);
 
-  // Wczytaj punkty — PRIORYTET: projekt.json z Google Drive
+  // Wczytaj punkty z Google Drive
   const handleLoadPoints = useCallback(async () => {
     if (!project) return;
     setLoading(true);
     setLoadError(null);
-    setPoints([]);
-    setAssignments({});
-    setExpandedRows(new Set());
-    setView("points");
+    setRows([]);
+    setExpandedId(null);
+    setActiveTab("table");
 
     try {
-      let pts = [];
+      let loaded = [];
 
-      // Pomocnicza konwersja attribs → InstallationPoint[]
-      const attribsToPoints = (attribs, floorName) => {
-        const result = [];
-        for (const [handle, a] of Object.entries(attribs)) {
-          if (handle === "_meta" || !a || typeof a !== "object") continue;
-          result.push({
-            id:           a.tag ?? handle,
-            room:         a.pomieszczenie ?? "—",
-            floor:        a.kondygnacja   ?? floorName ?? "—",
-            function:     a.uwagi ?? a.rola ?? a.tag ?? handle,
-            rawTyp:       a.typ ?? "",
-            resourceType: mapTypToResource(a.typ ?? ""),
-            outputCount:  1,
-          });
-        }
-        return result;
-      };
-
-      // 1. Próba wczytania z Google Drive (projekt.json / projekt_Piętro.json)
       if (GAS_ON) {
         const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
             if (!floor.attribs || typeof floor.attribs !== "object") continue;
-            pts.push(...attribsToPoints(floor.attribs, floor.name));
+            loaded.push(...attribsToRows(floor.attribs, floor.name, catalog));
           }
         }
       }
 
-      // 2. Fallback: lokalny mock (projekt_Parter.json) — gdy GAS wyłączony lub brak pliku
-      if (pts.length === 0) {
-        pts = attribsToPoints(MOCK_PARTER, "Parter");
-      }
-
-      if (pts.length === 0) {
-        setLoadError("Brak danych instalacyjnych dla tego projektu.");
+      if (loaded.length === 0) {
+        setLoadError("Brak danych instalacyjnych. Wgraj projekt.json do folderu projektu na Google Drive.");
       } else {
-        setPoints(pts);
-        setAssignments(buildDefaultAssignments(pts, catalog));
+        setRows(loaded);
       }
     } catch (e) {
       setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
@@ -630,235 +523,373 @@ function PointCalculator({ projects }) {
     }
   }, [project, catalog]);
 
-  // Grupowanie punktów: kondygnacja → pomieszczenie
-  const rooms = useMemo(() => {
-    const map = {};
-    for (const pt of points) {
-      const key =
-        pt.floor && pt.floor !== "—"
-          ? `${pt.floor} — ${pt.room}`
-          : (pt.room ?? "—");
-      if (!map[key]) map[key] = [];
-      map[key].push(pt);
-    }
-    return map;
-  }, [points]);
+  // Filtrowanie i sortowanie
+  const { uniqueTypy, uniqueFloors, uniqueRooms } = useMemo(() => ({
+    uniqueTypy:  [...new Set(rows.map(r => r.typ).filter(Boolean))].sort(),
+    uniqueFloors:[...new Set(rows.map(r => r.kondygnacja).filter(Boolean))].sort(),
+    uniqueRooms: [...new Set(rows.map(r => r.pomieszczenie).filter(Boolean))].sort(),
+  }), [rows]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase();
+    return rows
+      .filter(r => {
+        if (filterTyp   !== "all" && r.typ          !== filterTyp)   return false;
+        if (filterFloor !== "all" && r.kondygnacja  !== filterFloor) return false;
+        if (filterRoom  !== "all" && r.pomieszczenie !== filterRoom)  return false;
+        if (q && !["tag","rola","pomieszczenie","uwagi","typ","wariant"].some(k => (r[k] ?? "").toLowerCase().includes(q))) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const av = (a[sortKey] ?? "").toString().toLowerCase();
+        const bv = (b[sortKey] ?? "").toString().toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+  }, [rows, search, filterTyp, filterFloor, filterRoom, sortKey, sortDir]);
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const updateRow = useCallback((id, updater) => {
+    setRows(prev => prev.map(r => r._id === id ? (typeof updater === "function" ? updater(r) : { ...r, ...updater }) : r));
+  }, []);
 
   const summary = useMemo(
-    () => calculateSummary(points, assignments, catalog, matList, cennik),
-    [points, assignments, catalog, matList, cennik],
+    () => calculateSummary(rows, catalog, matList, cennik),
+    [rows, catalog, matList, cennik],
   );
 
-  const handleToggleRow = useCallback((id) => {
-    setExpandedRows(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const handleAssignmentChange = useCallback((pointId, a) => {
-    setAssignments(prev => ({ ...prev, [pointId]: a }));
-  }, []);
+  // Widoczne kolumny do wyświetlenia
+  const activeCols = COLS.filter(c => visibleCols.has(c.key));
+  const totalColSpan = activeCols.length + 4; // +4 za typ-badge, el.sterujący, I/O, materiały
 
   const handleSave = async () => {
     if (!project) return;
-    setSaving(true);
-    setSaveResult(null);
+    setSaving(true); setSaveResult(null);
     try {
       const allItems = [...summary.deviceItems, ...summary.materialItems].map(item => ({
-        id: item.id,
-        name: item.name,
-        category: item.category ?? "smart_home",
-        quantity: item.quantity,
-        unit: item.unit,
-        priceEst: item.priceEst ?? 0,
-        link: "",
-        status: "Oczekuje",
+        id: item.id, name: item.name, category: item.id.startsWith("dev-") ? "smart_home" : "cables",
+        quantity: item.quantity, unit: item.unit ?? "szt.",
+        priceEst: item.priceEst ?? 0, link: "", status: "Oczekuje",
       }));
-
-      let existingId;
-      let existingItems = [];
+      let existingId, existingItems = [];
       if (GAS_ON) {
         const existing = await GAS.getZakupy(project.id).catch(() => null);
         if (existing?.items) { existingItems = existing.items; existingId = existing.id; }
       }
-
       const existingIds = new Set(existingItems.map(i => i.id));
-      const newItems = allItems.filter(i => !existingIds.has(i.id));
-
       if (GAS_ON) {
         await GAS.upsertZakupy({
-          id: existingId,
-          projectId: project.id,
-          items: [...existingItems, ...newItems],
+          id: existingId, projectId: project.id,
+          items: [...existingItems, ...allItems.filter(i => !existingIds.has(i.id))],
           updatedDate: TODAY,
         });
       }
       setSaveResult("ok");
-    } catch {
-      setSaveResult("err");
-    } finally {
-      setSaving(false);
-    }
+    } catch { setSaveResult("err"); }
+    finally { setSaving(false); }
   };
+
+  const SortIcon = ({ col }) => {
+    if (!col.sortable) return null;
+    if (sortKey !== col.key) return <ChevronDown className="w-3 h-3 text-slate-300 shrink-0" />;
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3 h-3 text-orange-500 shrink-0" />
+      : <ChevronDown className="w-3 h-3 text-orange-500 shrink-0" />;
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
+
+      {/* ── Nagłówek ── */}
       <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
           <ShoppingCart className="w-4 h-4 text-orange-600" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-slate-800">Kalkulator instalacji</div>
           <div className="text-xs text-slate-400 mt-0.5">
-            Przypisz urządzenia i materiały do punktów — system wyliczy zestawienie
+            Przeglądaj i edytuj punkty instalacyjne, przypisuj elementy sterujące i generuj zestawienie
           </div>
         </div>
-        {/* Przełącznik widoku — widoczny po wczytaniu punktów */}
-        {points.length > 0 && (
+        {rows.length > 0 && (
           <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 shrink-0">
-            <button
-              onClick={() => setView("points")}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${view === "points" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              Punkty
+            <button onClick={() => setActiveTab("table")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "table" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              Tabela
             </button>
-            <button
-              onClick={() => setView("summary")}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${view === "summary" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
+            <button onClick={() => setActiveTab("summary")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "summary" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
               Zestawienie
             </button>
           </div>
         )}
       </div>
 
-      <div className="p-5 space-y-5">
+      <div className="p-5 space-y-4">
 
-        {/* Wybór projektu + wczytaj */}
+        {/* ── Projekt + wczytaj ── */}
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              Projekt
-            </label>
-            <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 transition-all bg-white">
-              <FolderKanban className="w-4 h-4 text-slate-300 flex-shrink-0" />
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Projekt</label>
+            <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 bg-white">
+              <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
               <select
                 value={selectedProjectId}
-                onChange={e => {
-                  setSelectedProjectId(e.target.value);
-                  setPoints([]);
-                  setAssignments({});
-                  setSaveResult(null);
-                  setLoadError(null);
-                  setView("points");
-                }}
+                onChange={e => { setSelectedProjectId(e.target.value); setRows([]); setLoadError(null); setSaveResult(null); }}
                 className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
               >
                 <option value="">— wybierz projekt —</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-                ))}
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
               </select>
             </div>
           </div>
-
           <button
             onClick={handleLoadPoints}
             disabled={!selectedProjectId || loading}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             Wczytaj punkty
           </button>
         </div>
 
-        {/* Błąd ładowania */}
+        {/* Błąd */}
         {loadError && (
           <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {loadError}
+            <AlertCircle className="w-4 h-4 shrink-0" />{loadError}
           </div>
         )}
 
-        {/* Widok: punkty instalacyjne */}
-        {view === "points" && points.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-700">Punkty instalacyjne</span>
-                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-                  {points.length} pkt.
-                </span>
+        {/* ── WIDOK: TABELA ── */}
+        {activeTab === "table" && rows.length > 0 && (
+          <>
+            {/* Pasek filtrów */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Szukaj */}
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Szukaj…"
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400"
+                />
+                {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>}
               </div>
+
+              {/* Filtr: typ */}
+              <select value={filterTyp} onChange={e => setFilterTyp(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie typy</option>
+                {uniqueTypy.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              {/* Filtr: kondygnacja */}
+              {uniqueFloors.length > 1 && (
+                <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[140px]">
+                  <option value="all">Wszystkie piętra</option>
+                  {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              )}
+
+              {/* Filtr: pomieszczenie */}
+              <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie pomieszczenia</option>
+                {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+
+              {/* Licznik */}
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {filteredRows.length} / {rows.length} pkt.
+              </span>
+
+              {/* Kolumny toggle */}
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setShowColPicker(v => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg transition-colors ${showColPicker ? "border-orange-400 text-orange-600 bg-orange-50" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" /> Kolumny
+                </button>
+                {showColPicker && (
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-3 min-w-[180px]">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Widoczne kolumny</div>
+                    {COLS.map(col => (
+                      <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:text-slate-800 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.has(col.key)}
+                          onChange={e => {
+                            const next = new Set(visibleCols);
+                            if (e.target.checked) next.add(col.key); else next.delete(col.key);
+                            setVisibleCols(next);
+                          }}
+                          className="rounded accent-orange-500"
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Eksport XLSX */}
               <button
-                onClick={() => setView("summary")}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-white text-xs font-bold rounded-lg hover:bg-slate-900 transition-colors"
+                onClick={() => exportXLSX(rows, catalog, summary)}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
               >
-                <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
+                <Download className="w-3.5 h-3.5" /> Eksport XLSX
               </button>
             </div>
 
+            {/* Tabela */}
             <div className="border border-slate-200 rounded-xl overflow-x-auto">
-              <table className="w-full text-sm min-w-[700px]">
+              <table className="w-full text-sm" style={{ minWidth: "900px" }}>
                 <thead>
-                  <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide">
-                    <th className="text-left px-3 py-2.5 w-24">ID</th>
-                    <th className="text-left px-3 py-2.5">Funkcja</th>
-                    <th className="text-left px-3 py-2.5 w-28">Typ</th>
-                    <th className="text-left px-3 py-2.5 w-52">Element sterujący</th>
-                    <th className="text-center px-3 py-2.5 w-16">I/O</th>
-                    <th className="text-left px-3 py-2.5 w-28">Materiały</th>
+                  <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
+                    {activeCols.map(col => (
+                      <th
+                        key={col.key}
+                        className={`text-left px-3 py-2.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
+                        onClick={() => col.sortable && handleSort(col.key)}
+                      >
+                        <div className="flex items-center gap-1">
+                          {col.label}<SortIcon col={col} />
+                        </div>
+                      </th>
+                    ))}
+                    {/* Stałe kolumny kalkulatora */}
+                    <th className="text-left px-3 py-2.5 w-48">Element sterujący</th>
+                    <th className="text-center px-3 py-2.5 w-14">I/O</th>
+                    <th className="text-left px-3 py-2.5 w-24">Materiały</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(rooms).map(([room, pts]) => (
-                    <RoomGroup
-                      key={room}
-                      room={room}
-                      points={pts}
-                      assignments={assignments}
-                      onAssignmentChange={handleAssignmentChange}
-                      matOptions={matOptions}
-                      catalog={catalog}
-                      expandedRows={expandedRows}
-                      onToggleRow={handleToggleRow}
-                    />
+                  {filteredRows.length === 0 ? (
+                    <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
+                  ) : filteredRows.map(row => (
+                    <React.Fragment key={row._id}>
+                      <tr className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${expandedId === row._id ? "bg-orange-50/30" : ""}`}>
+                        {/* Edytowalne kolumny z JSON */}
+                        {activeCols.map(col => (
+                          <td key={col.key} className="px-3 py-1.5">
+                            {col.key === "kolor" ? (
+                              <div className="flex items-center gap-1.5">
+                                {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
+                                <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
+                              </div>
+                            ) : col.key === "typ" ? (
+                              <div className="space-y-1">
+                                <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
+                                <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full inline-block ${RESOURCE_BADGE[row.resourceType] ?? "bg-slate-100 text-slate-500"}`}>
+                                  {row.resourceType?.replace("_", " ") ?? ""}
+                                </span>
+                              </div>
+                            ) : (
+                              <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
+                            )}
+                          </td>
+                        ))}
+
+                        {/* Element sterujący */}
+                        <td className="px-3 py-1.5">
+                          <select
+                            value={row.controlDevice ?? "uncontrolled"}
+                            onChange={e => updateRow(row._id, { controlDevice: e.target.value })}
+                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white w-full"
+                          >
+                            <option value="uncontrolled">— niesterowane —</option>
+                            {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                        </td>
+
+                        {/* I/O */}
+                        <td className="px-3 py-1.5 text-center">
+                          {row.controlDevice !== "uncontrolled" ? (
+                            <input
+                              type="number" min="1" max="32" value={row.ioCount ?? 1}
+                              onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                              className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
+                            />
+                          ) : <span className="text-slate-300 text-xs">—</span>}
+                        </td>
+
+                        {/* Materiały */}
+                        <td className="px-3 py-1.5">
+                          <button
+                            onClick={() => setExpandedId(id => id === row._id ? null : row._id)}
+                            className={`flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1 transition-colors ${
+                              expandedId === row._id
+                                ? "bg-orange-100 text-orange-700"
+                                : row.materials.length > 0
+                                  ? "bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                  : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"
+                            }`}
+                          >
+                            {row.materials.length > 0
+                              ? <><span className="w-4 h-4 bg-orange-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold">{row.materials.length}</span> mat.</>
+                              : <><Plus className="w-3 h-3" /> dodaj</>
+                            }
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Panel materiałów */}
+                      {expandedId === row._id && (
+                        <MaterialsPanel
+                          row={row}
+                          onRowChange={updated => updateRow(row._id, () => updated)}
+                          matOptions={matOptions}
+                          colSpan={totalColSpan}
+                        />
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
+
+            {/* Akcje pod tabelą */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-xs text-slate-400">
+                {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem ·{" "}
+                {rows.filter(r => r.materials.length > 0).length} z materiałami
+              </div>
+              <button
+                onClick={() => setActiveTab("summary")}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+              >
+                <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
+              </button>
+            </div>
+          </>
         )}
 
-        {/* Widok: zestawienie */}
-        {view === "summary" && points.length > 0 && (
+        {/* ── WIDOK: ZESTAWIENIE ── */}
+        {activeTab === "summary" && rows.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-slate-700">Zestawienie materiałów</span>
-                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-                  z {points.length} pkt.
-                </span>
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">z {rows.length} pkt.</span>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => exportXLSX(rows, catalog, summary)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> XLSX
+                </button>
                 <AnimatePresence>
                   {saveResult === "ok" && (
-                    <motion.div
-                      initial={{ opacity: 0, x: 8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="flex items-center gap-1.5 text-green-600 text-sm font-medium"
-                    >
-                      <CheckCircle2 className="w-4 h-4" /> Zapisano w zakupach
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 text-green-600 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4" /> Zapisano
                     </motion.div>
                   )}
                   {saveResult === "err" && (
-                    <div className="flex items-center gap-1.5 text-red-500 text-sm">
-                      <AlertCircle className="w-4 h-4" /> Błąd zapisu
-                    </div>
+                    <div className="flex items-center gap-1.5 text-red-500 text-sm"><AlertCircle className="w-4 h-4" /> Błąd</div>
                   )}
                 </AnimatePresence>
                 <button
@@ -866,27 +897,21 @@ function PointCalculator({ projects }) {
                   disabled={saving || !project}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl text-sm font-bold hover:from-slate-900 hover:to-slate-800 disabled:opacity-40 transition-all shadow-sm"
                 >
-                  {saving
-                    ? <><RefreshCw className="w-4 h-4 animate-spin" /> Zapisuję…</>
-                    : <><ShoppingCart className="w-4 h-4" /> Zapisz do zakupów</>
-                  }
+                  {saving ? <><RefreshCw className="w-4 h-4 animate-spin" /> Zapisuję…</> : <><ShoppingCart className="w-4 h-4" /> Zapisz do zakupów</>}
                 </button>
               </div>
             </div>
-
-            <SummaryTable
-              deviceItems={summary.deviceItems}
-              materialItems={summary.materialItems}
-            />
+            <SummaryPanel deviceItems={summary.deviceItems} materialItems={summary.materialItems} />
           </div>
         )}
 
         {/* Empty state */}
-        {!selectedProjectId && points.length === 0 && !loadError && (
-          <div className="text-center py-8 text-slate-300 text-sm">
-            Wybierz projekt i kliknij „Wczytaj punkty"
+        {rows.length === 0 && !loadError && (
+          <div className="text-center py-10 text-slate-300 text-sm">
+            {selectedProjectId ? "Kliknij „Wczytaj punkty" aby załadować dane" : "Wybierz projekt aby rozpocząć"}
           </div>
         )}
+
       </div>
     </div>
   );
@@ -905,10 +930,9 @@ export default function Kalkulator({ projects = [] }) {
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-900">Kalkulator</h2>
-          <p className="text-xs text-slate-400">Przypisz urządzenia i materiały — system wyliczy zestawienie</p>
+          <p className="text-xs text-slate-400">Edytuj punkty instalacyjne, przypisuj urządzenia i generuj zestawienie</p>
         </div>
       </div>
-
       <PointCalculator projects={projects} />
     </div>
   );
