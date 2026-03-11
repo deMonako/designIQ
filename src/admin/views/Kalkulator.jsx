@@ -102,7 +102,13 @@ function calculateSummary(rows, catalog, matList, cennik) {
   const matCount = {};
   for (const r of rows) {
     if (r.controlDevice && r.controlDevice !== "uncontrolled") {
-      deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
+      if (r.controlDevice.startsWith("mat:")) {
+        // Materiał jako element sterujący — liczy się jako ilość wg ioCount
+        const name = r.controlDevice.slice(4);
+        matCount[name] = (matCount[name] ?? 0) + (r.ioCount ?? 1);
+      } else {
+        deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
+      }
     }
     for (const m of r.materials ?? []) {
       matCount[m.name] = (matCount[m.name] ?? 0) + m.qty;
@@ -154,7 +160,7 @@ function exportXLSX(rows, catalog, summary) {
   const data1 = rows.map(r => [
     r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
     r.przewód, r.wysokość, r.wariant, r.kolor,
-    r.controlDevice === "uncontrolled" ? "niesterowane" : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
+    r.controlDevice === "uncontrolled" ? "niesterowane" : r.controlDevice.startsWith("mat:") ? r.controlDevice.slice(4) : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
     r.controlDevice !== "uncontrolled" ? r.ioCount : "",
     (r.materials ?? []).map(m => `${m.name} x${m.qty}`).join("; "),
   ]);
@@ -542,7 +548,7 @@ function PointCalculator({ projects }) {
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [rows, search, filterTyp, filterFloor, filterRoom, sortKey, sortDir]);
+  }, [rows, search, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -804,7 +810,18 @@ function PointCalculator({ projects }) {
                             className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white w-full"
                           >
                             <option value="uncontrolled">— niesterowane —</option>
-                            {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            {catalog.length > 0 && (
+                              <optgroup label="Urządzenia Loxone">
+                                {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </optgroup>
+                            )}
+                            {matOptions.length > 0 && (
+                              <optgroup label="Materiały">
+                                {matOptions.map(m => (
+                                  <option key={`mat:${m.name}`} value={`mat:${m.name}`}>{m.name}</option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                         </td>
 
