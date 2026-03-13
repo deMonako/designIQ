@@ -1,5 +1,5 @@
 /**
- * Baza produktów — PROTOTYP (dane hardcoded).
+ * Baza produktów — PROTOTYP (dane hardcoded jako fallback).
  *
  * W docelowej wersji ta funkcja załaduje dane z pliku Excel
  * z głównego folderu bazy materiałów.
@@ -20,73 +20,7 @@ import { RESOURCE } from "./resourceTypes.js";
 
 /** @type {ProductDefinition[]} */
 const CATALOG = [
-  // ── Audio ─────────────────────────────────────────────────────────────────
-  {
-    id: "lox-audio-master",
-    name: "Loxone Audio Extension (Master)",
-    partNumber: "610149",
-    resourceType: RESOURCE.RELAY,
-    outputsPerUnit: 1,
-    unit: "szt.",
-    notes: "Audio master – 1 kanał = 1 urządzenie",
-  },
-
-  // ── Czujnik obecności ─────────────────────────────────────────────────────
-  {
-    id: "lox-presence-sensor",
-    name: "Loxone Presence Sensor",
-    partNumber: "100466",
-    resourceType: RESOURCE.DIGITAL_IN,
-    outputsPerUnit: 1,
-    unit: "szt.",
-    notes: "Czujnik obecności – 1 kanał = 1 urządzenie",
-  },
-
-  // ── Tree Relay 14 – gniazda sterowane / oświetlenie 230V / rolety ─────────
-  {
-    id: "lox-tree-relay-14",
-    name: "Loxone Tree Relay Extension",
-    partNumber: "100038",
-    resourceType: RESOURCE.RELAY,
-    outputsPerUnit: 14,
-    unit: "szt.",
-    notes: "14 kanałów przekaźnikowych; gniazda sterowane, oświetlenie 230V, rolety",
-  },
-
-  // ── Kontaktrony ───────────────────────────────────────────────────────────
-  {
-    id: "lox-kontaktron",
-    name: "Loxone Door & Window Contact",
-    partNumber: "100283",
-    resourceType: RESOURCE.DIGITAL_IN,
-    outputsPerUnit: 20,
-    unit: "szt.",
-    notes: "Kontaktron – 1 urządzenie obsługuje 20 kanałów",
-  },
-
-  // ── Oświetlenie 24V ───────────────────────────────────────────────────────
-  {
-    id: "lox-dimmer-24v",
-    name: "Loxone LED Controller 24V",
-    partNumber: "100239",
-    resourceType: RESOURCE.DIMMER,
-    outputsPerUnit: 4,
-    unit: "szt.",
-    notes: "Oświetlenie 24V – 1 urządzenie = 4 kanały",
-  },
-
-  // ── Włączniki Loxone ──────────────────────────────────────────────────────
-  {
-    id: "lox-switch",
-    name: "Loxone Touch",
-    partNumber: "100221",
-    resourceType: RESOURCE.DIGITAL_IN,
-    outputsPerUnit: 1,
-    unit: "szt.",
-    notes: "Włącznik Loxone Touch – 1 kanał = 1 urządzenie",
-  },
-
-  // ── Relay Extension (ogólny) ──────────────────────────────────────────────
+  // ── Relay ─────────────────────────────────────────────────────────────────
   {
     id: "lox-relay-ext",
     name: "Loxone Relay Extension",
@@ -97,7 +31,7 @@ const CATALOG = [
     notes: "12 wyjść przekaźnikowych 230 V / 16 A",
   },
 
-  // ── Dimmer Extension (ogólny) ─────────────────────────────────────────────
+  // ── Dimmer ────────────────────────────────────────────────────────────────
   {
     id: "lox-dimmer-ext",
     name: "Loxone Dimmer Extension",
@@ -130,7 +64,7 @@ const CATALOG = [
     notes: "2 niezależne kanały silnikowe; możliwość podania pozycji %",
   },
 
-  // ── Digital Inputs (Extension ogólny) ────────────────────────────────────
+  // ── Digital Inputs ────────────────────────────────────────────────────────
   {
     id: "lox-extension",
     name: "Loxone Extension",
@@ -154,7 +88,50 @@ const CATALOG = [
 ];
 
 /**
- * Zwraca pełen katalog produktów.
+ * Specyfikacja dodatkowych urządzeń wyszukiwanych dynamicznie w cennik.json.
+ * Jeśli dany SKU istnieje w cenniku, zostanie dodany do katalogu z nazwą
+ * pobraną z cennika.
+ *
+ * @type {Record<string, { id: string, resourceType: string, outputsPerUnit: number, unit?: string, notes?: string }>}
+ */
+export const CENNIK_SKU_SPECS = {
+  "610149": { id: "lox-audio-master",    resourceType: RESOURCE.RELAY,      outputsPerUnit: 1,  notes: "Audio master – 1 kanał = 1 urządzenie" },
+  "610151": { id: "lox-audio-slave",     resourceType: RESOURCE.RELAY,      outputsPerUnit: 1,  notes: "Audio slave" },
+  "100466": { id: "lox-presence-sensor", resourceType: RESOURCE.DIGITAL_IN, outputsPerUnit: 1,  notes: "Czujnik obecności – 1 kanał = 1 urządzenie" },
+  "100038": { id: "lox-tree-relay-14",   resourceType: RESOURCE.RELAY,      outputsPerUnit: 14, notes: "14 kanałów; gniazda sterowane, oświetlenie 230V, rolety" },
+  "100283": { id: "lox-kontaktron",      resourceType: RESOURCE.DIGITAL_IN, outputsPerUnit: 20, notes: "Kontaktron – 1 urządzenie obsługuje 20 kanałów" },
+  "100239": { id: "lox-dimmer-24v",      resourceType: RESOURCE.DIMMER,     outputsPerUnit: 4,  notes: "Oświetlenie 24V – 1 urządzenie = 4 kanały" },
+  "100221": { id: "lox-switch",          resourceType: RESOURCE.DIGITAL_IN, outputsPerUnit: 1,  notes: "Włącznik Loxone Touch – 1 kanał = 1 urządzenie" },
+};
+
+/**
+ * Buduje listę wpisów katalogowych na podstawie wpisów z cennika.
+ * Dodaje tylko te urządzenia, których SKU znajdzie w tablicy cennikItems.
+ *
+ * @param {Array<{ sku: string|number, name: string, price_pln?: number }>} cennikItems
+ * @returns {ProductDefinition[]}
+ */
+export function buildCatalogFromCennik(cennikItems) {
+  const result = [];
+  for (const item of cennikItems) {
+    const sku = String(item.sku ?? "");
+    const spec = CENNIK_SKU_SPECS[sku];
+    if (!spec) continue;
+    result.push({
+      id: spec.id,
+      name: item.name,
+      partNumber: sku,
+      resourceType: spec.resourceType,
+      outputsPerUnit: spec.outputsPerUnit,
+      unit: spec.unit ?? "szt.",
+      notes: spec.notes ?? "",
+    });
+  }
+  return result;
+}
+
+/**
+ * Zwraca bazowy katalog (hardcoded fallback).
  * Punkt rozszerzenia: zastąp tę funkcję ładowaniem z Excela / API.
  *
  * @returns {ProductDefinition[]}

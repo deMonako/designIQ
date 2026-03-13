@@ -9,7 +9,7 @@ import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
-import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
+import { loadProductCatalog, buildCatalogFromCennik } from "../../lib/shoppingList/productCatalog";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 const FALLBACK_CATALOG = loadProductCatalog();
@@ -636,8 +636,21 @@ function PointCalculator({ projects }) {
       gasGet("getCennik").catch(() => []),
       gasGet("getMaterialyJson").catch(() => []),
     ]).then(([loxData, cennikData, matData]) => {
-      if (Array.isArray(loxData) && loxData.length > 0) setCatalog(loxData);
-      setCennik(Array.isArray(cennikData) ? cennikData : []);
+      const cennikArr = Array.isArray(cennikData) ? cennikData : [];
+      // Buduj katalog: loxone.json z Drive (jeśli dostępny), uzupełniony
+      // o urządzenia znalezione w cennik.json po SKU; fallback = hardcoded
+      const fromCennik = buildCatalogFromCennik(cennikArr);
+      if (Array.isArray(loxData) && loxData.length > 0) {
+        // Połącz dane z loxone.json z wpisami z cennika (cennik nadpisuje duplikaty)
+        const loxIds = new Set(loxData.map(p => p.id));
+        setCatalog([...loxData, ...fromCennik.filter(p => !loxIds.has(p.id))]);
+      } else if (fromCennik.length > 0) {
+        // Brak loxone.json — użyj wpisów z cennika + hardcoded fallback
+        const cennikIds = new Set(fromCennik.map(p => p.id));
+        setCatalog([...fromCennik, ...FALLBACK_CATALOG.filter(p => !cennikIds.has(p.id))]);
+      }
+      // else: zostaje FALLBACK_CATALOG (stan początkowy)
+      setCennik(cennikArr);
       setMatList(Array.isArray(matData) ? matData : []);
     });
   }, []);
