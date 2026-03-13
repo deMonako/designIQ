@@ -130,13 +130,14 @@ function attribsToRows(attribs, floorName) {
 
 function calculateSummary(rows, catalog, matList, cennik) {
   const deviceIO = {};
-  const matCount = {};
+  const controlMatCount = {}; // materiały wybrane jako element sterujący
+  const matCount = {};        // dodatkowe materiały per punkt
   for (const r of rows) {
     if (r.controlDevice && r.controlDevice !== "uncontrolled") {
       if (r.controlDevice.startsWith("mat:")) {
-        // Materiał jako element sterujący — liczy się jako ilość wg ioCount
+        // Materiał jako element sterujący — zalicza się do urządzeń sterujących
         const name = r.controlDevice.slice(4);
-        matCount[name] = (matCount[name] ?? 0) + (r.ioCount ?? 1);
+        controlMatCount[name] = (controlMatCount[name] ?? 0) + (r.ioCount ?? 1);
       } else {
         deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
       }
@@ -160,11 +161,18 @@ function calculateSummary(rows, catalog, matList, cennik) {
       priceEst: allPrices.find(c => String(c.sku) === product.partNumber)?.price_pln ?? 0,
     };
   }).filter(Boolean);
+  // Materiały wybrane jako element sterujący → zawsze w sekcji urządzeń sterujących
+  const controlMatItems = Object.entries(controlMatCount).map(([name, qty]) => ({
+    id: `ctrl-mat-${name}`, name, partNumber: null,
+    totalIO: qty, outputsPerUnit: 1, quantity: qty,
+    unit: "szt.",
+    priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
+  }));
   const materialItems = Object.entries(matCount).map(([name, qty]) => ({
     id: `mat-${name}`, name, quantity: qty, unit: "szt.",
     priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
   }));
-  return { deviceItems, materialItems };
+  return { deviceItems: [...deviceItems, ...controlMatItems], materialItems };
 }
 
 // ── CSV export (bez zewnętrznych zależności, otwieralny w Excelu) ─────────────
@@ -268,7 +276,10 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
       .map(p => ({ value: p.id, label: p.name, sub: p.partNumber || null }));
     const devNames = new Set(devs.map(d => d.label.toLowerCase()));
     const mats = matOptions
-      .filter(m => m.name.toLowerCase().includes(q) && !devNames.has(m.name.toLowerCase()))
+      .filter(m =>
+        (m.name.toLowerCase().includes(q) || (m.sku != null && String(m.sku).toLowerCase().includes(q)))
+        && !devNames.has(m.name.toLowerCase())
+      )
       .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.sku || null }));
     return [...devs, ...mats].slice(0, 12);
   }, [query, catalog, matOptions]);
@@ -385,7 +396,12 @@ function AddMaterialRow({ matOptions, onAdd }) {
   const suggestions = useMemo(() => {
     if (search.length < 2) return [];
     const q = search.toLowerCase();
-    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 6);
+    return matOptions.filter(m =>
+      m.name && (
+        m.name.toLowerCase().includes(q) ||
+        (m.sku != null && String(m.sku).toLowerCase().includes(q))
+      )
+    ).slice(0, 6);
   }, [search, matOptions]);
 
   useEffect(() => {
@@ -814,8 +830,28 @@ function PointCalculator({ projects }) {
     if (!project) return;
     setSaving(true); setSaveResult(null);
     try {
+      const getCategoryForItem = (item) => {
+        // Urządzenia z katalogu Loxone → zawsze sprzęt smart home
+        if (item.id.startsWith("dev-") || item.id.startsWith("ctrl-mat-")) {
+          const name = item.name;
+          const matEntry = matList.find(m => m.name === name);
+          if (matEntry?.shopCategory) return matEntry.shopCategory;
+          if (matEntry?.device === "Loxone") return "smart_home";
+          if (catalog.find(p => p.name === name)) return "smart_home";
+          // ctrl-mat domyślnie do smart_home (pełnią rolę elementu sterującego)
+          if (item.id.startsWith("dev-")) return "smart_home";
+          return "smart_home";
+        }
+        // Materiały dodatkowe → szukaj shopCategory, Loxone → smart_home, reszta → other
+        const name = item.name;
+        const matEntry = matList.find(m => m.name === name);
+        if (matEntry?.shopCategory) return matEntry.shopCategory;
+        if (matEntry?.device === "Loxone") return "smart_home";
+        if (catalog.find(p => p.name === name)) return "smart_home";
+        return "other";
+      };
       const allItems = [...summary.deviceItems, ...summary.materialItems].map(item => ({
-        id: item.id, name: item.name, category: item.id.startsWith("dev-") ? "smart_home" : "cables",
+        id: item.id, name: item.name, category: getCategoryForItem(item),
         quantity: item.quantity, unit: item.unit ?? "szt.",
         priceEst: item.priceEst ?? 0, link: "", status: "Oczekuje",
       }));

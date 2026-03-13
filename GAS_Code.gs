@@ -53,7 +53,7 @@ var HEADERS = {
     "id", "projectId", "title", "type", "stage", "items"
   ],
   "Materiały": [
-    "id", "title", "category", "device", "description", "url", "date"
+    "id", "title", "category", "device", "description", "url", "date", "shopCategory"
   ],
   "Dokumenty": [
     "id", "projectId", "name", "type", "description", "url", "driveId", "date", "clientVisible"

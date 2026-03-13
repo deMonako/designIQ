@@ -10,6 +10,16 @@ import { GAS_CONFIG } from "../api/gasConfig";
 const CATEGORIES = ["Dokumentacje", "Instrukcje", "Skrypty", "Linki", "Inne"];
 const DEVICES    = ["Fotowoltaika", "Rekuperacja", "Ogrzewanie", "Klimatyzacja", "Alarm", "KNX", "Loxone"];
 
+// Kategorie zakupowe (te same co w Zakupy.jsx)
+const SHOP_CATEGORIES = [
+  { key: "smart_home", label: "Sprzęt Smart Home" },
+  { key: "cables",     label: "Kable i osprzęt" },
+  { key: "cabinet",    label: "Szafa sterownicza" },
+  { key: "audio",      label: "Audio / Video" },
+  { key: "security",   label: "Monitoring i bezpieczeństwo" },
+  { key: "other",      label: "Inne" },
+];
+
 const CATEGORY_META = {
   "Dokumentacje": { icon: FileText,   color: "bg-blue-50 text-blue-600 border-blue-200",   dot: "bg-blue-500" },
   "Instrukcje":   { icon: BookOpen,   color: "bg-purple-50 text-purple-600 border-purple-200", dot: "bg-purple-500" },
@@ -64,6 +74,11 @@ function MaterialCard({ material, onDelete }) {
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <CategoryBadge category={material.category} />
           <DeviceBadge device={material.device} />
+          {material.shopCategory && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-orange-50 text-orange-700 border-orange-200">
+              {SHOP_CATEGORIES.find(c => c.key === material.shopCategory)?.label ?? material.shopCategory}
+            </span>
+          )}
           <span className="text-xs text-slate-400">{material.date}</span>
         </div>
       </div>
@@ -99,7 +114,7 @@ const EXT_TYPE_MAT = {
 
 function AddMaterialModal({ onAdd, onClose }) {
   const [form, setForm] = useState({
-    title: "", category: "Dokumentacje", device: "", description: "",
+    title: "", category: "Dokumentacje", device: "", description: "", shopCategory: "",
   });
   const [matFile,      setMatFile]      = useState(null);
   const [uploading,    setUploading]    = useState(false);
@@ -174,6 +189,14 @@ function AddMaterialModal({ onAdd, onClose }) {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
               <option value="">Brak</option>
               {DEVICES.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Kategoria zakupowa</label>
+            <select value={form.shopCategory} onChange={e => set("shopCategory", e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
+              <option value="">Brak (automatycznie)</option>
+              {SHOP_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
