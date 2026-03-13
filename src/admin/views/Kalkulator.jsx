@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
+import ReactDOM from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
@@ -221,18 +222,30 @@ function exportXLSX(rows, catalog, summary) {
 function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const ref = useRef(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => { if (triggerRef.current && !triggerRef.current.contains(e.target)) setOpen(false); };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
   useEffect(() => {
-    if (open) setTimeout(() => inputRef.current?.focus(), 30);
-    else setQuery("");
+    if (open) {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setDropPos({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: Math.max(rect.width, 288), // min 288px = w-72
+        });
+      }
+      setTimeout(() => inputRef.current?.focus(), 30);
+    } else {
+      setQuery("");
+    }
   }, [open]);
 
   const label = value === "uncontrolled"
@@ -248,7 +261,6 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
       .filter(p => p.name.toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
       .map(p => ({ value: p.id, label: p.name, sub: p.partNumber || null }));
     const devNames = new Set(devs.map(d => d.label.toLowerCase()));
-    // Materiały: pomiń te, które już są w katalogu (deduplikacja po nazwie)
     const mats = matOptions
       .filter(m => m.name.toLowerCase().includes(q) && !devNames.has(m.name.toLowerCase()))
       .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.sku || null }));
@@ -257,8 +269,73 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
 
   const select = (val) => { onChange(val); setOpen(false); };
 
+  const dropdown = open && ReactDOM.createPortal(
+    <div
+      className="absolute z-[9999] mt-0.5 bg-white border border-slate-200 rounded-xl shadow-lg"
+      style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
+    >
+      <div className="p-2 border-b border-slate-100">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Szukaj urządzenia lub materiału (min. 3 znaki)…"
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <div className="max-h-52 overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => select("uncontrolled")}
+          className={`w-full text-left px-3 py-1.5 text-xs border-b border-slate-50 ${value === "uncontrolled" ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-500 hover:bg-slate-50"}`}
+        >
+          — niesterowane —
+        </button>
+
+        {query.length < 3 ? (
+          <>
+            {catalog.length > 0 && (
+              <>
+                <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Urządzenia Loxone</div>
+                {catalog.map(p => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => select(p.id)}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === p.id ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+                  >
+                    <span className="truncate">{p.name}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0 font-mono">{p.partNumber}</span>
+                  </button>
+                ))}
+              </>
+            )}
+            <div className="px-3 py-2 text-[11px] text-slate-400 italic border-t border-slate-50">
+              Wpisz 3 znaki, aby wyszukać materiały…
+            </div>
+          </>
+        ) : suggestions.length > 0 ? (
+          suggestions.map(s => (
+            <button
+              type="button"
+              key={s.value}
+              onClick={() => select(s.value)}
+              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === s.value ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+            >
+              <span className="truncate">{s.label}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">{s.sub}</span>
+            </button>
+          ))
+        ) : (
+          <div className="px-3 py-3 text-xs text-slate-400 text-center">Brak wyników dla &ldquo;{query}&rdquo;</div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative" ref={triggerRef}>
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -267,69 +344,7 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
         <span className={`flex-1 text-left truncate ${value === "uncontrolled" ? "text-slate-400" : "text-slate-700"}`}>{label}</span>
         <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
       </button>
-
-      {open && (
-        <div className="absolute left-0 top-full mt-0.5 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-72">
-          <div className="p-2 border-b border-slate-100">
-            <input
-              ref={inputRef}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Szukaj urządzenia lub materiału (min. 3 znaki)…"
-              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-400"
-            />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {/* Niesterowane — zawsze widoczne */}
-            <button
-              type="button"
-              onClick={() => select("uncontrolled")}
-              className={`w-full text-left px-3 py-1.5 text-xs border-b border-slate-50 ${value === "uncontrolled" ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-500 hover:bg-slate-50"}`}
-            >
-              — niesterowane —
-            </button>
-
-            {query.length < 3 ? (
-              /* Bez wyszukiwania: lista urządzeń z katalogu */
-              <>
-                {catalog.length > 0 && (
-                  <>
-                    <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Urządzenia Loxone</div>
-                    {catalog.map(p => (
-                      <button
-                        type="button"
-                        key={p.id}
-                        onClick={() => select(p.id)}
-                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === p.id ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
-                      >
-                        <span className="truncate">{p.name}</span>
-                        <span className="text-[10px] text-slate-400 shrink-0 font-mono">{p.partNumber}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-                <div className="px-3 py-2 text-[11px] text-slate-400 italic border-t border-slate-50">
-                  Wpisz 3 znaki, aby wyszukać materiały…
-                </div>
-              </>
-            ) : suggestions.length > 0 ? (
-              suggestions.map(s => (
-                <button
-                  type="button"
-                  key={s.value}
-                  onClick={() => select(s.value)}
-                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === s.value ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
-                >
-                  <span className="truncate">{s.label}</span>
-                  <span className="text-[10px] text-slate-400 shrink-0">{s.sub}</span>
-                </button>
-              ))
-            ) : (
-              <div className="px-3 py-3 text-xs text-slate-400 text-center">Brak wyników dla &ldquo;{query}&rdquo;</div>
-            )}
-          </div>
-        </div>
-      )}
+      {dropdown}
     </div>
   );
 }
