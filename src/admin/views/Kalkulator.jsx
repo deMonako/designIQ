@@ -83,26 +83,26 @@ const COLS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function resolveDefaultDevice(rawTyp, rola, catalog) {
+function resolveDefaultDevice(rawTyp, rola) {
   const isSlave = (rola ?? "").toLowerCase().includes("slave");
 
   if (UNCONTROLLED_TYPES.has(rawTyp)) return "uncontrolled";
   if (isSlave && !SLAVE_GETS_DEVICE.has(rawTyp)) return "uncontrolled";
 
   const byTyp = DEFAULT_DEVICE_BY_TYP[rawTyp];
-  if (byTyp && catalog.some(p => p.id === byTyp)) return byTyp;
+  if (byTyp) return byTyp;
 
   return "uncontrolled";
 }
 
-function attribsToRows(attribs, floorName, catalog) {
+function attribsToRows(attribs, floorName) {
   const rows = [];
   for (const [handle, a] of Object.entries(attribs)) {
     if (handle === "_meta" || !a || typeof a !== "object") continue;
     const rawTyp = a.typ ?? "";
     const rola   = a.rola ?? "";
     const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
-    const controlDevice = resolveDefaultDevice(rawTyp, rola, catalog);
+    const controlDevice = resolveDefaultDevice(rawTyp, rola);
     const ioCount = DEFAULT_IO_BY_TYP[rawTyp] ?? 1;
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
@@ -121,7 +121,8 @@ function attribsToRows(attribs, floorName, catalog) {
       rawTyp,
       controlDevice,
       ioCount,
-      materials:    [],
+      materials:         [],
+      requiresAttention: false,
     });
   }
   return rows;
@@ -224,10 +225,15 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
   const [query, setQuery] = useState("");
   const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
   const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const h = (e) => { if (triggerRef.current && !triggerRef.current.contains(e.target)) setOpen(false); };
+    const h = (e) => {
+      const inTrigger = triggerRef.current?.contains(e.target);
+      const inDropdown = dropdownRef.current?.contains(e.target);
+      if (!inTrigger && !inDropdown) setOpen(false);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
@@ -271,6 +277,7 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
 
   const dropdown = open && ReactDOM.createPortal(
     <div
+      ref={dropdownRef}
       className="absolute z-[9999] mt-0.5 bg-white border border-slate-200 rounded-xl shadow-lg"
       style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
     >
@@ -610,6 +617,9 @@ function PointCalculator({ projects }) {
   // Filtr master
   const [filterMasterOnly, setFilterMasterOnly] = useState(false);
 
+  // Filtr: wymaga uwagi
+  const [filterNeedsAttention, setFilterNeedsAttention] = useState(false);
+
   // Sortowanie
   const [sortKey, setSortKey] = useState("pomieszczenie");
   const [sortDir, setSortDir] = useState("asc");
@@ -671,9 +681,10 @@ function PointCalculator({ projects }) {
       if (!override) return r;
       return {
         ...r,
-        controlDevice: override.controlDevice ?? r.controlDevice,
-        ioCount:       override.ioCount       ?? r.ioCount,
-        materials:     override.materials      ?? r.materials,
+        controlDevice:     override.controlDevice     ?? r.controlDevice,
+        ioCount:           override.ioCount           ?? r.ioCount,
+        materials:         override.materials          ?? r.materials,
+        requiresAttention: override.requiresAttention ?? r.requiresAttention,
       };
     });
   }, []);
@@ -701,7 +712,7 @@ function PointCalculator({ projects }) {
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
             if (!floor.attribs || typeof floor.attribs !== "object") continue;
-            loaded.push(...attribsToRows(floor.attribs, floor.name, catalog));
+            loaded.push(...attribsToRows(floor.attribs, floor.name));
           }
         }
 
@@ -721,7 +732,7 @@ function PointCalculator({ projects }) {
     } finally {
       setLoading(false);
     }
-  }, [project, catalog]);
+  }, [project]);
 
   // Zapisz konfigurację do config.json
   const handleSaveConfig = useCallback(async () => {
@@ -731,12 +742,13 @@ function PointCalculator({ projects }) {
     try {
       const rowOverrides = {};
       for (const r of rows) {
-        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== (DEFAULT_IO_BY_TYP[r.rawTyp] ?? 1);
+        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== (DEFAULT_IO_BY_TYP[r.rawTyp] ?? 1) || r.requiresAttention;
         if (hasOverride) {
           rowOverrides[r._id] = {
-            controlDevice: r.controlDevice,
-            ioCount:       r.ioCount,
-            materials:     r.materials,
+            controlDevice:     r.controlDevice,
+            ioCount:           r.ioCount,
+            materials:         r.materials,
+            requiresAttention: r.requiresAttention,
           };
         }
       }
@@ -769,6 +781,7 @@ function PointCalculator({ projects }) {
         if (filterFloor !== "all" && r.kondygnacja  !== filterFloor) return false;
         if (filterRoom  !== "all" && r.pomieszczenie !== filterRoom)  return false;
         if (filterMasterOnly && !(r.rola ?? "").toLowerCase().includes("master")) return false;
+        if (filterNeedsAttention && !r.requiresAttention) return false;
         if (q && !["tag","rola","pomieszczenie","uwagi","typ","wariant"].some(k => (r[k] ?? "").toLowerCase().includes(q))) return false;
         return true;
       })
@@ -777,7 +790,7 @@ function PointCalculator({ projects }) {
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
+  }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, filterNeedsAttention, sortKey, sortDir]);
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -795,7 +808,7 @@ function PointCalculator({ projects }) {
 
   // Widoczne kolumny do wyświetlenia
   const activeCols = COLS.filter(c => visibleCols.has(c.key));
-  const totalColSpan = activeCols.length + 4; // +4 za typ-badge, el.sterujący, I/O, materiały
+  const totalColSpan = activeCols.length + 5; // +5 za el.sterujący, I/O, materiały, uwaga, (zapas)
 
   const handleSave = async () => {
     if (!project) return;
@@ -971,6 +984,17 @@ function PointCalculator({ projects }) {
                 Tylko master
               </label>
 
+              {/* Filtr: wymaga uwagi */}
+              <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none whitespace-nowrap border rounded-lg px-2.5 py-2 transition-colors ${filterNeedsAttention ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+                <input
+                  type="checkbox"
+                  checked={filterNeedsAttention}
+                  onChange={e => setFilterNeedsAttention(e.target.checked)}
+                  className="rounded accent-amber-500"
+                />
+                Wymaga uwagi
+              </label>
+
               {/* Licznik */}
               <span className="text-xs text-slate-400 whitespace-nowrap">
                 {filteredRows.length} / {rows.length} pkt.
@@ -1016,9 +1040,13 @@ function PointCalculator({ projects }) {
             </div>
 
             {/* Tabela */}
-            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+            <div
+              className="border border-slate-200 rounded-xl overflow-hidden"
+              style={{ minHeight: "calc(100vh - 360px)", maxHeight: "calc(100vh - 360px)" }}
+            >
+              <div className="overflow-x-auto overflow-y-auto h-full">
               <table className="w-full text-sm" style={{ minWidth: "860px" }}>
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                     {activeCols.map(col => (
                       <th
@@ -1032,6 +1060,7 @@ function PointCalculator({ projects }) {
                       </th>
                     ))}
                     {/* Stałe kolumny kalkulatora */}
+                    <th className="text-center px-3 py-1.5 w-16">Uwaga</th>
                     <th className="text-left px-3 py-1.5 w-48">Element sterujący</th>
                     <th className="text-center px-3 py-1.5 w-14">I/O</th>
                     <th className="text-left px-3 py-1.5 w-24">Materiały</th>
@@ -1058,6 +1087,17 @@ function PointCalculator({ projects }) {
                             )}
                           </td>
                         ))}
+
+                        {/* Wymaga uwagi */}
+                        <td className="px-3 py-0.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={row.requiresAttention ?? false}
+                            onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
+                            className="rounded accent-amber-500 cursor-pointer w-4 h-4"
+                            title="Wymaga uwagi"
+                          />
+                        </td>
 
                         {/* Element sterujący */}
                         <td className="px-3 py-0.5 min-w-[200px]">
@@ -1113,6 +1153,7 @@ function PointCalculator({ projects }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Akcje pod tabelą */}
@@ -1120,6 +1161,9 @@ function PointCalculator({ projects }) {
               <div className="text-xs text-slate-400">
                 {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem ·{" "}
                 {rows.filter(r => r.materials.length > 0).length} z materiałami
+                {rows.filter(r => r.requiresAttention).length > 0 && (
+                  <span className="text-amber-500 ml-1">· {rows.filter(r => r.requiresAttention).length} wymaga uwagi</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <AnimatePresence>
