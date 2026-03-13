@@ -1,24 +1,24 @@
 // src/components/ui/select.jsx
 import React, { useState, cloneElement, useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 
 export function Select({ value, onValueChange, children, className }) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
 
   const toggleOpen = () => setOpen((s) => !s);
   const close = () => setOpen(false);
 
   return (
-    <div className={`relative ${className}`}>
+    <div className={`relative ${className}`} ref={triggerRef}>
       {React.Children.map(children, (child) => {
         if (!child) return null;
 
         if (child.type?.displayName === "SelectTrigger") {
-          // przekazujemy open, toggleOpen, value
           return cloneElement(child, { open, toggleOpen, value });
         }
         if (child.type?.displayName === "SelectContent") {
-          // przekazujemy open, close, value, onValueChange
-          return cloneElement(child, { open, close, value, onValueChange });
+          return cloneElement(child, { open, close, value, onValueChange, triggerRef });
         }
         return child;
       })}
@@ -58,8 +58,6 @@ export function SelectTrigger({ open, toggleOpen, value, children, className }) 
 SelectTrigger.displayName = "SelectTrigger";
 
 export function SelectValue({ children, placeholder, className }) {
-  // jeśli są children -> użyj children
-  // jeśli nie ma -> placeholder
   return <span className={className}>{children || placeholder}</span>;
 }
 SelectValue.displayName = "SelectValue";
@@ -67,17 +65,44 @@ SelectValue.displayName = "SelectValue";
 /* ---------------------------
    Content + Item (lista)
    --------------------------- */
-export function SelectContent({ children, open, close, onValueChange, value, className }) {
+export function SelectContent({ children, open, close, onValueChange, value, triggerRef, className }) {
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (open && triggerRef?.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  }, [open, triggerRef]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (!triggerRef?.current?.contains(e.target)) {
+        close();
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, close, triggerRef]);
+
   if (!open) return null;
 
-  return (
-    <div className={`absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg ${className}`}>
+  return ReactDOM.createPortal(
+    <div
+      className={`absolute z-[9999] mt-1 bg-white border border-slate-200 rounded-lg shadow-lg ${className}`}
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
+    >
       {React.Children.map(children, (child) => {
         if (!child) return null;
-        // przekazujemy aktualną wartość jako `selectedValue`
         return cloneElement(child, { onValueChange, close, selectedValue: value });
       })}
-    </div>
+    </div>,
+    document.body
   );
 }
 SelectContent.displayName = "SelectContent";
@@ -88,7 +113,6 @@ export function SelectItem({ children, value: itemValue, onValueChange, close, s
     close?.();
   };
 
-  // selectedValue to aktualny value z Select; itemValue to wartość tego elementu
   const isSelected = selectedValue === itemValue;
 
   return (
