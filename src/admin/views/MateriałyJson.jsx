@@ -6,16 +6,26 @@ import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
+const SHOP_CATEGORIES = [
+  { key: "smart_home", label: "Sprzęt Smart Home" },
+  { key: "cables",     label: "Kable i osprzęt" },
+  { key: "cabinet",    label: "Szafa sterownicza" },
+  { key: "audio",      label: "Audio / Video" },
+  { key: "security",   label: "Monitoring i bezpieczeństwo" },
+  { key: "other",      label: "Inne" },
+];
+
 function emptyItem() {
-  return { _id: `m-${Date.now()}`, name: "", price_pln: 0, link: "" };
+  return { _id: `m-${Date.now()}`, name: "", price_pln: 0, link: "", shopCategory: "" };
 }
 
 function normalize(item) {
   return {
     _id: `m-${Math.random().toString(36).slice(2)}`,
-    name:      item.name      ?? "",
-    price_pln: item.price_pln ?? 0,
-    link:      item.link ?? item.sku ?? "",
+    name:         item.name         ?? "",
+    price_pln:    item.price_pln    ?? 0,
+    link:         item.link ?? item.sku ?? "",
+    shopCategory: item.shopCategory ?? "",
   };
 }
 
@@ -47,10 +57,11 @@ export default function MateriałyJson() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = items.map(({ name, price_pln, link }) => ({
+      const payload = items.map(({ name, price_pln, link, shopCategory }) => ({
         name,
         price_pln: Number(price_pln),
         link,
+        shopCategory: shopCategory ?? "",
       }));
       await gasPost("saveMaterialyJson", { items: payload });
       toast.success("Materiały zapisane");
@@ -108,13 +119,14 @@ export default function MateriałyJson() {
                 <th className="text-left px-4 py-3">Nazwa</th>
                 <th className="text-right px-4 py-3 w-36">Cena (zł)</th>
                 <th className="text-left px-4 py-3">Link</th>
+                <th className="text-left px-4 py-3 w-52">Kategoria zakupowa</th>
                 <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center py-10 text-slate-300 text-sm">
+                  <td colSpan={5} className="text-center py-10 text-slate-300 text-sm">
                     Brak elementów — kliknij „Dodaj materiał"
                   </td>
                 </tr>
@@ -158,6 +170,18 @@ export default function MateriałyJson() {
                       )}
                     </div>
                   </td>
+                  <td className="px-4 py-2">
+                    <select
+                      value={item.shopCategory}
+                      onChange={e => update(item._id, "shopCategory", e.target.value)}
+                      className="w-full bg-transparent border-0 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400/50 rounded px-1 py-0.5 text-slate-700 text-sm"
+                    >
+                      <option value="">— brak —</option>
+                      {SHOP_CATEGORIES.map(c => (
+                        <option key={c.key} value={c.key}>{c.label}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="px-2 py-2 text-center">
                     <button
                       onClick={() => remove(item._id)}
@@ -171,7 +195,7 @@ export default function MateriałyJson() {
             </tbody>
             <tfoot>
               <tr className="bg-slate-50 border-t border-slate-200">
-                <td colSpan={4} className="px-4 py-2.5">
+                <td colSpan={5} className="px-4 py-2.5">
                   <button
                     onClick={addItem}
                     className="flex items-center gap-1.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors"
