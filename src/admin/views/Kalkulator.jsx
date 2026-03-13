@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
@@ -40,6 +40,32 @@ const TYP_MAP = {
   "Inne":                      "relay_output",
 };
 
+// Domyślne urządzenie wg nazwy typu (bardziej precyzyjne niż DEFAULT_CONTROL)
+const DEFAULT_DEVICE_BY_TYP = {
+  "Audio":                     "lox-audio-master",   // slave → niesterowane
+  "Czujniki obecności LOXONE": "lox-presence-sensor",// slave też dostaje urządzenie
+  "Gniazda sterowane":         "lox-tree-relay-14",
+  "Kontaktrony":               "lox-kontaktron",
+  "Oświetlenie 230V":          "lox-tree-relay-14",
+  "Oświetlenie zewn. 230V":    "lox-tree-relay-14",
+  "Oświetlenie 24V":           "lox-dimmer-24v",
+  "Oświetlenie zewn. 24V":     "lox-dimmer-24v",
+  "Rolety":                    "lox-tree-relay-14",
+  "Włączniki LOXONE":          "lox-switch",         // slave też dostaje urządzenie
+};
+
+// Domyślna liczba zajmowanych kanałów na punkt
+const DEFAULT_IO_BY_TYP = {
+  "Rolety": 2,
+};
+
+// Typy, dla których slave dostaje urządzenie (wyjątek od ogólnej reguły)
+const SLAVE_GETS_DEVICE = new Set([
+  "Włączniki LOXONE",
+  "Czujniki obecności LOXONE",
+]);
+
+// Fallback gdy typ nie ma wpisu w DEFAULT_DEVICE_BY_TYP
 const DEFAULT_CONTROL = {
   relay_output:  "lox-relay-ext",
   dimmer_output: "lox-dimmer-ext",
@@ -66,21 +92,43 @@ const COLS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function resolveDefaultDevice(rawTyp, rola, catalog) {
+  const isSlave = (rola ?? "").toLowerCase().includes("slave");
+
+  // Typ z listy "niesterowane"
+  if (UNCONTROLLED_TYPES.has(rawTyp)) return "uncontrolled";
+
+  // Slave → niesterowane, chyba że typ jest w wyjątkach
+  if (isSlave && !SLAVE_GETS_DEVICE.has(rawTyp)) return "uncontrolled";
+
+  // Szukaj konkretnego urządzenia dla tego typu
+  const byTyp = DEFAULT_DEVICE_BY_TYP[rawTyp];
+  if (byTyp && catalog.some(p => p.id === byTyp)) return byTyp;
+
+  // Fallback przez resourceType
+  const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
+  const fallbackId = DEFAULT_CONTROL[resourceType];
+  if (fallbackId && catalog.some(p => p.id === fallbackId)) return fallbackId;
+
+  return "uncontrolled";
+}
+
 function attribsToRows(attribs, floorName, catalog) {
   const rows = [];
   for (const [handle, a] of Object.entries(attribs)) {
     if (handle === "_meta" || !a || typeof a !== "object") continue;
     const rawTyp = a.typ ?? "";
+    const rola   = a.rola ?? "";
     const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
-    const defaultId = DEFAULT_CONTROL[resourceType];
-    const exists = catalog.some(p => p.id === defaultId);
+    const controlDevice = resolveDefaultDevice(rawTyp, rola, catalog);
+    const ioCount = DEFAULT_IO_BY_TYP[rawTyp] ?? 1;
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",
       typ:          rawTyp,
-      rola:         a.rola         ?? "",
+      rola,
       uwagi:        a.uwagi        ?? "",
       przewód:      a.przewód      ?? "",
       wysokość:     a.wysokość     ?? "",
@@ -89,9 +137,9 @@ function attribsToRows(attribs, floorName, catalog) {
       // kalkulatorowe
       resourceType,
       rawTyp,
-      controlDevice: (UNCONTROLLED_TYPES.has(rawTyp) || !exists) ? "uncontrolled" : defaultId,
-      ioCount:       1,
-      materials:     [],
+      controlDevice,
+      ioCount,
+      materials:    [],
     });
   }
   return rows;
@@ -183,6 +231,124 @@ function exportXLSX(rows, catalog, summary) {
     const csv2 = [toCsvRow(headers2), ...data2.map(toCsvRow)].join("\n");
     downloadCsv(csv2, "zestawienie.csv");
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ControlDevicePicker — picker z wyszukiwaniem urządzeń i materiałów
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 30);
+    else setQuery("");
+  }, [open]);
+
+  const label = value === "uncontrolled"
+    ? "— niesterowane —"
+    : value?.startsWith("mat:")
+      ? value.slice(4)
+      : catalog.find(p => p.id === value)?.name ?? value;
+
+  const suggestions = useMemo(() => {
+    if (query.length < 3) return [];
+    const q = query.toLowerCase();
+    const devs = catalog
+      .filter(p => p.name.toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
+      .map(p => ({ value: p.id, label: p.name, sub: p.partNumber, type: "device" }));
+    const mats = matOptions
+      .filter(m => m.name.toLowerCase().includes(q))
+      .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.price_pln != null ? `${m.price_pln} zł` : null, type: "material" }));
+    return [...devs, ...mats].slice(0, 12);
+  }, [query, catalog, matOptions]);
+
+  const select = (val) => { onChange(val); setOpen(false); };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1 w-full border rounded-lg px-2 py-1 text-xs bg-white transition-colors ${open ? "border-orange-400 ring-1 ring-orange-400/20" : "border-slate-200 hover:border-orange-300"}`}
+      >
+        <span className={`flex-1 text-left truncate ${value === "uncontrolled" ? "text-slate-400" : "text-slate-700"}`}>{label}</span>
+        <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 top-full mt-0.5 z-50 bg-white border border-slate-200 rounded-xl shadow-lg w-72">
+          <div className="p-2 border-b border-slate-100">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Szukaj urządzenia lub materiału (min. 3 znaki)…"
+              className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-400"
+            />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {/* Niesterowane — zawsze widoczne */}
+            <button
+              type="button"
+              onClick={() => select("uncontrolled")}
+              className={`w-full text-left px-3 py-1.5 text-xs border-b border-slate-50 ${value === "uncontrolled" ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-500 hover:bg-slate-50"}`}
+            >
+              — niesterowane —
+            </button>
+
+            {query.length < 3 ? (
+              /* Bez wyszukiwania: lista urządzeń z katalogu */
+              <>
+                {catalog.length > 0 && (
+                  <>
+                    <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Urządzenia Loxone</div>
+                    {catalog.map(p => (
+                      <button
+                        type="button"
+                        key={p.id}
+                        onClick={() => select(p.id)}
+                        className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === p.id ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+                      >
+                        <span className="truncate">{p.name}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0 font-mono">{p.partNumber}</span>
+                      </button>
+                    ))}
+                  </>
+                )}
+                <div className="px-3 py-2 text-[11px] text-slate-400 italic border-t border-slate-50">
+                  Wpisz 3 znaki, aby wyszukać materiały…
+                </div>
+              </>
+            ) : suggestions.length > 0 ? (
+              suggestions.map(s => (
+                <button
+                  type="button"
+                  key={s.value}
+                  onClick={() => select(s.value)}
+                  className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === s.value ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+                >
+                  <span className="truncate">{s.label}</span>
+                  <span className="text-[10px] text-slate-400 shrink-0">{s.sub}</span>
+                </button>
+              ))
+            ) : (
+              <div className="px-3 py-3 text-xs text-slate-400 text-center">Brak wyników dla &ldquo;{query}&rdquo;</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -438,6 +604,7 @@ function PointCalculator({ projects }) {
 
   // Filtrowanie
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [filterTyp, setFilterTyp] = useState("all");
   const [filterFloor, setFilterFloor] = useState("all");
   const [filterRoom, setFilterRoom] = useState("all");
@@ -533,7 +700,7 @@ function PointCalculator({ projects }) {
   useEffect(() => { setFilterRoom("all"); }, [filterFloor]);
 
   const filteredRows = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = deferredSearch.toLowerCase();
     return rows
       .filter(r => {
         if (filterTyp   !== "all" && r.typ          !== filterTyp)   return false;
@@ -548,7 +715,7 @@ function PointCalculator({ projects }) {
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [rows, search, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
+  }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -803,26 +970,13 @@ function PointCalculator({ projects }) {
                         ))}
 
                         {/* Element sterujący */}
-                        <td className="px-3 py-0.5">
-                          <select
+                        <td className="px-3 py-0.5 min-w-[200px]">
+                          <ControlDevicePicker
                             value={row.controlDevice ?? "uncontrolled"}
-                            onChange={e => updateRow(row._id, { controlDevice: e.target.value })}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white w-full"
-                          >
-                            <option value="uncontrolled">— niesterowane —</option>
-                            {catalog.length > 0 && (
-                              <optgroup label="Urządzenia Loxone">
-                                {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </optgroup>
-                            )}
-                            {matOptions.length > 0 && (
-                              <optgroup label="Materiały">
-                                {matOptions.map(m => (
-                                  <option key={`mat:${m.name}`} value={`mat:${m.name}`}>{m.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
+                            catalog={catalog}
+                            matOptions={matOptions}
+                            onChange={v => updateRow(row._id, { controlDevice: v })}
+                          />
                         </td>
 
                         {/* I/O */}
