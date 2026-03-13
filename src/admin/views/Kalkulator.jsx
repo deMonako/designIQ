@@ -3,16 +3,15 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
   ShoppingCart, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu,
+  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu, Save, FolderOpen,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
-import { loadProductCatalog, buildCatalogFromCennik } from "../../lib/shoppingList/productCatalog";
+import { buildCatalogFromCennik } from "../../lib/shoppingList/productCatalog";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-const FALLBACK_CATALOG = loadProductCatalog();
 
 // ── Mapowania ────────────────────────────────────────────────────────────────
 
@@ -40,7 +39,7 @@ const TYP_MAP = {
   "Inne":                      "relay_output",
 };
 
-// Domyślne urządzenie wg nazwy typu (bardziej precyzyjne niż DEFAULT_CONTROL)
+// Domyślne urządzenie wg nazwy typu
 const DEFAULT_DEVICE_BY_TYP = {
   "Audio":                     "lox-audio-master",   // slave → niesterowane
   "Czujniki obecności LOXONE": "lox-presence-sensor",// slave też dostaje urządzenie
@@ -65,25 +64,16 @@ const SLAVE_GETS_DEVICE = new Set([
   "Czujniki obecności LOXONE",
 ]);
 
-// Fallback gdy typ nie ma wpisu w DEFAULT_DEVICE_BY_TYP
-const DEFAULT_CONTROL = {
-  relay_output:  "lox-relay-ext",
-  dimmer_output: "lox-dimmer-ext",
-  rgbw_output:   "lox-rgbw-dimmer",
-  motor_output:  "lox-blind-ctrl",
-  digital_input: "lox-extension",
-  analog_input:  "lox-analog-ext",
-};
 
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true  },
+  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true,  narrow: true  },
   { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true  },
   { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
   { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
   { key: "rola",          label: "Rola",           sortable: true,  defaultVisible: true  },
-  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: true  },
+  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: false },
   { key: "przewód",       label: "Przewód",        sortable: false, defaultVisible: false },
   { key: "wysokość",      label: "Wysokość",       sortable: false, defaultVisible: false },
   { key: "wariant",       label: "Wariant",        sortable: false, defaultVisible: false },
@@ -95,20 +85,11 @@ const COLS = [
 function resolveDefaultDevice(rawTyp, rola, catalog) {
   const isSlave = (rola ?? "").toLowerCase().includes("slave");
 
-  // Typ z listy "niesterowane"
   if (UNCONTROLLED_TYPES.has(rawTyp)) return "uncontrolled";
-
-  // Slave → niesterowane, chyba że typ jest w wyjątkach
   if (isSlave && !SLAVE_GETS_DEVICE.has(rawTyp)) return "uncontrolled";
 
-  // Szukaj konkretnego urządzenia dla tego typu
   const byTyp = DEFAULT_DEVICE_BY_TYP[rawTyp];
   if (byTyp && catalog.some(p => p.id === byTyp)) return byTyp;
-
-  // Fallback przez resourceType
-  const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
-  const fallbackId = DEFAULT_CONTROL[resourceType];
-  if (fallbackId && catalog.some(p => p.id === fallbackId)) return fallbackId;
 
   return "uncontrolled";
 }
@@ -265,10 +246,12 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
     const q = query.toLowerCase();
     const devs = catalog
       .filter(p => p.name.toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
-      .map(p => ({ value: p.id, label: p.name, sub: p.partNumber, type: "device" }));
+      .map(p => ({ value: p.id, label: p.name, sub: p.partNumber || null }));
+    const devNames = new Set(devs.map(d => d.label.toLowerCase()));
+    // Materiały: pomiń te, które już są w katalogu (deduplikacja po nazwie)
     const mats = matOptions
-      .filter(m => m.name.toLowerCase().includes(q))
-      .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.price_pln != null ? `${m.price_pln} zł` : null, type: "material" }));
+      .filter(m => m.name.toLowerCase().includes(q) && !devNames.has(m.name.toLowerCase()))
+      .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.sku || null }));
     return [...devs, ...mats].slice(0, 12);
   }, [query, catalog, matOptions]);
 
@@ -589,7 +572,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
 function PointCalculator({ projects }) {
   // Dane
   const [rows, setRows] = useState([]);
-  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [catalog, setCatalog] = useState([]);
   const [cennik, setCennik] = useState([]);
   const [matList, setMatList] = useState([]);
 
@@ -622,9 +605,14 @@ function PointCalculator({ projects }) {
   );
   const [showColPicker, setShowColPicker] = useState(false);
 
-  // Zapis
+  // Zapis do zakupów
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null);
+
+  // Konfiguracja kalkulatora (config.json)
+  const [pendingConfig, setPendingConfig] = useState(null); // config czekający na decyzję
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configSaveResult, setConfigSaveResult] = useState(null); // "ok"|"err"|null
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
@@ -638,18 +626,14 @@ function PointCalculator({ projects }) {
     ]).then(([loxData, cennikData, matData]) => {
       const cennikArr = Array.isArray(cennikData) ? cennikData : [];
       // Buduj katalog: loxone.json z Drive (jeśli dostępny), uzupełniony
-      // o urządzenia znalezione w cennik.json po SKU; fallback = hardcoded
+      // o urządzenia znalezione w cennik.json po SKU
       const fromCennik = buildCatalogFromCennik(cennikArr);
       if (Array.isArray(loxData) && loxData.length > 0) {
-        // Połącz dane z loxone.json z wpisami z cennika (cennik nadpisuje duplikaty)
         const loxIds = new Set(loxData.map(p => p.id));
         setCatalog([...loxData, ...fromCennik.filter(p => !loxIds.has(p.id))]);
-      } else if (fromCennik.length > 0) {
-        // Brak loxone.json — użyj wpisów z cennika + hardcoded fallback
-        const cennikIds = new Set(fromCennik.map(p => p.id));
-        setCatalog([...fromCennik, ...FALLBACK_CATALOG.filter(p => !cennikIds.has(p.id))]);
+      } else {
+        setCatalog(fromCennik);
       }
-      // else: zostaje FALLBACK_CATALOG (stan początkowy)
       setCennik(cennikArr);
       setMatList(Array.isArray(matData) ? matData : []);
     });
@@ -657,12 +641,27 @@ function PointCalculator({ projects }) {
 
   const matOptions = useMemo(() => {
     const all = [
-      ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln })),
-      ...matList.map(m => ({ name: m.name, price_pln: m.price_pln })),
+      ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln, sku: c.sku ?? null })),
+      ...matList.map(m => ({ name: m.name, price_pln: m.price_pln, sku: null })),
     ];
     const seen = new Set();
     return all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name));
   }, [cennik, matList]);
+
+  // Zastosuj konfigurację do wierszy
+  const applyConfig = useCallback((baseRows, cfg) => {
+    if (!cfg?.rows) return baseRows;
+    return baseRows.map(r => {
+      const override = cfg.rows[r._id];
+      if (!override) return r;
+      return {
+        ...r,
+        controlDevice: override.controlDevice ?? r.controlDevice,
+        ioCount:       override.ioCount       ?? r.ioCount,
+        materials:     override.materials      ?? r.materials,
+      };
+    });
+  }, []);
 
   // Wczytaj punkty z Google Drive
   const handleLoadPoints = useCallback(async () => {
@@ -672,24 +671,35 @@ function PointCalculator({ projects }) {
     setRows([]);
     setExpandedId(null);
     setActiveTab("table");
+    setPendingConfig(null);
+    setConfigSaveResult(null);
 
     try {
       let loaded = [];
 
       if (GAS_ON) {
-        const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
+        const [result, cfg] = await Promise.all([
+          GAS.getDwgViewerContent(project.code).catch(() => null),
+          GAS.getKalkulatorConfig(project.code).catch(() => null),
+        ]);
+
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
             if (!floor.attribs || typeof floor.attribs !== "object") continue;
             loaded.push(...attribsToRows(floor.attribs, floor.name, catalog));
           }
         }
+
+        if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
+          setPendingConfig({ cfg, baseRows: loaded });
+          setRows(loaded); // wczytaj bez konfiguracji, czekaj na decyzję
+        } else {
+          setRows(loaded);
+        }
       }
 
       if (loaded.length === 0) {
         setLoadError("Brak danych instalacyjnych. Wgraj projekt.json do folderu projektu na Google Drive.");
-      } else {
-        setRows(loaded);
       }
     } catch (e) {
       setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
@@ -697,6 +707,30 @@ function PointCalculator({ projects }) {
       setLoading(false);
     }
   }, [project, catalog]);
+
+  // Zapisz konfigurację do config.json
+  const handleSaveConfig = useCallback(async () => {
+    if (!project || rows.length === 0) return;
+    setConfigSaving(true);
+    setConfigSaveResult(null);
+    try {
+      const rowOverrides = {};
+      for (const r of rows) {
+        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== (DEFAULT_IO_BY_TYP[r.rawTyp] ?? 1);
+        if (hasOverride) {
+          rowOverrides[r._id] = {
+            controlDevice: r.controlDevice,
+            ioCount:       r.ioCount,
+            materials:     r.materials,
+          };
+        }
+      }
+      const config = { version: 1, savedAt: TODAY, rows: rowOverrides };
+      if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
+      setConfigSaveResult("ok");
+    } catch { setConfigSaveResult("err"); }
+    finally { setConfigSaving(false); }
+  }, [project, rows]);
 
   // Filtrowanie i sortowanie
   const { uniqueTypy, uniqueFloors } = useMemo(() => ({
@@ -786,7 +820,7 @@ function PointCalculator({ projects }) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
 
       {/* ── Nagłówek ── */}
       <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
@@ -843,6 +877,34 @@ function PointCalculator({ projects }) {
         {loadError && (
           <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <AlertCircle className="w-4 h-4 shrink-0" />{loadError}
+          </div>
+        )}
+
+        {/* Baner: znaleziono zapisaną konfigurację */}
+        {pendingConfig && (
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <FolderOpen className="w-4 h-4 text-blue-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-semibold text-blue-800">Znaleziono zapisaną konfigurację</span>
+              {pendingConfig.cfg.savedAt && (
+                <span className="text-xs text-blue-500 ml-2">z {pendingConfig.cfg.savedAt}</span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setRows(applyConfig(pendingConfig.baseRows, pendingConfig.cfg));
+                setPendingConfig(null);
+              }}
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+            >
+              Wczytaj konfigurację
+            </button>
+            <button
+              onClick={() => setPendingConfig(null)}
+              className="px-3 py-1.5 border border-blue-200 text-blue-600 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
+            >
+              Użyj tylko projektu
+            </button>
           </div>
         )}
 
@@ -940,13 +1002,13 @@ function PointCalculator({ projects }) {
 
             {/* Tabela */}
             <div className="border border-slate-200 rounded-xl overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: "900px" }}>
+              <table className="w-full text-sm" style={{ minWidth: "860px" }}>
                 <thead>
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                     {activeCols.map(col => (
                       <th
                         key={col.key}
-                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
+                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""} ${col.narrow ? "w-20" : ""}`}
                         onClick={() => col.sortable && handleSort(col.key)}
                       >
                         <div className="flex items-center gap-1">
@@ -1039,17 +1101,38 @@ function PointCalculator({ projects }) {
             </div>
 
             {/* Akcje pod tabelą */}
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between pt-1 gap-3">
               <div className="text-xs text-slate-400">
                 {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem ·{" "}
                 {rows.filter(r => r.materials.length > 0).length} z materiałami
               </div>
-              <button
-                onClick={() => setActiveTab("summary")}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
-              >
-                <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
-              </button>
+              <div className="flex items-center gap-2">
+                <AnimatePresence>
+                  {configSaveResult === "ok" && (
+                    <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Konfiguracja zapisana
+                    </motion.span>
+                  )}
+                  {configSaveResult === "err" && (
+                    <span className="flex items-center gap-1 text-xs text-red-500"><AlertCircle className="w-3.5 h-3.5" /> Błąd zapisu</span>
+                  )}
+                </AnimatePresence>
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={configSaving || !project}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
+                >
+                  {configSaving
+                    ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
+                    : <><Save className="w-3.5 h-3.5" /> Zapisz konfigurację</>}
+                </button>
+                <button
+                  onClick={() => setActiveTab("summary")}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
+                </button>
+              </div>
             </div>
           </>
         )}

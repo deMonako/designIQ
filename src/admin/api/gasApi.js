@@ -278,3 +278,17 @@ export async function getZakupy(projectId) {
 export async function upsertZakupy(zakupy) {
   return gasPost("upsertZakupy", { zakupy });
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// KONFIGURACJA KALKULATORA (config.json w folderze projektu)
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Odczytuje zapisaną konfigurację kalkulatora dla projektu */
+export async function getKalkulatorConfig(projectCode) {
+  return gasGet("getKalkulatorConfig", { projectCode });
+}
+
+/** Zapisuje konfigurację kalkulatora do config.json w folderze projektu */
+export async function saveKalkulatorConfig(projectCode, config) {
+  return gasPost("saveKalkulatorConfig", { projectCode, config });
+}

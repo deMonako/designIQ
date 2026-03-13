@@ -456,6 +456,24 @@ function doGet(e) {
         return err("Plik cennik.json nie znaleziony w folderze Materiały");
       }
 
+      // Odczytuje config.json z folderu projektu (konfiguracja kalkulatora)
+      // GET ?action=getKalkulatorConfig&projectCode=KOW-2026-001
+      case "getKalkulatorConfig": {
+        var cfgCode = e.parameter.projectCode;
+        if (!cfgCode) return ok(null);
+        var cfgFolder = getProjectFolder(cfgCode);
+        if (!cfgFolder) return ok(null);
+        var cfgFiles = cfgFolder.getFiles();
+        while (cfgFiles.hasNext()) {
+          var cfgFile = cfgFiles.next();
+          if (cfgFile.getName().toLowerCase() === "config.json") {
+            try { return ok(JSON.parse(cfgFile.getBlob().getDataAsString("UTF-8"))); }
+            catch(ex) { return ok(null); }
+          }
+        }
+        return ok(null);
+      }
+
       case "getLeads":
         return ok(sheetToObjects("Leady"));
 
@@ -742,9 +760,21 @@ function doPost(e) {
         return ok({ saved: true, count: body.items.length });
       }
 
-      // ── Leady (admin) ─────────────────────────────────────────────────────────
+      // Zapisuje config.json do folderu projektu (konfiguracja kalkulatora)
+      case "saveKalkulatorConfig": {
+        if (!body.projectCode || !body.config) return err("Brak danych");
+        var kcFolder = getOrCreateProjectFolder(body.projectCode);
+        if (!kcFolder) return err("Nie można uzyskać dostępu do folderu projektu");
+        var kcOld = kcFolder.getFiles();
+        while (kcOld.hasNext()) {
+          var kcF = kcOld.next();
+          if (kcF.getName().toLowerCase() === "config.json") { kcF.setTrashed(true); break; }
+        }
+        kcFolder.createFile("config.json", JSON.stringify(body.config, null, 2), "application/json");
+        return ok({ saved: true });
+      }
 
-      // Tworzenie leada z formularza kontaktowego lub konfiguratora
+      // ── Leady (admin) ─────────────────────────────────────────────────────────────────────────────rzenie leada z formularza kontaktowego lub konfiguratora
       // body: { lead: { id, name, email, phone, notes, pipelineStatus, status, source, date, ... } }
       case "createLead": {
         var newLeadObj = body.lead || {};

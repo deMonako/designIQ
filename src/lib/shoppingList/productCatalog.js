@@ -1,14 +1,14 @@
 /**
- * Baza produktów — PROTOTYP (dane hardcoded jako fallback).
+ * Baza produktów — DYNAMICZNA (dane z cennik.json na Google Drive).
  *
- * W docelowej wersji ta funkcja załaduje dane z pliku Excel
- * z głównego folderu bazy materiałów.
+ * Żadne produkty nie są hardcoded. Katalog budowany jest wyłącznie
+ * na podstawie wpisów w cennik.json, których SKU pasuje do CENNIK_SKU_SPECS.
  *
  * Schemat pojedynczego produktu:
  * {
  *   id:              string   — unikalne ID produktu
- *   name:            string   — pełna nazwa handlowa
- *   partNumber:      string   — numer katalogowy producenta
+ *   name:            string   — pełna nazwa handlowa (z cennika)
+ *   partNumber:      string   — numer katalogowy producenta (SKU z cennika)
  *   resourceType:    string   — jaki RESOURCE obsługuje (z resourceTypes.js)
  *   outputsPerUnit:  number   — ile kanałów obsługuje 1 sztuka
  *   unit:            string   — jednostka miary ("szt.", "kpl." …)
@@ -18,79 +18,10 @@
 
 import { RESOURCE } from "./resourceTypes.js";
 
-/** @type {ProductDefinition[]} */
-const CATALOG = [
-  // ── Relay ─────────────────────────────────────────────────────────────────
-  {
-    id: "lox-relay-ext",
-    name: "Loxone Relay Extension",
-    partNumber: "100039",
-    resourceType: RESOURCE.RELAY,
-    outputsPerUnit: 12,
-    unit: "szt.",
-    notes: "12 wyjść przekaźnikowych 230 V / 16 A",
-  },
-
-  // ── Dimmer ────────────────────────────────────────────────────────────────
-  {
-    id: "lox-dimmer-ext",
-    name: "Loxone Dimmer Extension",
-    partNumber: "100052",
-    resourceType: RESOURCE.DIMMER,
-    outputsPerUnit: 4,
-    unit: "szt.",
-    notes: "4 kanały PWM / 0–10 V; max 300 W na kanał",
-  },
-
-  // ── RGBW ──────────────────────────────────────────────────────────────────
-  {
-    id: "lox-rgbw-dimmer",
-    name: "Loxone RGBW 24V Dimmer",
-    partNumber: "200113",
-    resourceType: RESOURCE.RGBW,
-    outputsPerUnit: 1,
-    unit: "szt.",
-    notes: "1 kanał RGBW 24 V DC; steruje jedną listwą LED",
-  },
-
-  // ── Motor (napędy rolet / żaluzji) ────────────────────────────────────────
-  {
-    id: "lox-blind-ctrl",
-    name: "Loxone Blind & AC Motor Controller",
-    partNumber: "100096",
-    resourceType: RESOURCE.MOTOR,
-    outputsPerUnit: 2,
-    unit: "szt.",
-    notes: "2 niezależne kanały silnikowe; możliwość podania pozycji %",
-  },
-
-  // ── Digital Inputs ────────────────────────────────────────────────────────
-  {
-    id: "lox-extension",
-    name: "Loxone Extension",
-    partNumber: "100011",
-    resourceType: RESOURCE.DIGITAL_IN,
-    outputsPerUnit: 12,
-    unit: "szt.",
-    notes: "12 wejść cyfrowych + 12 wyjść cyfrowych; tu liczymy tylko wejścia",
-  },
-
-  // ── Analog Inputs ─────────────────────────────────────────────────────────
-  {
-    id: "lox-analog-ext",
-    name: "Loxone Analog Extension",
-    partNumber: "100059",
-    resourceType: RESOURCE.ANALOG_IN,
-    outputsPerUnit: 8,
-    unit: "szt.",
-    notes: "8 wejść analogowych 0–10 V / NTC / Pt1000",
-  },
-];
-
 /**
- * Specyfikacja dodatkowych urządzeń wyszukiwanych dynamicznie w cennik.json.
- * Jeśli dany SKU istnieje w cenniku, zostanie dodany do katalogu z nazwą
- * pobraną z cennika.
+ * Specyfikacja urządzeń wyszukiwanych dynamicznie w cennik.json.
+ * Jeśli dany SKU istnieje w cenniku, zostanie dodany do katalogu
+ * z nazwą pobraną z cennika.
  *
  * @type {Record<string, { id: string, resourceType: string, outputsPerUnit: number, unit?: string, notes?: string }>}
  */
@@ -131,20 +62,19 @@ export function buildCatalogFromCennik(cennikItems) {
 }
 
 /**
- * Zwraca bazowy katalog (hardcoded fallback).
- * Punkt rozszerzenia: zastąp tę funkcję ładowaniem z Excela / API.
- *
+ * Zwraca pusty katalog (produkty budowane dynamicznie z cennik.json).
  * @returns {ProductDefinition[]}
  */
 export function loadProductCatalog() {
-  return CATALOG;
+  return [];
 }
 
 /**
  * Zwraca produkty obsługujące dany typ zasobu.
  * @param {string} resourceType
+ * @param {ProductDefinition[]} catalog - aktualny katalog
  * @returns {ProductDefinition[]}
  */
-export function getProductsForResource(resourceType) {
-  return CATALOG.filter(p => p.resourceType === resourceType);
+export function getProductsForResource(resourceType, catalog = []) {
+  return catalog.filter(p => p.resourceType === resourceType);
 }
