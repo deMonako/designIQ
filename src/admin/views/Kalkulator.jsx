@@ -1040,11 +1040,8 @@ function PointCalculator({ projects }) {
             </div>
 
             {/* Tabela */}
-            <div
-              className="border border-slate-200 rounded-xl overflow-hidden"
-              style={{ minHeight: "calc(100vh - 360px)", maxHeight: "calc(100vh - 360px)" }}
-            >
-              <div className="overflow-x-auto overflow-y-auto h-full">
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 430px)" }}>
               <table className="w-full text-sm" style={{ minWidth: "860px" }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
