@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   X, Plus, Trash2, Save, Loader2, ShoppingCart, ChevronDown, ChevronUp,
   ExternalLink, Package
 } from "lucide-react";
 import { toast } from "sonner";
 import { getZakupy, upsertZakupy } from "../api/gasApi";
+import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -45,6 +46,10 @@ export default function ZakupyEditor({ project, onClose }) {
   const [loading,  setLoading] = useState(true);
   const [saving,   setSaving]  = useState(false);
   const [collapsed, setCollapsed] = useState({});
+  const [cennik,   setCennik]  = useState([]);
+  const [sugg,     setSugg]    = useState({});
+  const [suggPos,  setSuggPos] = useState({});
+  const suggRefs = useRef({});
 
   useEffect(() => {
     if (!GAS_ON) { setLoading(false); return; }
@@ -57,7 +62,34 @@ export default function ZakupyEditor({ project, onClose }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    Promise.all([
+      gasGet("getCennik").catch(() => []),
+      gasGet("getMaterialyJson").catch(() => []),
+    ]).then(([cennikData, matData]) => {
+      const merged = [
+        ...(Array.isArray(cennikData) ? cennikData : []),
+        ...(Array.isArray(matData) ? matData.map(m => ({ name: m.name, price_pln: m.price_pln, sku: null, link: m.link })) : []),
+      ];
+      setCennik(merged);
+    });
   }, [project.id]);
+
+  // Zamknij podpowiedzi po kliknięciu poza
+  useEffect(() => {
+    const handler = (e) => {
+      setSugg(prev => {
+        const next = { ...prev };
+        Object.keys(suggRefs.current).forEach(id => {
+          if (suggRefs.current[id] && !suggRefs.current[id].contains(e.target)) {
+            if (next[id]) next[id] = { ...next[id], show: false };
+          }
+        });
+        return next;
+      });
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const addItem    = () => setItems(prev => [...prev, emptyItem()]);
   const removeItem = (id) => setItems(prev => prev.filter(it => it.id !== id));
@@ -68,6 +100,32 @@ export default function ZakupyEditor({ project, onClose }) {
         : it
     ));
   };
+
+  const handleNameChange = useCallback((id, value) => {
+    updateItem(id, "name", value);
+    if (value.length >= 3 && cennik.length > 0) {
+      const q = value.toLowerCase();
+      const matches = cennik
+        .filter(c => (c.name != null && c.name.toLowerCase().includes(q)) || (c.sku != null && String(c.sku).toLowerCase().includes(q)))
+        .slice(0, 8);
+      if (matches.length > 0 && suggRefs.current[id]) {
+        const rect = suggRefs.current[id].getBoundingClientRect();
+        setSuggPos(prev => ({ ...prev, [id]: { top: rect.bottom, left: rect.left, width: rect.width } }));
+      }
+      setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
+    } else {
+      setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
+    }
+  }, [cennik]);
+
+  const selectSugg = useCallback((itemId, cennikItem) => {
+    setItems(prev => prev.map(it =>
+      it.id === itemId
+        ? { ...it, name: cennikItem.name, priceEst: cennikItem.price_pln ?? it.priceEst, link: cennikItem.link || it.link }
+        : it
+    ));
+    setSugg(prev => ({ ...prev, [itemId]: { show: false, list: [] } }));
+  }, []);
 
   const handleSave = async () => {
     setSaving(true);
@@ -158,12 +216,38 @@ export default function ZakupyEditor({ project, onClose }) {
                     {items.map(item => (
                       <tr key={item.id} className="hover:bg-slate-50/50">
                         <td className="p-2">
-                          <input
-                            value={item.name}
-                            onChange={e => updateItem(item.id, "name", e.target.value)}
-                            placeholder="Nazwa produktu"
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-400"
-                          />
+                          <div
+                            className="relative"
+                            ref={el => { suggRefs.current[item.id] = el; }}
+                          >
+                            <input
+                              value={item.name}
+                              onChange={e => handleNameChange(item.id, e.target.value)}
+                              placeholder="Nazwa produktu (min. 3 znaki)"
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-400"
+                            />
+                            {sugg[item.id]?.show && suggPos[item.id] && (
+                              <ul style={{ position: 'fixed', top: suggPos[item.id].top + 2, left: suggPos[item.id].left, width: Math.max(suggPos[item.id].width, 280), zIndex: 9999 }} className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+                                {sugg[item.id].list.map(c => (
+                                  <li
+                                    key={c.sku ?? c.name}
+                                    onMouseDown={() => selectSugg(item.id, c)}
+                                    className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-green-50 gap-2"
+                                  >
+                                    <span className="flex-1 truncate">{c.name}</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {c.sku && <span className="text-xs text-slate-400 font-mono">{c.sku}</span>}
+                                      {c.price_pln != null && (
+                                        <span className="text-xs font-semibold text-green-600">
+                                          {c.price_pln.toLocaleString("pl-PL")} zł
+                                        </span>
+                                      )}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
                         </td>
                         <td className="p-2">
                           <select

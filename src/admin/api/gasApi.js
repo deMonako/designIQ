@@ -170,8 +170,8 @@ export async function toggleDocClientVisible(id) {
  * Pobiera listę plików z podfolderu projektu na Google Drive.
  * @param {string} projectId - id projektu, np. "proj-1749123456789"
  */
-export async function getProjectFiles(projectId) {
-  return gasGet("getProjectFiles", { projectId });
+export async function getProjectFiles(projectId, projectCode) {
+  return gasGet("getProjectFiles", { projectId, projectCode });
 }
 
 /**
@@ -217,6 +217,11 @@ export async function getLeads() {
   return gasGet("getLeads");
 }
 
+/** Tworzy nowy lead (z konfiguratora lub formularza kontaktowego) */
+export async function createLead(lead) {
+  return gasPost("createLead", { lead });
+}
+
 /** Aktualizuje lead (status, notatki) */
 export async function updateLead(lead) {
   return gasPost("updateLead", { lead });
@@ -258,6 +263,11 @@ export async function upsertWycena(wycena) {
 // ────────────────────────────────────────────────────────────────────────────────
 // ZAKUPY
 // ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera katalog urządzeń Loxone z pliku loxone.json na Drive */
+export async function getLoxoneJson() {
+  return gasGet("getLoxoneJson");
+}
 
 /** Pobiera listę zakupów projektu po projectId */
 export async function getZakupy(projectId) {

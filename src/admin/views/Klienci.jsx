@@ -9,13 +9,12 @@ import {
 import { TODAY } from "../mockData";
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const STAGES  = ["Lead", "Wycena", "Negocjacje", "Umowa", "Realizacja"];
+const STAGES  = ["Lead", "Wycena", "Umowa", "Realizacja"];
 const SOURCES = ["Konfigurator", "Polecenie", "Inne"];
 
 const STAGE_META = {
   "Lead":       { bg: "bg-blue-50",   border: "border-blue-200",   text: "text-blue-700",   dot: "bg-blue-500",   dragBg: "bg-blue-100"   },
   "Wycena":     { bg: "bg-amber-50",  border: "border-amber-200",  text: "text-amber-700",  dot: "bg-amber-500",  dragBg: "bg-amber-100"  },
-  "Negocjacje": { bg: "bg-purple-50", border: "border-purple-200", text: "text-purple-700", dot: "bg-purple-500", dragBg: "bg-purple-100" },
   "Umowa":      { bg: "bg-green-50",  border: "border-green-200",  text: "text-green-700",  dot: "bg-green-500",  dragBg: "bg-green-100"  },
   "Realizacja": { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", dot: "bg-orange-500", dragBg: "bg-orange-100" },
 };
@@ -97,7 +96,7 @@ function PipelineColumn({ stage, clients, projects, onDrop, onDragOver, onDragLe
 
   return (
     <div
-      className="flex-1 min-w-[210px] max-w-[280px] flex flex-col"
+      className="flex-1 min-w-[210px] flex flex-col"
       onDragOver={(e) => { e.preventDefault(); onDragOver(stage); }}
       onDragLeave={onDragLeave}
       onDrop={(e) => { e.preventDefault(); onDrop(stage); }}
@@ -872,7 +871,7 @@ export default function Klienci({ clients, projects, leads = [], onUpdateClient,
 
       {/* ── Pipeline view ── */}
       {viewMode === "pipeline" && (
-        <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+        <div className="flex gap-3 pb-2">
           {STAGES.map(stage => (
             <PipelineColumn
               key={stage}

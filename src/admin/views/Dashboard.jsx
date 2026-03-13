@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
-  StickyNote, FolderKanban, Phone, Mail,
+  StickyNote, FolderKanban, Phone, Mail, Pencil, Plus,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { TODAY, isOverdue } from "../mockData";
+import TaskModal, { projectLabel, DESIGNIQ_PROJECT_ID } from "../components/TaskModal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -28,63 +29,104 @@ function formatDayShort(dateStr) {
 
 // ─── AgendaRow (zadanie lub wydarzenie na dziś) ───────────────────────────────
 
-function AgendaRow({ task, project, onStatusChange }) {
+function AgendaRow({ task, project, onStatusChange, onEdit }) {
+  const [expanded, setExpanded] = React.useState(false);
   const isDone  = task.status === "Zrobione";
   const isEvent = task.type === "event";
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -4 }}
-      animate={{ opacity: 1, x: 0 }}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
-        isDone  ? "bg-slate-50 border-slate-100 opacity-60" :
-        isEvent ? "bg-violet-50 border-violet-100" :
-                  "bg-white border-slate-100 shadow-sm"
-      }`}
-    >
-      {isEvent ? (
-        <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-          <Calendar className="w-3 h-3 text-violet-500" />
-        </div>
-      ) : (
-        <button
-          onClick={() => onStatusChange(task.id, isDone ? "Niezrobione" : "Zrobione")}
-          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-            isDone
-              ? "bg-green-500 border-green-500"
-              : "border-slate-300 hover:border-orange-400"
-          }`}
-        >
-          {isDone && <CheckCircle2 className="w-3 h-3 text-white" />}
-        </button>
-      )}
+    <motion.div layout initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }}>
+      <div
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-all ${
+          isDone  ? "bg-slate-50 border-slate-100 opacity-60" :
+          isEvent ? "bg-violet-50 border-violet-100" :
+                    "bg-white border-slate-100 shadow-sm"
+        } ${expanded ? "rounded-b-none border-b-0" : ""}`}
+      >
+        {isEvent ? (
+          <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
+            <Calendar className="w-3 h-3 text-violet-500" />
+          </div>
+        ) : (
+          <button
+            onClick={(e) => { e.stopPropagation(); onStatusChange(task.id, isDone ? "Niezrobione" : "Zrobione"); }}
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+              isDone
+                ? "bg-green-500 border-green-500"
+                : "border-slate-300 hover:border-orange-400"
+            }`}
+          >
+            {isDone && <CheckCircle2 className="w-3 h-3 text-white" />}
+          </button>
+        )}
 
-      <div className="flex-1 min-w-0">
-        <span className={`text-sm font-medium ${
-          isDone ? "line-through text-slate-400" :
-          isEvent ? "text-violet-800" :
-                    "text-slate-800"
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="flex-1 min-w-0 text-left"
+        >
+          <span className={`text-sm font-medium ${
+            isDone ? "line-through text-slate-400" :
+            isEvent ? "text-violet-800" :
+                      "text-slate-800"
+          }`}>
+            {task.title}
+          </span>
+          {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+            <span className="text-xs text-slate-400 ml-2">
+              {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+            </span>
+          )}
+        </button>
+
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+          isEvent ? "bg-violet-100 text-violet-600" : "bg-orange-50 text-orange-600"
         }`}>
-          {task.title}
+          {isEvent ? "Wydarzenie" : task.priority}
         </span>
-        {project && (
-          <span className="text-xs text-slate-400 ml-2">{project.name}</span>
+
+        {!isEvent && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(task); }}
+            className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors flex-shrink-0"
+            title="Edytuj zadanie"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
         )}
       </div>
 
-      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
-        isEvent ? "bg-violet-100 text-violet-600" : "bg-orange-50 text-orange-600"
-      }`}>
-        {isEvent ? "Wydarzenie" : task.priority}
-      </span>
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="overflow-hidden"
+          >
+            <div className={`px-3 py-2.5 rounded-b-lg border border-t-0 text-xs text-slate-600 space-y-1 ${
+              isEvent ? "bg-violet-50 border-violet-100" : "bg-slate-50 border-slate-100"
+            }`}>
+              {task.description && (
+                <p className="text-slate-700 leading-relaxed">{task.description}</p>
+              )}
+              {!task.description && <p className="text-slate-400 italic">Brak opisu</p>}
+              {task.dueDate && (
+                <p className="text-slate-400 flex items-center gap-1">
+                  <Clock className="w-3 h-3" /> Termin: {String(task.dueDate).substring(0, 10)}
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
 
 // ─── OverdueRow (zaległe zadanie) ─────────────────────────────────────────────
 
-function OverdueRow({ task, project, onStatusChange }) {
+function OverdueRow({ task, project, onStatusChange, onEdit }) {
   return (
     <motion.div
       layout
@@ -98,7 +140,11 @@ function OverdueRow({ task, project, onStatusChange }) {
       />
       <div className="flex-1 min-w-0">
         <span className="text-sm font-medium text-slate-800">{task.title}</span>
-        {project && <span className="text-xs text-slate-400 ml-2">{project.name}</span>}
+        {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+          <span className="text-xs text-slate-400 ml-2">
+            {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
@@ -108,6 +154,13 @@ function OverdueRow({ task, project, onStatusChange }) {
           <AlertTriangle className="w-3 h-3" />
           {task.dueDate}
         </span>
+        <button
+          onClick={() => onEdit(task)}
+          className="p-1 rounded-md text-slate-300 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          title="Edytuj zadanie"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
       </div>
     </motion.div>
   );
@@ -141,7 +194,13 @@ function ProjectCard({ project, client, onClick }) {
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-2 mb-2.5">
-        <div className="min-w-0">
+        <div className="flex items-start gap-2 min-w-0">
+          {client && (
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white text-[11px] font-bold flex-shrink-0 mt-0.5">
+              {client.name?.slice(0, 1).toUpperCase() ?? "?"}
+            </div>
+          )}
+          <div className="min-w-0">
           <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
           <div
             className="relative text-xs text-slate-400 truncate mt-0.5 cursor-default"
@@ -164,6 +223,7 @@ function ProjectCard({ project, client, onClick }) {
               </div>
             )}
           </div>
+        </div>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${statusColors[project.status] ?? "bg-slate-100 text-slate-400"}`}>
           {project.status}
@@ -192,21 +252,26 @@ function ProjectCard({ project, client, onClick }) {
 
 // ─── UpcomingItem ─────────────────────────────────────────────────────────────
 
-function UpcomingItem({ task, project }) {
+function UpcomingItem({ task, project, onClick }) {
   const isEvent = task.type === "event";
   return (
-    <div className="flex items-center gap-2 py-1.5 text-xs">
+    <button
+      onClick={() => onClick(task)}
+      className="w-full flex items-center gap-2 py-1.5 text-xs text-left hover:bg-slate-50 rounded-md px-1 -mx-1 transition-colors group"
+    >
       {isEvent
         ? <Calendar className="w-3 h-3 text-violet-400 flex-shrink-0" />
         : <span className="w-2 h-2 rounded-full bg-orange-400 flex-shrink-0" />
       }
-      <span className={`flex-1 truncate font-medium ${isEvent ? "text-violet-700" : "text-slate-700"}`}>
+      <span className={`flex-1 truncate font-medium ${isEvent ? "text-violet-700" : "text-slate-700"} group-hover:underline`}>
         {task.title}
       </span>
-      {project && (
-        <span className="text-slate-300 truncate max-w-[80px]">{project.name.split("–")[0].trim()}</span>
+      {(project || task.projectId === DESIGNIQ_PROJECT_ID) && (
+        <span className="text-slate-300 truncate max-w-[80px]">
+          {task.projectId === DESIGNIQ_PROJECT_ID ? "designIQ" : project.name.split("–")[0].trim()}
+        </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -217,9 +282,9 @@ function QuickNotes() {
   const save = (v) => { setNotes(v); localStorage.setItem("diq_notes", v); };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col h-full">
+    <div className="bg-white rounded-xl border border-slate-200 border-l-4 border-l-orange-300 shadow-sm p-4 flex flex-col h-full">
       <div className="flex items-center gap-2 mb-3">
-        <StickyNote className="w-4 h-4 text-orange-500" />
+        <StickyNote className="w-4 h-4 text-orange-400" />
         <span className="text-sm font-semibold text-slate-700">Szybkie notatki</span>
         {notes && <span className="ml-auto text-xs text-slate-300">zapisano lokalnie</span>}
       </div>
@@ -227,7 +292,7 @@ function QuickNotes() {
         value={notes}
         onChange={e => save(e.target.value)}
         placeholder="Wpisz notatkę, numer telefonu, przypomnienie…"
-        className="flex-1 min-h-[100px] text-sm text-slate-700 resize-none outline-none placeholder-slate-300 leading-relaxed"
+        className="flex-1 min-h-[100px] text-sm text-slate-700 resize-none outline-none placeholder-slate-300 leading-relaxed bg-transparent"
       />
     </div>
   );
@@ -236,7 +301,7 @@ function QuickNotes() {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSelectProject }) {
+export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -280,9 +345,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
 
   const fewTasksToday = todayItems.length <= 3;
 
+  const [editingTask, setEditingTask] = useState(null);
+
   const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find(t => t.id === taskId);
     if (task) onUpdateTask({ ...task, status: newStatus });
+  };
+
+  const handleSaveTask = (taskData) => {
+    if (taskData.id && tasks.find(t => t.id === taskData.id)) onUpdateTask(taskData);
+    else onAddTask?.(taskData);
   };
 
   // ── Stat chips ────────────────────────────────────────────────────────────
@@ -360,10 +432,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
               <span className="w-1 h-5 rounded-full bg-orange-500 flex-shrink-0" />
               <span className="text-sm font-bold text-slate-800">Agenda dnia</span>
               {todayDone > 0 && (
-                <span className="ml-auto text-xs text-green-600 font-medium flex items-center gap-1">
+                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> {todayDone} zrobione
                 </span>
               )}
+              <button
+                onClick={() => setEditingTask({ dueDate: TODAY, status: "Niezrobione", priority: "Normalny", type: "task" })}
+                className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 border border-orange-200 transition-colors"
+              >
+                <Plus className="w-3 h-3" /> Dodaj
+              </button>
             </div>
             <AnimatePresence>
               {todayItems.length > 0 ? (
@@ -374,6 +452,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                       task={t}
                       project={projects.find(p => p.id === t.projectId)}
                       onStatusChange={handleStatusChange}
+                      onEdit={setEditingTask}
                     />
                   ))}
                 </div>
@@ -412,6 +491,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                       task={t}
                       project={projects.find(p => p.id === t.projectId)}
                       onStatusChange={handleStatusChange}
+                      onEdit={setEditingTask}
                     />
                   ))}
                 </div>
@@ -442,6 +522,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                             key={t.id}
                             task={t}
                             project={projects.find(p => p.id === t.projectId)}
+                            onClick={setEditingTask}
                           />
                         ))}
                       </div>
@@ -503,6 +584,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
                             key={t.id}
                             task={t}
                             project={projects.find(p => p.id === t.projectId)}
+                            onClick={setEditingTask}
                           />
                         ))}
                       </div>
@@ -519,6 +601,19 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onSe
 
       {/* ── Notatki ── */}
       <QuickNotes />
+
+      {/* ── Modal edycji zadania (nadchodzące) ── */}
+      <AnimatePresence>
+        {editingTask && (
+          <TaskModal
+            projects={projects}
+            task={editingTask}
+            onSave={handleSaveTask}
+            onDelete={onDeleteTask}
+            onClose={() => setEditingTask(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

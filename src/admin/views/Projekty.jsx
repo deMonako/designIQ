@@ -8,9 +8,8 @@ import {
   ChevronUp, ChevronDown,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
-import { uploadFile } from "../api/gasApi";
+import { uploadFile, getProjectFiles } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
-import ZakupyEditor from "./ZakupyEditor";
 import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
 
@@ -196,9 +195,9 @@ function ProjectCard({ project, client, onClick, onDelete }) {
 
 function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
-  onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask,
+  onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask,
   onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible,
-  onAddChecklist, onToggleChecklistItem,
+  onAddChecklist, onToggleChecklistItem, onNavigateToZakupy,
 }) {
   const [activeTab,     setActiveTab]     = useState("tasks");
   const [editingNote,   setEditingNote]   = useState(false);
@@ -212,7 +211,14 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
-  const [showZakupy,        setShowZakupy]        = useState(false);
+  const [driveFiles,        setDriveFiles]        = useState([]);
+
+  useEffect(() => {
+    if (!GAS_ON) return;
+    getProjectFiles(project.id, project.code)
+      .then(files => setDriveFiles(Array.isArray(files) ? files : []))
+      .catch(() => {});
+  }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -332,11 +338,18 @@ function ProjectDetail({
       : project.stages.map(s => ({ name: s, start: project.startDate || TODAY, end: project.deadline || TODAY }));
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleForm,    setScheduleForm]    = useState(buildScheduleForm);
-  useEffect(() => { if (!editingSchedule) setScheduleForm(buildScheduleForm()); }, [project]); // eslint-disable-line
+  const [milestoneForm,   setMilestoneForm]   = useState(() => project.milestones ?? []);
+  useEffect(() => { if (!editingSchedule) { setScheduleForm(buildScheduleForm()); setMilestoneForm(project.milestones ?? []); } }, [project]); // eslint-disable-line
   const setStageDate = (i, key, val) =>
     setScheduleForm(f => f.map((s, j) => j === i ? { ...s, [key]: val } : s));
+  const addMilestone = () =>
+    setMilestoneForm(f => [...f, { id: `ms-${Date.now()}`, label: "", date: TODAY }]);
+  const setMilestone = (id, key, val) =>
+    setMilestoneForm(f => f.map(m => m.id === id ? { ...m, [key]: val } : m));
+  const removeMilestone = (id) =>
+    setMilestoneForm(f => f.filter(m => m.id !== id));
   const saveSchedule = () => {
-    onUpdateProject({ ...project, stageSchedule: scheduleForm });
+    onUpdateProject({ ...project, stageSchedule: scheduleForm, milestones: milestoneForm.filter(m => m.label && m.date) });
     setEditingSchedule(false);
   };
 
@@ -366,7 +379,18 @@ function ProjectDetail({
       done:    i < project.stageIndex,
       current: i === project.stageIndex,
     }));
-    return { months, bars };
+    // Auto-milestones: start date of each stage (orange)
+    const autoMilestones = scheduleForm
+      .map((s, i) => ({ id: `auto-${i}`, label: s.name, date: s.start, auto: true }))
+      .map(m => ({ ...m, pct: pct(+new Date(m.date)) }))
+      .filter(m => m.pct >= 0 && m.pct <= 100);
+    // Manual milestones from project.milestones (blue)
+    const manualMilestones = (project.milestones ?? [])
+      .filter(m => m.label && m.date)
+      .map(m => ({ ...m, pct: pct(+new Date(m.date)) }))
+      .filter(m => m.pct >= 0 && m.pct <= 100);
+    const milestones = [...autoMilestones, ...manualMilestones];
+    return { months, bars, milestones };
   }, [scheduleForm, project.stageIndex]); // eslint-disable-line
   const totalExpected  = FINANCE_STAGES.reduce((s, st) => s + (project[st.profitKey] || 0), 0);
   const totalPaid      = FINANCE_STAGES.reduce((s, st) => s + (project[st.paidKey]   || 0), 0);
@@ -376,12 +400,19 @@ function ProjectDetail({
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
   const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  const sheetDocUrls      = new Set(projectDocList.map(d => d.url).filter(Boolean));
+  const SYSTEM_FILES      = new Set(["projekt.svg", "projekt.json"]);
+  const driveOnlyFiles    = driveFiles.filter(f =>
+    !SYSTEM_FILES.has(f.name.toLowerCase()) &&
+    !sheetDocUrls.has(f.webViewLink) &&
+    !sheetDocUrls.has(f.webContentLink)
+  );
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
+    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -769,9 +800,12 @@ function ProjectDetail({
                           { cls: "bg-green-200 border-green-300", label: "Ukończony" },
                           { cls: "bg-orange-200 border-orange-300", label: "Bieżący" },
                           { cls: "bg-slate-200 border-slate-300", label: "Zaplanowany" },
-                        ].map(({ cls, label }) => (
+                        ].map(({ cls, label, isDot }) => (
                           <div key={label} className="flex items-center gap-1">
-                            <div className={`w-3 h-3 rounded border ${cls}`} />
+                            {isDot
+                              ? <div className={`w-2 h-2 rounded-full ${cls}`} />
+                              : <div className={`w-3 h-3 rounded border ${cls}`} />
+                            }
                             <span className="text-[10px] text-slate-400">{label}</span>
                           </div>
                         ))}
@@ -825,8 +859,46 @@ function ProjectDetail({
                           );
                         })}
                       </div>
+                      {/* Kamienie milowe */}
+                      <div className="pt-4 mt-2 border-t border-slate-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-semibold text-slate-600 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                            Kamienie milowe
+                          </span>
+                          <button onClick={addMilestone}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                            <Plus className="w-3 h-3" /> Dodaj
+                          </button>
+                        </div>
+                        {milestoneForm.length === 0 && (
+                          <p className="text-[11px] text-slate-400 italic">Brak kamieni milowych — kliknij Dodaj</p>
+                        )}
+                        <div className="space-y-1.5">
+                          {milestoneForm.map(ms => (
+                            <div key={ms.id} className="flex items-center gap-2">
+                              <input
+                                value={ms.label}
+                                onChange={e => setMilestone(ms.id, "label", e.target.value)}
+                                placeholder="Nazwa kamienia…"
+                                className="flex-1 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              />
+                              <input
+                                type="date" value={ms.date}
+                                onChange={e => setMilestone(ms.id, "date", e.target.value)}
+                                className="w-36 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+                              />
+                              <button onClick={() => removeMilestone(ms.id)}
+                                className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
                       <div className="flex gap-2 pt-1 border-t border-slate-100">
-                        <button onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); }}
+                        <button onClick={() => { setEditingSchedule(false); setScheduleForm(buildScheduleForm()); setMilestoneForm(project.milestones ?? []); }}
                           className="flex-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 font-medium transition-colors">
                           Anuluj
                         </button>
@@ -985,6 +1057,15 @@ function ProjectDetail({
                                   </div>
                                 </div>
                                 <div className="flex gap-2">
+                                  {onDeleteTask && (
+                                    <button
+                                      onClick={() => { onDeleteTask(t.id); setEditingTaskId(null); }}
+                                      className="px-3 py-1.5 border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1"
+                                      title="Usuń zadanie"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
                                   <button onClick={() => setEditingTaskId(null)} className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-white font-medium">Anuluj</button>
                                   <button onClick={saveTask} disabled={!editTaskForm.title.trim()}
                                     className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-bold hover:bg-orange-600 disabled:opacity-40 flex items-center justify-center gap-1">
@@ -1249,44 +1330,87 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {projectDocList.length === 0 && !showAddDoc ? (
+              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" /> Brak dokumentów dla tego projektu
                 </div>
               ) : (
-                projectDocList.map(doc => (
-                  <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
-                    <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                      <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
-                      {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <span className="text-xs text-slate-400">{doc.date}</span>
-                        <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
-                        {doc.clientVisible
-                          ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
-                          : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
-                        }
+                <>
+                  {projectDocList.map(doc => (
+                    <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
+                      <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                        <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
+                        {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          <span className="text-xs text-slate-400">{doc.date}</span>
+                          <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
+                          {doc.clientVisible
+                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
+                            : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
+                          }
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {doc.url && doc.url !== "#" && (
+                          <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                        <button onClick={() => onToggleDocClientVisible(doc.id)}
+                          className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
+                          {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                        </button>
+                        <button onClick={() => onDeleteProjectDoc(doc.id)} className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {doc.url && doc.url !== "#" && (
-                        <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                  ))}
+
+                  {driveOnlyFiles.length > 0 && (
+                    <>
+                      {projectDocList.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 border-t border-slate-200" />
+                          <span className="text-xs text-slate-400 font-medium">Pliki na dysku (widoczne dla klienta)</span>
+                          <div className="flex-1 border-t border-slate-200" />
+                        </div>
                       )}
-                      <button onClick={() => onToggleDocClientVisible(doc.id)}
-                        className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
-                        {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => onDeleteProjectDoc(doc.id)} className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))
+                      {driveOnlyFiles.map(f => (
+                        <div key={f.id} className="bg-blue-50/40 rounded-xl border border-blue-200/60 p-4 flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {f.modifiedTime && (
+                                <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>
+                              )}
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> Widoczny dla klienta
+                              </span>
+                              <span className="text-xs text-slate-400">Dysk Google</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                            {f.webContentLink && (
+                              <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
+                                <Download className="w-4 h-4" />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -1362,7 +1486,7 @@ function ProjectDetail({
                     <List className="w-4 h-4 text-green-600" /> Lista zakupów
                   </h3>
                   <button
-                    onClick={() => setShowZakupy(true)}
+                    onClick={() => onNavigateToZakupy?.(project)}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-lg text-xs font-semibold hover:bg-green-100 transition-colors"
                   >
                     <List className="w-3.5 h-3.5" /> Edytuj zakupy
@@ -1623,17 +1747,11 @@ function ProjectDetail({
         />
       )}
 
-      {showZakupy && (
-        <ZakupyEditor
-          project={project}
-          onClose={() => setShowZakupy(false)}
-        />
-      )}
     </div>
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject, onNavigateToZakupy }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1664,11 +1782,13 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         onDeleteProject={onDeleteProject}
         onAddTask={onAddTask}
         onUpdateTask={onUpdateTask}
+        onDeleteTask={onDeleteTask}
         onAddChecklist={onAddChecklist}
         onToggleChecklistItem={onToggleChecklistItem}
         onAddProjectDoc={onAddProjectDoc}
         onDeleteProjectDoc={onDeleteProjectDoc}
         onToggleDocClientVisible={onToggleDocClientVisible}
+        onNavigateToZakupy={onNavigateToZakupy}
       />
     );
   }

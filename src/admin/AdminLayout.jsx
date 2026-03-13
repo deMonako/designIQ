@@ -4,7 +4,7 @@ import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
   BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
   ChevronRight, Users, Search, Plus, User, Calendar,
-  CheckCircle2, AlertCircle, RefreshCw,
+  CheckCircle2, AlertCircle, RefreshCw, Calculator, BookOpen, ShoppingCart,
 } from "lucide-react";
 import { TODAY } from "./mockData";
 
@@ -15,9 +15,12 @@ const NAV_ITEMS = [
   { id: "projekty",   label: "Projekty",   icon: FolderKanban,   badge: "projekty" },
   { id: "klienci",    label: "Klienci",    icon: Users,          badge: "klienci" },
   { id: "zadania",    label: "Zadania",    icon: CheckSquare,    badge: "zadania" },
-  { id: "checklisty", label: "Checklisty", icon: ClipboardList },
-  { id: "materialy",  label: "Materiały",  icon: Package },
-  { id: "analityka",  label: "Analityka",  icon: BarChart2 },
+  { id: "checklisty",  label: "Checklisty",  icon: ClipboardList },
+  { id: "zakupy",      label: "Zakupy",      icon: ShoppingCart },
+  { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
+  { id: "materialy",   label: "Materiały",   icon: Package },
+  { id: "analityka",   label: "Analityka",   icon: BarChart2 },
+  { id: "kalkulator", label: "Kalkulator", icon: Calculator },
 ];
 const NAV_BOTTOM = [{ id: "ustawienia", label: "Ustawienia", icon: Settings }];
 
@@ -117,8 +120,9 @@ export default function AdminLayout({
 
   const VIEW_TITLES = {
     dashboard: "Dashboard", projekty: "Projekty", klienci: "Klienci",
-    zadania: "Zadania", checklisty: "Checklisty", materialy: "Materiały",
-    analityka: "Analityka", ustawienia: "Ustawienia",
+    zadania: "Zadania", checklisty: "Checklisty", zakupy: "Zakupy",
+    baza_wiedzy: "Baza wiedzy", materialy: "Materiały",
+    analityka: "Analityka", kalkulator: "Kalkulator", ustawienia: "Ustawienia",
   };
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -310,6 +314,7 @@ export default function AdminLayout({
                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none"
                   >
                     <option value="">— bez projektu —</option>
+                    <option value="__designiq__">designIQ</option>
                     {projects.filter(p => p.status !== "Ukończony").map(p => (
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}

@@ -9,6 +9,9 @@ import Zadania      from "../admin/views/Zadania";
 import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
+import MateriałyJson from "../admin/views/MateriałyJson";
+import ZakupyView   from "../admin/views/Zakupy";
+import Kalkulator   from "../admin/views/Kalkulator";
 import AddProjectModal from "../admin/AddProjectModal";
 import {
   mockProjects, mockTasks, mockChecklists, mockMaterials,
@@ -71,6 +74,7 @@ export default function Admin() {
   const [loading,            setLoading]            = useState(GAS_ON);
   const [syncError,          setSyncError]          = useState(null);
   const [syncStatus,         setSyncStatus]         = useState("synced"); // "synced" | "syncing" | "error"
+  const [zakupyInitProjectId, setZakupyInitProjectId] = useState(null);
 
   // ── State (inicjalizacja zależy od trybu) ──────────────────────────────────
   const [clients, setClients] = useState(() =>
@@ -92,7 +96,7 @@ export default function Admin() {
   const [checklists,  setChecklists]  = useState(() => GAS_ON ? [] : ls("diq_checklists",  mockChecklists));
   const [materials,   setMaterials]   = useState(() => GAS_ON ? [] : ls("diq_materials",   mockMaterials));
   const [projectDocs, setProjectDocs] = useState(() => GAS_ON ? [] : ls("diq_projectDocs", mockProjectDocs));
-  const [leads,       setLeads]       = useState([]);
+  const [leads,       setLeads]       = useState(() => GAS_ON ? [] : ls("diq_leads", []));
 
   // ── Ładowanie danych z GAS (jednorazowo po zalogowaniu) ───────────────────
   useEffect(() => {
@@ -125,6 +129,7 @@ export default function Admin() {
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_checklists",  JSON.stringify(checklists));  }, [checklists]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_materials",   JSON.stringify(materials));   }, [materials]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_projectDocs", JSON.stringify(projectDocs)); }, [projectDocs]);
+  useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_leads",       JSON.stringify(leads));       }, [leads]);
 
   const handleLogout = () => {
     localStorage.removeItem("designiq_admin_auth");
@@ -188,14 +193,22 @@ export default function Admin() {
   };
 
   const handleDeleteProject = async (id) => {
+    const snapProject    = projects.find(p  => p.id        === id);
+    const snapDocs       = projectDocs.filter(d  => d.projectId === id);
+    const snapTasks      = tasks.filter(t  => t.projectId === id);
+    const snapChecklists = checklists.filter(cl => cl.projectId === id);
     setProjects(prev    => prev.filter(p  => p.id        !== id));
     setProjectDocs(prev => prev.filter(d  => d.projectId !== id));
     setTasks(prev       => prev.filter(t  => t.projectId !== id));
     setChecklists(prev  => prev.filter(cl => cl.projectId !== id));
     if (selectedProject?.id === id) setSelectedProject(null);
-    await gasSync(() => GAS.deleteProject(id), () =>
-      syncErr("Błąd usuwania projektu – odśwież stronę aby zsynchronizować")
-    );
+    await gasSync(() => GAS.deleteProject(id), () => {
+      if (snapProject) setProjects(prev => [snapProject, ...prev]);
+      setProjectDocs(prev => [...prev, ...snapDocs]);
+      setTasks(prev       => [...prev, ...snapTasks]);
+      setChecklists(prev  => [...prev, ...snapChecklists]);
+      syncErr("Błąd usuwania projektu – przywrócono dane lokalnie");
+    });
   };
 
   const handleAddProject = async (project, newClientData) => {
@@ -237,6 +250,15 @@ export default function Admin() {
     await gasSync(() => GAS.updateTask(t), () => {
       if (snap) setTasks(prev => prev.map(x => x.id === t.id ? snap : x));
       syncErr("Błąd aktualizacji zadania");
+    });
+  };
+
+  const handleDeleteTask = async (id) => {
+    const snap = tasks.find(x => x.id === id);
+    setTasks(prev => prev.filter(x => x.id !== id));
+    await gasSync(() => GAS.deleteTask(id), () => {
+      if (snap) setTasks(prev => [snap, ...prev]);
+      syncErr("Błąd usuwania zadania");
     });
   };
 
@@ -346,6 +368,11 @@ export default function Admin() {
   // ── Nawigacja ─────────────────────────────────────────────────────────────
   const openProject      = (project) => { setSelectedProject(project); setCurrentView("projekty"); };
   const navigateToClient = () => setCurrentView("klienci");
+  const navigateToZakupy = (project) => {
+    setZakupyInitProjectId(project?.id ?? null);
+    setSelectedProject(null);
+    setCurrentView("zakupy");
+  };
 
   // ── Guard ─────────────────────────────────────────────────────────────────
   if (!isAuthenticated) return <AdminLogin onLogin={() => setIsAuthenticated(true)} />;
@@ -357,7 +384,7 @@ export default function Admin() {
         return (
           <Dashboard
             projects={projects} tasks={tasks} clients={clients}
-            onUpdateTask={handleUpdateTask}
+            onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask}
             onSelectProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />
         );
@@ -370,6 +397,7 @@ export default function Admin() {
             onDeleteProject={handleDeleteProject}
             onAddTask={handleAddTask}
             onUpdateTask={handleUpdateTask}
+            onDeleteTask={handleDeleteTask}
             onAddChecklist={handleAddChecklist}
             onToggleChecklistItem={handleToggleChecklistItem}
             selectedProject={selectedProject}
@@ -379,6 +407,7 @@ export default function Admin() {
             onDeleteProjectDoc={handleDeleteProjectDoc}
             onToggleDocClientVisible={handleToggleDocClientVisible}
             onOpenAddProject={openAddProject}
+            onNavigateToZakupy={navigateToZakupy}
           />
         );
       case "klienci":
@@ -394,7 +423,7 @@ export default function Admin() {
           />
         );
       case "zadania":
-        return <Zadania projects={projects} tasks={tasks} onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} />;
+        return <Zadania projects={projects} tasks={tasks} onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask} />;
       case "checklisty":
         return (
           <Checklisty
@@ -403,8 +432,12 @@ export default function Admin() {
             onAddChecklist={handleAddChecklist} onDeleteChecklist={handleDeleteChecklist}
           />
         );
-      case "materialy":
+      case "zakupy":
+        return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} />;
+      case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
+      case "materialy":
+        return <MateriałyJson />;
       case "analityka":
         return (
           <Analityka
@@ -412,6 +445,8 @@ export default function Admin() {
             onNavigateToProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />
         );
+      case "kalkulator":
+        return <Kalkulator projects={projects} />;
       case "ustawienia":
         return <PlaceholderView title="Ustawienia" />;
       default:

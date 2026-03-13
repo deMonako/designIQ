@@ -1,359 +1,959 @@
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { Calculator, Zap, TrendingUp, Activity, Info } from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
+  ShoppingCart, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
+  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu,
+} from "lucide-react";
+import * as GAS from "../api/gasApi";
+import { gasGet } from "../api/gasClient";
+import { GAS_CONFIG } from "../api/gasConfig";
+import { TODAY } from "../mockData";
+import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
+
+const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
+const FALLBACK_CATALOG = loadProductCatalog();
+
+// ── Mapowania ────────────────────────────────────────────────────────────────
+
+const UNCONTROLLED_TYPES = new Set([
+  "Gniazda niesterowane", "Sieć internetowa", "Inne",
+]);
+
+const TYP_MAP = {
+  "Włączniki LOXONE":          "digital_input",
+  "Czujniki obecności LOXONE": "digital_input",
+  "Kontaktrony":               "digital_input",
+  "Monitoring":                "digital_input",
+  "Sterowanie":                "digital_input",
+  "Sieć internetowa":          "digital_input",
+  "Oświetlenie 24V":           "dimmer_output",
+  "Oświetlenie zewn. 24V":     "dimmer_output",
+  "Rolety":                    "motor_output",
+  "Audio":                     "relay_output",
+  "Oświetlenie 230V":          "relay_output",
+  "Oświetlenie zewn. 230V":    "relay_output",
+  "Gniazda sterowane":         "relay_output",
+  "Gniazda niesterowane":      "relay_output",
+  "Gniazda 3F":                "relay_output",
+  "Zasilanie":                 "relay_output",
+  "Inne":                      "relay_output",
+};
+
+const DEFAULT_CONTROL = {
+  relay_output:  "lox-relay-ext",
+  dimmer_output: "lox-dimmer-ext",
+  rgbw_output:   "lox-rgbw-dimmer",
+  motor_output:  "lox-blind-ctrl",
+  digital_input: "lox-extension",
+  analog_input:  "lox-analog-ext",
+};
+
+// ── Definicje kolumn ─────────────────────────────────────────────────────────
+
+const COLS = [
+  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true  },
+  { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true  },
+  { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
+  { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
+  { key: "rola",          label: "Rola",           sortable: true,  defaultVisible: true  },
+  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: true  },
+  { key: "przewód",       label: "Przewód",        sortable: false, defaultVisible: false },
+  { key: "wysokość",      label: "Wysokość",       sortable: false, defaultVisible: false },
+  { key: "wariant",       label: "Wariant",        sortable: false, defaultVisible: false },
+  { key: "kolor",         label: "Kolor",          sortable: false, defaultVisible: false },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function SectionCard({ icon: Icon, title, badge, children }) {
+function attribsToRows(attribs, floorName, catalog) {
+  const rows = [];
+  for (const [handle, a] of Object.entries(attribs)) {
+    if (handle === "_meta" || !a || typeof a !== "object") continue;
+    const rawTyp = a.typ ?? "";
+    const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
+    const defaultId = DEFAULT_CONTROL[resourceType];
+    const exists = catalog.some(p => p.id === defaultId);
+    rows.push({
+      _id:          `${floorName ?? ""}__${handle}`,
+      tag:          a.tag          ?? handle,
+      kondygnacja:  a.kondygnacja  ?? floorName ?? "",
+      pomieszczenie:a.pomieszczenie?? "",
+      typ:          rawTyp,
+      rola:         a.rola         ?? "",
+      uwagi:        a.uwagi        ?? "",
+      przewód:      a.przewód      ?? "",
+      wysokość:     a.wysokość     ?? "",
+      wariant:      a.wariant      ?? "",
+      kolor:        a.kolor        ?? "",
+      // kalkulatorowe
+      resourceType,
+      rawTyp,
+      controlDevice: (UNCONTROLLED_TYPES.has(rawTyp) || !exists) ? "uncontrolled" : defaultId,
+      ioCount:       1,
+      materials:     [],
+    });
+  }
+  return rows;
+}
+
+function calculateSummary(rows, catalog, matList, cennik) {
+  const deviceIO = {};
+  const matCount = {};
+  for (const r of rows) {
+    if (r.controlDevice && r.controlDevice !== "uncontrolled") {
+      if (r.controlDevice.startsWith("mat:")) {
+        // Materiał jako element sterujący — liczy się jako ilość wg ioCount
+        const name = r.controlDevice.slice(4);
+        matCount[name] = (matCount[name] ?? 0) + (r.ioCount ?? 1);
+      } else {
+        deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
+      }
+    }
+    for (const m of r.materials ?? []) {
+      matCount[m.name] = (matCount[m.name] ?? 0) + m.qty;
+    }
+  }
+  const allPrices = [
+    ...(cennik ?? []),
+    ...(matList ?? []).map(m => ({ name: m.name, price_pln: m.price_pln, sku: null })),
+  ];
+  const deviceItems = Object.entries(deviceIO).map(([productId, totalIO]) => {
+    const product = catalog.find(p => p.id === productId);
+    if (!product) return null;
+    return {
+      id: `dev-${productId}`, name: product.name, partNumber: product.partNumber,
+      totalIO, outputsPerUnit: product.outputsPerUnit,
+      quantity: Math.ceil(totalIO / product.outputsPerUnit),
+      unit: product.unit ?? "szt.",
+      priceEst: allPrices.find(c => String(c.sku) === product.partNumber)?.price_pln ?? 0,
+    };
+  }).filter(Boolean);
+  const materialItems = Object.entries(matCount).map(([name, qty]) => ({
+    id: `mat-${name}`, name, quantity: qty, unit: "szt.",
+    priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
+  }));
+  return { deviceItems, materialItems };
+}
+
+// ── CSV export (bez zewnętrznych zależności, otwieralny w Excelu) ─────────────
+
+function toCsvRow(cells) {
+  return cells.map(v => {
+    const s = String(v ?? "").replace(/"/g, '""');
+    return `"${s}"`;
+  }).join(",");
+}
+
+function downloadCsv(content, filename) {
+  // BOM UTF-8 — Excel wyświetla polskie znaki poprawnie
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportXLSX(rows, catalog, summary) {
+  // Arkusz 1 — Punkty instalacyjne
+  const headers1 = ["ID/Tag","Kondygnacja","Pomieszczenie","Typ","Rola","Uwagi","Przewód","Wysokosc","Wariant","Kolor","El. sterujacy","I/O","Materialy"];
+  const data1 = rows.map(r => [
+    r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
+    r.przewód, r.wysokość, r.wariant, r.kolor,
+    r.controlDevice === "uncontrolled" ? "niesterowane" : r.controlDevice.startsWith("mat:") ? r.controlDevice.slice(4) : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
+    r.controlDevice !== "uncontrolled" ? r.ioCount : "",
+    (r.materials ?? []).map(m => `${m.name} x${m.qty}`).join("; "),
+  ]);
+  const csv1 = [toCsvRow(headers1), ...data1.map(toCsvRow)].join("\n");
+  downloadCsv(csv1, "punkty_instalacyjne.csv");
+
+  // Arkusz 2 — Zestawienie (osobny plik)
+  if (summary.deviceItems.length > 0 || summary.materialItems.length > 0) {
+    const headers2 = ["Kategoria","Nazwa","Nr kat.","Ilosc","Jednostka","Cena jedn.","Wartosc"];
+    const data2 = [
+      ...summary.deviceItems.map(d => [
+        "Urz\u0105dzenie", d.name, d.partNumber, d.quantity, d.unit,
+        d.priceEst || "", d.priceEst ? d.quantity * d.priceEst : "",
+      ]),
+      ...summary.materialItems.map(m => [
+        "Materia\u0142", m.name, "", m.quantity, m.unit,
+        m.priceEst || "", m.priceEst ? m.quantity * m.priceEst : "",
+      ]),
+    ];
+    const csv2 = [toCsvRow(headers2), ...data2.map(toCsvRow)].join("\n");
+    downloadCsv(csv2, "zestawienie.csv");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EditableCell — komórka z edycją inline
+// ─────────────────────────────────────────────────────────────────────────────
+
+function EditableCell({ value, onChange, type = "text", placeholder = "—" }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl border border-slate-200 shadow-sm"
-    >
-      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-        <Icon className="w-4 h-4 text-orange-500" />
-        <span className="font-semibold text-slate-800">{title}</span>
-        {badge && (
-          <span className="ml-1 text-[10px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-semibold">{badge}</span>
-        )}
-      </div>
-      <div className="p-5">{children}</div>
-    </motion.div>
+    <input
+      type={type}
+      value={value ?? ""}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full bg-transparent text-sm text-slate-700 outline-none focus:bg-white focus:ring-1 focus:ring-orange-400 rounded px-1 -mx-1 py-0.5 min-w-0 placeholder:text-slate-300"
+    />
   );
 }
 
-function Stepper({ value, onChange, min = 0 }) {
+// ─────────────────────────────────────────────────────────────────────────────
+// AddMaterialRow — autocomplete do dodania materiału
+// ─────────────────────────────────────────────────────────────────────────────
+
+function AddMaterialRow({ matOptions, onAdd }) {
+  const [search, setSearch] = useState("");
+  const [qty, setQty] = useState(1);
+  const [showSugg, setShowSugg] = useState(false);
+  const ref = useRef(null);
+
+  const suggestions = useMemo(() => {
+    if (search.length < 2) return [];
+    const q = search.toLowerCase();
+    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [search, matOptions]);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShowSugg(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  const commit = (name = search) => {
+    if (!name.trim()) return;
+    onAdd({ id: `m-${Date.now()}`, name: name.trim(), qty });
+    setSearch(""); setQty(1); setShowSugg(false);
+  };
+
   return (
-    <div className="flex items-center gap-1">
-      <button
-        onClick={() => onChange(Math.max(min, value - 1))}
-        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-base leading-none transition-colors"
-      >−</button>
+    <div className="flex items-center gap-2" ref={ref}>
+      <div className="relative flex-1">
+        <input
+          value={search}
+          onChange={e => { setSearch(e.target.value); setShowSugg(true); }}
+          onFocus={() => setShowSugg(true)}
+          onKeyDown={e => e.key === "Enter" && commit()}
+          placeholder="Szukaj materiału…"
+          className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
+        />
+        {showSugg && suggestions.length > 0 && (
+          <ul className="absolute left-0 top-full mt-0.5 w-64 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-36 overflow-y-auto">
+            {suggestions.map(m => (
+              <li
+                key={m.name}
+                onMouseDown={() => { setSearch(m.name); setShowSugg(false); }}
+                className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex justify-between"
+              >
+                <span className="truncate">{m.name}</span>
+                {m.price_pln != null && <span className="text-orange-600 ml-2 shrink-0">{m.price_pln} zł</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
       <input
-        type="number" min={min} value={value}
-        onChange={e => onChange(Math.max(min, parseInt(e.target.value) || 0))}
-        className="w-14 text-center border border-slate-200 rounded-lg py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+        type="number" min="1" value={qty}
+        onChange={e => setQty(Math.max(1, parseInt(e.target.value) || 1))}
+        className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400"
       />
-      <button
-        onClick={() => onChange(value + 1)}
-        className="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-base leading-none transition-colors"
-      >+</button>
+      <button onMouseDown={() => commit()} className="px-2 py-1 bg-orange-500 text-white text-xs rounded hover:bg-orange-600">
+        <Plus className="w-3 h-3" />
+      </button>
     </div>
   );
 }
 
-// ── Loxone Module Calculator ──────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MaterialsPanel — rozwijany panel materiałów dla jednego wiersza
+// ─────────────────────────────────────────────────────────────────────────────
 
-const LOXONE_MODULES = [
-  { key: "miniserver", label: "Loxone Miniserver Gen 2", price: 2490, color: "text-orange-600", bg: "bg-orange-50" },
-  { key: "extension",  label: "Extension (8 DI / 8 DO)",  price:  790, color: "text-blue-600",   bg: "bg-blue-50"   },
-  { key: "dimmer",     label: "Dimmer Extension",         price: 1190, color: "text-purple-600", bg: "bg-purple-50" },
-  { key: "blind",      label: "Blind Extension",          price: 1190, color: "text-green-600",  bg: "bg-green-50"  },
-  { key: "tree",       label: "Tree Extension",           price:  890, color: "text-amber-600",  bg: "bg-amber-50"  },
-];
+function MaterialsPanel({ row, onRowChange, matOptions, colSpan }) {
+  const [matsOpen, setMatsOpen] = useState(true);
 
-const LOXONE_INPUTS = [
-  { key: "lights",   label: "Grupy oświetleniowe (ON/OFF)", icon: "💡", tip: "Każda niezależna sekcja świateł" },
-  { key: "dimmers",  label: "Obwody ściemnialne",           icon: "🔆", tip: "Oświetlenie LED/halogen z regulacją" },
-  { key: "blinds",   label: "Rolety / żaluzje",            icon: "🪟", tip: "Każdy napęd rolety/żaluzji" },
-  { key: "heating",  label: "Strefy ogrzewania",           icon: "🌡️", tip: "Niezależne obwody grzewcze/klimatyzacja" },
-  { key: "sensors",  label: "Czujniki (temp., ruch, CO2)", icon: "📡", tip: "Czujniki 1-Wire, AI lub cyfrowe" },
-];
-
-function LoxoneCalc() {
-  const [v, setV] = useState({ lights: 12, dimmers: 4, blinds: 6, heating: 8, sensors: 6 });
-  const set = (k, val) => setV(p => ({ ...p, [k]: val }));
-
-  const doNeeded  = v.lights + v.heating;
-  const diNeeded  = Math.ceil((v.lights + v.blinds + v.dimmers) * 1.5 + v.sensors);
-  const ext       = Math.max(Math.ceil((Math.max(doNeeded, diNeeded) - 8) / 8), 0);
-  const dimExt    = Math.ceil(v.dimmers / 8);
-  const blindExt  = Math.ceil(v.blinds / 4);
-  const treeExt   = Math.ceil(v.sensors / 10);
-  const total     = 1 + ext + dimExt + blindExt + treeExt;
-  const cost      = 2490 + ext * 790 + dimExt * 1190 + blindExt * 1190 + treeExt * 890;
-  const totalPoints = v.lights + v.dimmers + v.blinds + v.heating + v.sensors;
-
-  const modules = [
-    { key: "miniserver", count: 1,       price: 2490 },
-    { key: "extension",  count: ext,     price: 790  },
-    { key: "dimmer",     count: dimExt,  price: 1190 },
-    { key: "blind",      count: blindExt,price: 1190 },
-    { key: "tree",       count: treeExt, price: 890  },
-  ];
+  const updateMat = (idx, qty) => {
+    const mats = [...row.materials];
+    mats[idx] = { ...mats[idx], qty };
+    onRowChange({ ...row, materials: mats });
+  };
+  const removeMat = (idx) => {
+    const mats = [...row.materials];
+    mats.splice(idx, 1);
+    onRowChange({ ...row, materials: mats });
+  };
+  const addMat = (mat) => {
+    onRowChange({ ...row, materials: [...row.materials, mat] });
+    setMatsOpen(true);
+  };
 
   return (
-    <SectionCard icon={Zap} title="Kalkulator modułów Loxone" badge="Instalacje">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-3">
-          {LOXONE_INPUTS.map(({ key, label, icon, tip }) => (
-            <div key={key} className="flex items-center gap-3">
-              <span className="text-xl w-7 flex-shrink-0 text-center">{icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-slate-700">{label}</div>
-                <div className="text-xs text-slate-400">{tip}</div>
-              </div>
-              <Stepper value={v[key]} onChange={val => set(key, val)} />
-            </div>
-          ))}
-        </div>
-
-        <div className="space-y-3">
-          <p className="text-sm font-semibold text-slate-700">Wymagane moduły:</p>
-          <div className="space-y-2">
-            {modules.filter(m => m.count > 0).map(m => {
-              const mod = LOXONE_MODULES.find(x => x.key === m.key);
-              return (
-                <div key={m.key} className={`flex items-center justify-between rounded-lg px-3 py-2 ${mod.bg}`}>
-                  <span className="text-sm text-slate-700">{mod.label}</span>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-sm font-bold ${mod.color}`}>×{m.count}</span>
-                    <span className="text-xs text-slate-500">{(m.count * m.price).toLocaleString("pl")} zł</span>
-                  </div>
+    <tr className="bg-orange-50/50 border-b border-orange-100">
+      <td colSpan={colSpan} className="px-4 py-2">
+        <div className="max-w-lg">
+          {row.materials.length > 0 && (
+            <div className="mb-2">
+              <button
+                onClick={() => setMatsOpen(v => !v)}
+                className="flex items-center gap-1 text-xs text-slate-500 font-medium hover:text-slate-700 mb-1.5"
+              >
+                {matsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                Dodane materiały ({row.materials.length})
+              </button>
+              {matsOpen && (
+                <div className="space-y-0.5 pl-1 border-l-2 border-orange-200 mb-2">
+                  {row.materials.map((m, i) => (
+                    <div key={m.id ?? i} className="flex items-center gap-2 py-0.5">
+                      <span className="flex-1 text-xs text-slate-700 truncate">{m.name}</span>
+                      <input
+                        type="number" min="1" value={m.qty}
+                        onChange={e => updateMat(i, Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-12 text-center border border-slate-200 rounded px-1 py-0.5 text-xs outline-none focus:ring-1 focus:ring-orange-400"
+                      />
+                      <span className="text-xs text-slate-400">szt.</span>
+                      <button onClick={() => removeMat(i)} className="p-0.5 text-slate-300 hover:text-red-500">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="border-t border-slate-100 pt-3 space-y-1.5">
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Łącznie modułów</span>
-              <span className="font-semibold text-slate-800">{total} szt.</span>
+              )}
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-500">Punktów logiki</span>
-              <span className="font-semibold text-slate-800">{totalPoints}</span>
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 p-4 text-white">
-            <p className="text-xs text-orange-100">Szacunkowy koszt sprzętu Loxone</p>
-            <p className="text-2xl font-bold mt-0.5">~{cost.toLocaleString("pl")} zł</p>
-            <p className="text-xs text-orange-200 mt-1">netto · bez robocizny i okablowania</p>
-          </div>
+          )}
+          <AddMaterialRow matOptions={matOptions} onAdd={addMat} />
         </div>
-      </div>
-    </SectionCard>
+      </td>
+    </tr>
   );
 }
 
-// ── Cable Cost Calculator ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// SummaryPanel — zestawienie urządzeń i materiałów
+// ─────────────────────────────────────────────────────────────────────────────
 
-const CABLE_TYPES = [
-  { id: 1, type: "YDY 3×1.5 mm²",       hint: "oświetlenie",         pricePerM: 2.5  },
-  { id: 2, type: "YDY 5×2.5 mm²",       hint: "obwody siłowe",       pricePerM: 4.2  },
-  { id: 3, type: "YSLCY 3×1.5 mm²",     hint: "ekranowany (silniki)", pricePerM: 3.8  },
-  { id: 4, type: "UTP Cat6",            hint: "sieć / BUS / IP",     pricePerM: 1.8  },
-  { id: 5, type: "Loxone Tree Bus",     hint: "magistrala drzewkowa", pricePerM: 3.2  },
-  { id: 6, type: "KNX (YCYM 2×2×0.8)", hint: "KNX / EIB",           pricePerM: 4.8  },
-];
-
-function CableCalc() {
-  const [cables, setCables] = useState(CABLE_TYPES.map(c => ({ ...c, meters: 0 })));
-  const set = (id, key, val) => setCables(prev => prev.map(c => c.id === id ? { ...c, [key]: val } : c));
-  const total = cables.reduce((s, c) => s + c.meters * c.pricePerM, 0);
-  const totalMeters = cables.reduce((s, c) => s + c.meters, 0);
+function SummaryPanel({ deviceItems, materialItems }) {
+  const total = [...deviceItems, ...materialItems].reduce((s, i) => s + i.quantity * (i.priceEst ?? 0), 0);
 
   return (
-    <SectionCard icon={Activity} title="Kalkulator kosztów okablowania">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs text-slate-400 border-b border-slate-100">
-              <th className="text-left pb-2 font-medium">Typ kabla</th>
-              <th className="text-right pb-2 font-medium pr-2">Metry</th>
-              <th className="text-right pb-2 font-medium pr-2">Cena/m (zł)</th>
-              <th className="text-right pb-2 font-medium">Wartość</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {cables.map(c => (
-              <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="py-2.5 pr-4">
-                  <div className="font-medium text-slate-700">{c.type}</div>
-                  <div className="text-xs text-slate-400">{c.hint}</div>
-                </td>
-                <td className="py-2.5 pr-2 text-right">
-                  <input
-                    type="number" min="0" placeholder="0" value={c.meters || ""}
-                    onChange={e => set(c.id, "meters", parseFloat(e.target.value) || 0)}
-                    className="w-20 text-right border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                  />
-                </td>
-                <td className="py-2.5 pr-2 text-right">
-                  <input
-                    type="number" min="0" step="0.1" value={c.pricePerM}
-                    onChange={e => set(c.id, "pricePerM", parseFloat(e.target.value) || 0)}
-                    className="w-16 text-right border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                  />
-                </td>
-                <td className="py-2.5 text-right font-medium text-slate-700">
-                  {(c.meters * c.pricePerM).toFixed(2)} zł
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-slate-500">
-          Łącznie: <span className="font-semibold text-slate-700">{totalMeters.toFixed(0)} m</span> kabla
+    <div className="space-y-4">
+      {deviceItems.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+            <Cpu className="w-3.5 h-3.5" /> Urządzenia sterujące
+          </div>
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
+                  <th className="text-left px-3 py-2">Urządzenie</th>
+                  <th className="text-left px-3 py-2 w-24">Nr kat.</th>
+                  <th className="text-center px-3 py-2 w-28">Zajęte / dost. I/O</th>
+                  <th className="text-center px-3 py-2 w-16">Ilość</th>
+                  <th className="text-right px-3 py-2 w-24">Cena</th>
+                  <th className="text-right px-3 py-2 w-24">Wartość</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {deviceItems.map(d => (
+                  <tr key={d.id}>
+                    <td className="px-3 py-2 font-medium text-slate-800">{d.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-400">{d.partNumber}</td>
+                    <td className="px-3 py-2 text-center text-xs text-slate-500 tabular-nums">{d.totalIO} / {d.quantity * d.outputsPerUnit}</td>
+                    <td className="px-3 py-2 text-center font-bold text-orange-600">{d.quantity}</td>
+                    <td className="px-3 py-2 text-right text-xs text-slate-500">{d.priceEst > 0 ? `${d.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{d.priceEst > 0 ? `${(d.quantity * d.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs text-slate-400">Łączny koszt okablowania</div>
-          <div className="text-xl font-bold text-orange-600">{total.toFixed(2)} zł</div>
+      )}
+      {materialItems.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">
+            <Package className="w-3.5 h-3.5" /> Materiały dodatkowe
+          </div>
+          <div className="border border-slate-200 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
+                  <th className="text-left px-3 py-2">Materiał</th>
+                  <th className="text-center px-3 py-2 w-16">Ilość</th>
+                  <th className="text-right px-3 py-2 w-24">Cena</th>
+                  <th className="text-right px-3 py-2 w-24">Wartość</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {materialItems.map(m => (
+                  <tr key={m.id}>
+                    <td className="px-3 py-2 text-slate-800">{m.name}</td>
+                    <td className="px-3 py-2 text-center font-bold text-orange-600">{m.quantity}</td>
+                    <td className="px-3 py-2 text-right text-xs text-slate-500">{m.priceEst > 0 ? `${m.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-slate-700">{m.priceEst > 0 ? `${(m.quantity * m.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-    </SectionCard>
+      )}
+      {total > 0 && (
+        <div className="flex justify-end border-t border-slate-100 pt-3">
+          <div className="text-right">
+            <div className="text-xs text-slate-400">Łączna wartość zestawienia</div>
+            <div className="text-2xl font-bold text-orange-600">{total.toLocaleString("pl-PL")} zł</div>
+            <div className="text-xs text-slate-400">netto</div>
+          </div>
+        </div>
+      )}
+      {deviceItems.length === 0 && materialItems.length === 0 && (
+        <div className="text-center py-8 text-slate-300 text-sm">Brak przypisanych urządzeń ani materiałów</div>
+      )}
+    </div>
   );
 }
 
-// ── Quick Project Price Estimator ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PointCalculator — główny komponent kalkulatora
+// ─────────────────────────────────────────────────────────────────────────────
 
-const PACKAGES = {
-  "Smart design":  { price: 350, desc: "Oświetlenie, ogrzewanie, rolety" },
-  "Smart design+": { price: 500, desc: "+ audio, klimatyzacja, zabezpieczenia" },
-  "Full house":    { price: 700, desc: "Pełna automatyka, KNX/Loxone premium" },
-};
+function PointCalculator({ projects }) {
+  // Dane
+  const [rows, setRows] = useState([]);
+  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [cennik, setCennik] = useState([]);
+  const [matList, setMatList] = useState([]);
 
-const EXTRAS = [
-  { key: "alarm",   label: "System alarmowy (Satel/DSC)", price: 3500 },
-  { key: "audio",   label: "Multiroom audio",              price: 5000 },
-  { key: "gate",    label: "Automatyka bramy / garażu",    price: 1800 },
-  { key: "camera",  label: "Monitoring IP (4 kamery)",     price: 4200 },
-  { key: "ev",      label: "Ładowarka EV (wallbox)",       price: 3200 },
-  { key: "solar",   label: "Integracja PV / magazyn",      price: 6500 },
-];
+  // Selekcja projektu
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
-function PriceEstimator() {
-  const [metraz, setMetraz] = useState(120);
-  const [pakiet, setPakiet] = useState("Smart design");
-  const [extras, setExtras] = useState({});
+  // Widok
+  const [activeTab, setActiveTab] = useState("table"); // "table" | "summary"
+  const [expandedId, setExpandedId] = useState(null);
 
-  const base        = metraz * PACKAGES[pakiet].price;
-  const extrasTotal = EXTRAS.reduce((s, e) => s + (extras[e.key] ? e.price : 0), 0);
-  const total       = base + extrasTotal;
-  const margin      = total * 0.25;
+  // Filtrowanie
+  const [search, setSearch] = useState("");
+  const [filterTyp, setFilterTyp] = useState("all");
+  const [filterFloor, setFilterFloor] = useState("all");
+  const [filterRoom, setFilterRoom] = useState("all");
+
+  // Filtr master
+  const [filterMasterOnly, setFilterMasterOnly] = useState(false);
+
+  // Sortowanie
+  const [sortKey, setSortKey] = useState("pomieszczenie");
+  const [sortDir, setSortDir] = useState("asc");
+
+  // Widoczność kolumn
+  const [visibleCols, setVisibleCols] = useState(
+    () => new Set(COLS.filter(c => c.defaultVisible).map(c => c.key))
+  );
+  const [showColPicker, setShowColPicker] = useState(false);
+
+  // Zapis
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState(null);
+
+  const project = projects.find(p => p.id === selectedProjectId) ?? null;
+
+  // Wczytaj katalog Loxone + cennik + materiały
+  useEffect(() => {
+    if (!GAS_ON) return;
+    Promise.all([
+      GAS.getLoxoneJson().catch(() => []),
+      gasGet("getCennik").catch(() => []),
+      gasGet("getMaterialyJson").catch(() => []),
+    ]).then(([loxData, cennikData, matData]) => {
+      if (Array.isArray(loxData) && loxData.length > 0) setCatalog(loxData);
+      setCennik(Array.isArray(cennikData) ? cennikData : []);
+      setMatList(Array.isArray(matData) ? matData : []);
+    });
+  }, []);
+
+  const matOptions = useMemo(() => {
+    const all = [
+      ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln })),
+      ...matList.map(m => ({ name: m.name, price_pln: m.price_pln })),
+    ];
+    const seen = new Set();
+    return all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name));
+  }, [cennik, matList]);
+
+  // Wczytaj punkty z Google Drive
+  const handleLoadPoints = useCallback(async () => {
+    if (!project) return;
+    setLoading(true);
+    setLoadError(null);
+    setRows([]);
+    setExpandedId(null);
+    setActiveTab("table");
+
+    try {
+      let loaded = [];
+
+      if (GAS_ON) {
+        const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
+        if (result?.floors?.length > 0) {
+          for (const floor of result.floors) {
+            if (!floor.attribs || typeof floor.attribs !== "object") continue;
+            loaded.push(...attribsToRows(floor.attribs, floor.name, catalog));
+          }
+        }
+      }
+
+      if (loaded.length === 0) {
+        setLoadError("Brak danych instalacyjnych. Wgraj projekt.json do folderu projektu na Google Drive.");
+      } else {
+        setRows(loaded);
+      }
+    } catch (e) {
+      setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
+    } finally {
+      setLoading(false);
+    }
+  }, [project, catalog]);
+
+  // Filtrowanie i sortowanie
+  const { uniqueTypy, uniqueFloors } = useMemo(() => ({
+    uniqueTypy:  [...new Set(rows.map(r => r.typ).filter(Boolean))].sort(),
+    uniqueFloors:[...new Set(rows.map(r => r.kondygnacja).filter(Boolean))].sort(),
+  }), [rows]);
+
+  const uniqueRooms = useMemo(() => {
+    const base = filterFloor === "all" ? rows : rows.filter(r => r.kondygnacja === filterFloor);
+    return [...new Set(base.map(r => r.pomieszczenie).filter(Boolean))].sort();
+  }, [rows, filterFloor]);
+
+  // Reset filtra pomieszczenia gdy zmieni się kondygnacja
+  useEffect(() => { setFilterRoom("all"); }, [filterFloor]);
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase();
+    return rows
+      .filter(r => {
+        if (filterTyp   !== "all" && r.typ          !== filterTyp)   return false;
+        if (filterFloor !== "all" && r.kondygnacja  !== filterFloor) return false;
+        if (filterRoom  !== "all" && r.pomieszczenie !== filterRoom)  return false;
+        if (filterMasterOnly && !(r.rola ?? "").toLowerCase().includes("master")) return false;
+        if (q && !["tag","rola","pomieszczenie","uwagi","typ","wariant"].some(k => (r[k] ?? "").toLowerCase().includes(q))) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const av = (a[sortKey] ?? "").toString().toLowerCase();
+        const bv = (b[sortKey] ?? "").toString().toLowerCase();
+        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+      });
+  }, [rows, search, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const updateRow = useCallback((id, updater) => {
+    setRows(prev => prev.map(r => r._id === id ? (typeof updater === "function" ? updater(r) : { ...r, ...updater }) : r));
+  }, []);
+
+  const summary = useMemo(
+    () => calculateSummary(rows, catalog, matList, cennik),
+    [rows, catalog, matList, cennik],
+  );
+
+  // Widoczne kolumny do wyświetlenia
+  const activeCols = COLS.filter(c => visibleCols.has(c.key));
+  const totalColSpan = activeCols.length + 4; // +4 za typ-badge, el.sterujący, I/O, materiały
+
+  const handleSave = async () => {
+    if (!project) return;
+    setSaving(true); setSaveResult(null);
+    try {
+      const allItems = [...summary.deviceItems, ...summary.materialItems].map(item => ({
+        id: item.id, name: item.name, category: item.id.startsWith("dev-") ? "smart_home" : "cables",
+        quantity: item.quantity, unit: item.unit ?? "szt.",
+        priceEst: item.priceEst ?? 0, link: "", status: "Oczekuje",
+      }));
+      let existingId, existingItems = [];
+      if (GAS_ON) {
+        const existing = await GAS.getZakupy(project.id).catch(() => null);
+        if (existing?.items) { existingItems = existing.items; existingId = existing.id; }
+      }
+      const existingIds = new Set(existingItems.map(i => i.id));
+      if (GAS_ON) {
+        await GAS.upsertZakupy({
+          id: existingId, projectId: project.id,
+          items: [...existingItems, ...allItems.filter(i => !existingIds.has(i.id))],
+          updatedDate: TODAY,
+        });
+      }
+      setSaveResult("ok");
+    } catch { setSaveResult("err"); }
+    finally { setSaving(false); }
+  };
+
+  const SortIcon = ({ col }) => {
+    if (!col.sortable) return null;
+    if (sortKey !== col.key) return <ChevronDown className="w-3 h-3 text-slate-300 shrink-0" />;
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3 h-3 text-orange-500 shrink-0" />
+      : <ChevronDown className="w-3 h-3 text-orange-500 shrink-0" />;
+  };
+
+  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <SectionCard icon={TrendingUp} title="Szybka wycena projektu">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-5">
-          {/* Metraz */}
-          <div>
-            <div className="flex justify-between mb-1.5">
-              <label className="text-sm font-medium text-slate-700">Powierzchnia obiektu</label>
-              <span className="text-sm font-bold text-slate-800">{metraz} m²</span>
-            </div>
-            <input
-              type="range" min="30" max="600" step="5" value={metraz}
-              onChange={e => setMetraz(+e.target.value)}
-              className="w-full accent-orange-500"
-            />
-            <div className="flex justify-between text-xs text-slate-400 mt-0.5">
-              <span>30 m²</span><span>600 m²</span>
-            </div>
-          </div>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
-          {/* Pakiet */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Pakiet</label>
-            <div className="space-y-2">
-              {Object.entries(PACKAGES).map(([key, { price, desc }]) => (
-                <label
-                  key={key}
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${pakiet === key ? "border-orange-400 bg-orange-50" : "border-slate-200 hover:border-slate-300"}`}
-                >
-                  <input type="radio" name="pakiet" checked={pakiet === key} onChange={() => setPakiet(key)} className="mt-0.5 accent-orange-500" />
-                  <div>
-                    <div className="text-sm font-semibold text-slate-800">{key}</div>
-                    <div className="text-xs text-slate-500">{desc}</div>
-                    <div className="text-xs font-medium text-orange-600 mt-0.5">{price} zł/m²</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Extras */}
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Systemy dodatkowe</label>
-            <div className="grid grid-cols-2 gap-2">
-              {EXTRAS.map(e => (
-                <label
-                  key={e.key}
-                  className={`flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-all ${extras[e.key] ? "border-orange-300 bg-orange-50" : "border-slate-200 hover:border-slate-300"}`}
-                >
-                  <input
-                    type="checkbox" checked={!!extras[e.key]}
-                    onChange={ev => setExtras(p => ({ ...p, [e.key]: ev.target.checked }))}
-                    className="mt-0.5 accent-orange-500"
-                  />
-                  <div>
-                    <div className="text-xs font-medium text-slate-700 leading-tight">{e.label}</div>
-                    <div className="text-xs text-slate-400 mt-0.5">+{e.price.toLocaleString("pl")} zł</div>
-                  </div>
-                </label>
-              ))}
-            </div>
+      {/* ── Nagłówek ── */}
+      <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center shrink-0">
+          <ShoppingCart className="w-4 h-4 text-orange-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-slate-800">Kalkulator instalacji</div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            Przeglądaj i edytuj punkty instalacyjne, przypisuj elementy sterujące i generuj zestawienie
           </div>
         </div>
+        {rows.length > 0 && (
+          <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5 shrink-0">
+            <button onClick={() => setActiveTab("table")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "table" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              Tabela
+            </button>
+            <button onClick={() => setActiveTab("summary")} className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${activeTab === "summary" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              Zestawienie
+            </button>
+          </div>
+        )}
+      </div>
 
-        {/* Summary */}
-        <div className="flex flex-col gap-3">
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-5 text-white flex-1">
-            <p className="text-xs text-slate-400 uppercase tracking-wide">Łączna wartość projektu</p>
-            <p className="text-4xl font-bold mt-1">{total.toLocaleString("pl")} zł</p>
-            <p className="text-sm text-slate-400 mt-0.5">netto · orientacyjnie</p>
+      <div className="p-5 space-y-4">
 
-            <div className="mt-5 pt-4 border-t border-slate-700 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Automatyka ({pakiet})</span>
-                <span className="font-medium">{base.toLocaleString("pl")} zł</span>
+        {/* ── Projekt + wczytaj ── */}
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Projekt</label>
+            <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 bg-white">
+              <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
+              <select
+                value={selectedProjectId}
+                onChange={e => { setSelectedProjectId(e.target.value); setRows([]); setLoadError(null); setSaveResult(null); }}
+                className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
+              >
+                <option value="">— wybierz projekt —</option>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleLoadPoints}
+            disabled={!selectedProjectId || loading}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+            Wczytaj punkty
+          </button>
+        </div>
+
+        {/* Błąd */}
+        {loadError && (
+          <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <AlertCircle className="w-4 h-4 shrink-0" />{loadError}
+          </div>
+        )}
+
+        {/* ── WIDOK: TABELA ── */}
+        {activeTab === "table" && rows.length > 0 && (
+          <>
+            {/* Pasek filtrów */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Szukaj */}
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Szukaj…"
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400"
+                />
+                {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>}
               </div>
-              {EXTRAS.filter(e => extras[e.key]).map(e => (
-                <div key={e.key} className="flex justify-between text-sm">
-                  <span className="text-slate-400">{e.label.split(" (")[0]}</span>
-                  <span className="font-medium">+{e.price.toLocaleString("pl")} zł</span>
-                </div>
-              ))}
+
+              {/* Filtr: typ */}
+              <select value={filterTyp} onChange={e => setFilterTyp(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie typy</option>
+                {uniqueTypy.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+
+              {/* Filtr: kondygnacja */}
+              {uniqueFloors.length > 1 && (
+                <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[140px]">
+                  <option value="all">Wszystkie piętra</option>
+                  {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
+              )}
+
+              {/* Filtr: pomieszczenie */}
+              <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie pomieszczenia</option>
+                {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+
+              {/* Filtr: tylko master */}
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap border border-slate-200 rounded-lg px-2.5 py-2 hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  checked={filterMasterOnly}
+                  onChange={e => setFilterMasterOnly(e.target.checked)}
+                  className="rounded accent-orange-500"
+                />
+                Tylko master
+              </label>
+
+              {/* Licznik */}
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {filteredRows.length} / {rows.length} pkt.
+              </span>
+
+              {/* Kolumny toggle */}
+              <div className="relative ml-auto">
+                <button
+                  onClick={() => setShowColPicker(v => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg transition-colors ${showColPicker ? "border-orange-400 text-orange-600 bg-orange-50" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" /> Kolumny
+                </button>
+                {showColPicker && (
+                  <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-3 min-w-[180px]">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Widoczne kolumny</div>
+                    {COLS.map(col => (
+                      <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:text-slate-800 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.has(col.key)}
+                          onChange={e => {
+                            const next = new Set(visibleCols);
+                            if (e.target.checked) next.add(col.key); else next.delete(col.key);
+                            setVisibleCols(next);
+                          }}
+                          className="rounded accent-orange-500"
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Eksport XLSX */}
+              <button
+                onClick={() => exportXLSX(rows, catalog, summary)}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" /> Eksport XLSX
+              </button>
             </div>
-          </div>
 
-          <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-            <p className="text-xs text-green-600 font-medium">Szacowana marża (25%)</p>
-            <p className="text-xl font-bold text-green-700 mt-0.5">{margin.toLocaleString("pl")} zł</p>
-          </div>
+            {/* Tabela */}
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm" style={{ minWidth: "900px" }}>
+                <thead>
+                  <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
+                    {activeCols.map(col => (
+                      <th
+                        key={col.key}
+                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
+                        onClick={() => col.sortable && handleSort(col.key)}
+                      >
+                        <div className="flex items-center gap-1">
+                          {col.label}<SortIcon col={col} />
+                        </div>
+                      </th>
+                    ))}
+                    {/* Stałe kolumny kalkulatora */}
+                    <th className="text-left px-3 py-1.5 w-48">Element sterujący</th>
+                    <th className="text-center px-3 py-1.5 w-14">I/O</th>
+                    <th className="text-left px-3 py-1.5 w-24">Materiały</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
+                  ) : filteredRows.map(row => (
+                    <React.Fragment key={row._id}>
+                      <tr className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${expandedId === row._id ? "bg-orange-50/30" : ""}`}>
+                        {/* Edytowalne kolumny z JSON */}
+                        {activeCols.map(col => (
+                          <td key={col.key} className="px-3 py-0.5">
+                            {col.key === "kolor" ? (
+                              <div className="flex items-center gap-1.5">
+                                {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
+                                <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
+                              </div>
+                            ) : col.key === "typ" ? (
+                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
+                            ) : (
+                              <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
+                            )}
+                          </td>
+                        ))}
 
-          <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-xl p-3">
-            <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-blue-600">Wartość szacunkowa. Finalna wycena wymaga szczegółowego audytu i projektu instalacji.</p>
+                        {/* Element sterujący */}
+                        <td className="px-3 py-0.5">
+                          <select
+                            value={row.controlDevice ?? "uncontrolled"}
+                            onChange={e => updateRow(row._id, { controlDevice: e.target.value })}
+                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white w-full"
+                          >
+                            <option value="uncontrolled">— niesterowane —</option>
+                            {catalog.length > 0 && (
+                              <optgroup label="Urządzenia Loxone">
+                                {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                              </optgroup>
+                            )}
+                            {matOptions.length > 0 && (
+                              <optgroup label="Materiały">
+                                {matOptions.map(m => (
+                                  <option key={`mat:${m.name}`} value={`mat:${m.name}`}>{m.name}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                          </select>
+                        </td>
+
+                        {/* I/O */}
+                        <td className="px-3 py-0.5 text-center">
+                          {row.controlDevice !== "uncontrolled" ? (
+                            <input
+                              type="number" min="1" max="32" value={row.ioCount ?? 1}
+                              onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                              className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
+                            />
+                          ) : <span className="text-slate-300 text-xs">—</span>}
+                        </td>
+
+                        {/* Materiały */}
+                        <td className="px-3 py-0.5">
+                          <button
+                            onClick={() => setExpandedId(id => id === row._id ? null : row._id)}
+                            className={`flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1 transition-colors ${
+                              expandedId === row._id
+                                ? "bg-orange-100 text-orange-700"
+                                : row.materials.length > 0
+                                  ? "bg-slate-100 text-slate-700 hover:bg-orange-50 hover:text-orange-600"
+                                  : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"
+                            }`}
+                          >
+                            {row.materials.length > 0
+                              ? <><span className="w-4 h-4 bg-orange-500 text-white rounded-full flex items-center justify-center text-[9px] font-bold">{row.materials.length}</span> mat.</>
+                              : <><Plus className="w-3 h-3" /> dodaj</>
+                            }
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Panel materiałów */}
+                      {expandedId === row._id && (
+                        <MaterialsPanel
+                          row={row}
+                          onRowChange={updated => updateRow(row._id, () => updated)}
+                          matOptions={matOptions}
+                          colSpan={totalColSpan}
+                        />
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Akcje pod tabelą */}
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-xs text-slate-400">
+                {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem ·{" "}
+                {rows.filter(r => r.materials.length > 0).length} z materiałami
+              </div>
+              <button
+                onClick={() => setActiveTab("summary")}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+              >
+                <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── WIDOK: ZESTAWIENIE ── */}
+        {activeTab === "summary" && rows.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-700">Zestawienie materiałów</span>
+                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">z {rows.length} pkt.</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => exportXLSX(rows, catalog, summary)}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" /> XLSX
+                </button>
+                <AnimatePresence>
+                  {saveResult === "ok" && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1.5 text-green-600 text-sm font-medium">
+                      <CheckCircle2 className="w-4 h-4" /> Zapisano
+                    </motion.div>
+                  )}
+                  {saveResult === "err" && (
+                    <div className="flex items-center gap-1.5 text-red-500 text-sm"><AlertCircle className="w-4 h-4" /> Błąd</div>
+                  )}
+                </AnimatePresence>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !project}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl text-sm font-bold hover:from-slate-900 hover:to-slate-800 disabled:opacity-40 transition-all shadow-sm"
+                >
+                  {saving ? <><RefreshCw className="w-4 h-4 animate-spin" /> Zapisuję…</> : <><ShoppingCart className="w-4 h-4" /> Zapisz do zakupów</>}
+                </button>
+              </div>
+            </div>
+            <SummaryPanel deviceItems={summary.deviceItems} materialItems={summary.materialItems} />
           </div>
-        </div>
+        )}
+
+        {/* Empty state */}
+        {rows.length === 0 && !loadError && (
+          <div className="text-center py-10 text-slate-300 text-sm">
+            {selectedProjectId ? "Kliknij \u201eWczytaj punkty\u201c aby za\u0142adowa\u0107 dane" : "Wybierz projekt aby rozpocz\u0105\u0107"}
+          </div>
+        )}
+
       </div>
-    </SectionCard>
+    </div>
   );
 }
 
-// ── Main export ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN EXPORT
+// ─────────────────────────────────────────────────────────────────────────────
 
-export default function Kalkulator() {
+export default function Kalkulator({ projects = [] }) {
   return (
-    <div className="p-4 lg:p-6 space-y-6 max-w-5xl">
+    <div className="p-4 lg:p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
           <Calculator className="w-4 h-4 text-orange-600" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Kalkulatory instalacyjne</h2>
-          <p className="text-xs text-slate-400">Loxone · Okablowanie · Wycena projektu</p>
+          <h2 className="text-lg font-bold text-slate-900">Kalkulator</h2>
+          <p className="text-xs text-slate-400">Edytuj punkty instalacyjne, przypisuj urządzenia i generuj zestawienie</p>
         </div>
       </div>
-
-      <LoxoneCalc />
-      <CableCalc />
-      <PriceEstimator />
+      <PointCalculator projects={projects} />
     </div>
   );
 }

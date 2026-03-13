@@ -335,38 +335,127 @@ function doGet(e) {
         return ok(all);
 
       case "getProjectFiles":
-        return ok(getDriveFiles(e.parameter.projectId));
+        return ok(getDriveFiles(e.parameter.projectCode || e.parameter.projectId));
 
       // ── DWG Viewer — projekt.svg + projekt.json z folderu projektu ────────────
+      // Obsługuje pliki pojedyncze (projekt.svg / projekt.json) oraz wielopiętrowe:
+      //   projekt_Parter.svg + projekt_Parter.json
+      //   projekt_Piętro.svg + projekt_Piętro.json  → zwraca tablicę floors
       // GET ?action=getDwgViewerContent&projectCode=KOW-2026-001
       case "getDwgViewerContent": {
         var dwgCode = e.parameter.projectCode;
         if (!dwgCode) return err("Brak parametru projectCode");
         var dwgFolder = getProjectFolder(dwgCode);
-        if (!dwgFolder) return ok({ svg: null, attribs: null });
+        if (!dwgFolder) return ok({ floors: [] });
 
-        var svgContent  = null;
-        var jsonContent = null;
+        var singleSvg  = null;
+        var singleJson = null;
+        var floorMap   = {}; // { "Parter": { svg: null, json: null }, ... }
 
         var dwgFiles = dwgFolder.getFiles();
         while (dwgFiles.hasNext()) {
-          var df   = dwgFiles.next();
-          var name = df.getName().toLowerCase();
-          if (name === "projekt.svg")  svgContent  = df.getBlob().getDataAsString("UTF-8");
-          if (name === "projekt.json") jsonContent = df.getBlob().getDataAsString("UTF-8");
+          var df      = dwgFiles.next();
+          var origName = df.getName();
+          var nameLow  = origName.toLowerCase();
+
+          if (nameLow === "projekt.svg") {
+            singleSvg  = df.getBlob().getDataAsString("UTF-8");
+          } else if (nameLow === "projekt.json") {
+            singleJson = df.getBlob().getDataAsString("UTF-8");
+          } else {
+            // projekt_NazwaPiętra.svg / projekt_NazwaPiętra.json
+            var floorSvg  = nameLow.match(/^projekt_(.+)\.svg$/);
+            var floorJson = nameLow.match(/^projekt_(.+)\.json$/);
+            if (floorSvg || floorJson) {
+              // Pobierz nazwę z oryginalnego pliku (zachowaj wielkość liter)
+              var dotIdx   = origName.lastIndexOf(".");
+              var floorKey = origName.slice(8, dotIdx); // "projekt_".length === 8
+              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null };
+              if (floorSvg)  floorMap[floorKey].svg  = df.getBlob().getDataAsString("UTF-8");
+              if (floorJson) floorMap[floorKey].json = df.getBlob().getDataAsString("UTF-8");
+            }
+          }
         }
 
-        if (!svgContent) return ok({ svg: null, attribs: null });
+        var floorKeys = Object.keys(floorMap);
 
-        var attribs = null;
-        if (jsonContent) {
-          try { attribs = JSON.parse(jsonContent); } catch(ex) { attribs = null; }
+        if (floorKeys.length > 0) {
+          // Tryb wielopiętrowy – zwróć wszystkie piętra
+          var floors = floorKeys.map(function(key) {
+            var att = null;
+            if (floorMap[key].json) {
+              try { att = JSON.parse(floorMap[key].json); } catch(ex) {}
+            }
+            return { name: key, svg: floorMap[key].svg, attribs: att };
+          });
+          return ok({ floors: floors });
         }
 
-        return ok({ svg: svgContent, attribs: attribs });
+        // Tryb jednostronicowy (wsteczna kompatybilność)
+        if (!singleSvg) return ok({ floors: [] });
+        var singleAtt = null;
+        if (singleJson) { try { singleAtt = JSON.parse(singleJson); } catch(ex) {} }
+        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt }] });
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────
+      // Zwraca zawartość materialy.json z folderu Materiały na Drive
+      // GET ?action=getMaterialyJson
+      case "getMaterialyJson": {
+        var matJsonFolder = getOrCreateMaterialsFolder();
+        if (!matJsonFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var matJsonFiles = matJsonFolder.getFiles();
+        while (matJsonFiles.hasNext()) {
+          var mjf = matJsonFiles.next();
+          if (mjf.getName().toLowerCase() === "materialy.json") {
+            try {
+              return ok(JSON.parse(mjf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania materialy.json: " + ex.message);
+            }
+          }
+        }
+        return ok([]); // plik nie istnieje jeszcze – zwróć pustą tablicę
+      }
+
+      // Zwraca zawartość loxone.json z folderu Materiały na Drive
+      // GET ?action=getLoxoneJson
+      case "getLoxoneJson": {
+        var loxFolder = getOrCreateMaterialsFolder();
+        if (!loxFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var loxFiles = loxFolder.getFiles();
+        while (loxFiles.hasNext()) {
+          var lf = loxFiles.next();
+          if (lf.getName().toLowerCase() === "loxone.json") {
+            try {
+              return ok(JSON.parse(lf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania loxone.json: " + ex.message);
+            }
+          }
+        }
+        return ok([]); // plik nie istnieje jeszcze – zwróć pustą tablicę
+      }
+
+      // Zwraca zawartość cennik.json z folderu Materiały na Drive
+      // GET ?action=getCennik
+      case "getCennik": {
+        var cennikFolder = getOrCreateMaterialsFolder();
+        if (!cennikFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        var cennikFiles = cennikFolder.getFiles();
+        while (cennikFiles.hasNext()) {
+          var cf = cennikFiles.next();
+          if (cf.getName().toLowerCase() === "cennik.json") {
+            try {
+              return ok(JSON.parse(cf.getBlob().getDataAsString("UTF-8")));
+            } catch (ex) {
+              return err("Błąd parsowania cennik.json: " + ex.message);
+            }
+          }
+        }
+        return err("Plik cennik.json nie znaleziony w folderze Materiały");
+      }
+
       case "getLeads":
         return ok(sheetToObjects("Leady"));
 
@@ -632,7 +721,56 @@ function doPost(e) {
         if (!obj) return err("Dokument nie znaleziony: " + body.id);
         return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: !obj.clientVisible })));
 
+      // ── Materiały JSON (edytor materialy.json na Drive) ───────────────────────
+      // Zapisuje (nadpisuje) plik materialy.json w folderze Materiały na Drive
+      // body: { items: [{ name, price_pln, link }, ...] }
+      case "saveMaterialyJson": {
+        if (!Array.isArray(body.items)) return err("Brak tablicy items");
+        var saveMatFolder = getOrCreateMaterialsFolder();
+        if (!saveMatFolder) return err("Brak folderu Materiały na Drive (sprawdź DRIVE_FOLDER_ID)");
+        // Usuń stary plik (jeśli istnieje)
+        var oldMatFiles = saveMatFolder.getFiles();
+        while (oldMatFiles.hasNext()) {
+          var omf = oldMatFiles.next();
+          if (omf.getName().toLowerCase() === "materialy.json") {
+            omf.setTrashed(true);
+            break;
+          }
+        }
+        // Zapisz nowy
+        saveMatFolder.createFile("materialy.json", JSON.stringify(body.items, null, 2), "application/json");
+        return ok({ saved: true, count: body.items.length });
+      }
+
       // ── Leady (admin) ─────────────────────────────────────────────────────────
+
+      // Tworzenie leada z formularza kontaktowego lub konfiguratora
+      // body: { lead: { id, name, email, phone, notes, pipelineStatus, status, source, date, ... } }
+      case "createLead": {
+        var newLeadObj = body.lead || {};
+        if (!newLeadObj.id) newLeadObj.id = "lead-" + Date.now();
+        if (!newLeadObj.date) newLeadObj.date = todayStr();
+        if (!newLeadObj.status) newLeadObj.status = "Nowy";
+        insertRow("Leady", newLeadObj);
+
+        if (ADMIN_EMAIL && newLeadObj.source) {
+          try {
+            GmailApp.sendEmail(
+              ADMIN_EMAIL,
+              "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""),
+              "Nowy lead z formularza: " + newLeadObj.source + "\n\n" +
+              "Imię: "    + (newLeadObj.name  || "") + "\n" +
+              "Email: "   + (newLeadObj.email || "") + "\n" +
+              "Telefon: " + (newLeadObj.phone || "") + "\n" +
+              (newLeadObj.notes ? "\nNotatki:\n" + newLeadObj.notes + "\n" : "") +
+              "\nData: " + newLeadObj.date
+            );
+          } catch(ex) {}
+        }
+
+        return ok({ id: newLeadObj.id, status: newLeadObj.status });
+      }
+
       case "updateLead":
         return ok(upsertRow("Leady", body.lead));
 
@@ -806,15 +944,36 @@ function doPost(e) {
           } catch(ex) {}
         }
 
-        // Wyślij potwierdzenie do klienta
+        // Wyślij potwierdzenie do klienta z wycena i konfiguracja
         if (body.email) {
           try {
+            var clientQuote = lead.quoteValue
+              ? "Szacunkowa wycena: " + Number(lead.quoteValue).toLocaleString("pl-PL") + " zł netto\n"
+              : "";
+            var clientConfig = "";
+            if (lead.configData && typeof lead.configData === "object") {
+              var clientConfigLines = [];
+              var clientConfigKeys = Object.keys(lead.configData);
+              for (var cc = 0; cc < clientConfigKeys.length; cc++) {
+                var ck = clientConfigKeys[cc];
+                var cv = lead.configData[ck];
+                if (cv !== null && cv !== undefined && cv !== "") {
+                  clientConfigLines.push("  • " + ck + ": " + cv);
+                }
+              }
+              if (clientConfigLines.length > 0) {
+                clientConfig = "\nTwoja konfiguracja:\n" + clientConfigLines.join("\n") + "\n";
+              }
+            }
             GmailApp.sendEmail(
               body.email,
-              "Dziękujemy za zapytanie – designIQ",
+              "Potwierdzenie zapytania i szacunkowa wycena – designIQ",
               "Dzień dobry " + (body.name || "") + ",\n\n" +
               "Dziękujemy za skorzystanie z konfiguratora designIQ.\n" +
-              "Skontaktujemy się z Tobą wkrótce.\n\n" +
+              "Poniżej znajdziesz podsumowanie Twojego zapytania.\n\n" +
+              clientQuote +
+              clientConfig +
+              "\nNasz zespół skontaktuje się z Tobą wkrótce w celu omówienia szczegółów.\n\n" +
               "Pozdrawiamy,\nZespół designIQ"
             );
           } catch(ex) {}
