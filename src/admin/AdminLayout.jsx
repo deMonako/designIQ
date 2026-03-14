@@ -18,7 +18,6 @@ const NAV_ITEMS = [
   { id: "checklisty",  label: "Checklisty",  icon: ClipboardList },
   { id: "zakupy",      label: "Zakupy",      icon: ShoppingCart },
   { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
-  { id: "materialy",   label: "Materiały",   icon: Package },
   { id: "analityka",   label: "Analityka",   icon: BarChart2 },
   { id: "kalkulator", label: "Kalkulator", icon: Calculator },
 ];
@@ -121,7 +120,7 @@ export default function AdminLayout({
   const VIEW_TITLES = {
     dashboard: "Dashboard", projekty: "Projekty", klienci: "Klienci",
     zadania: "Zadania", checklisty: "Checklisty", zakupy: "Zakupy",
-    baza_wiedzy: "Baza wiedzy", materialy: "Materiały",
+    baza_wiedzy: "Baza wiedzy",
     analityka: "Analityka", kalkulator: "Kalkulator", ustawienia: "Ustawienia",
   };
 

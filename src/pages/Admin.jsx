@@ -9,7 +9,6 @@ import Zadania      from "../admin/views/Zadania";
 import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
-import MateriałyJson from "../admin/views/MateriałyJson";
 import ZakupyView   from "../admin/views/Zakupy";
 import Kalkulator   from "../admin/views/Kalkulator";
 import Ustawienia   from "../admin/views/Ustawienia";
@@ -442,8 +441,6 @@ export default function Admin() {
         return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} />;
       case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
-      case "materialy":
-        return <MateriałyJson />;
       case "analityka":
         return (
           <Analityka

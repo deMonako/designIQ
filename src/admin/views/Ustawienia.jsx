@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Settings, Calculator, Plus, Trash2, Save, RefreshCw,
-  ChevronDown, Info, RotateCcw,
+  ChevronDown, Info, RotateCcw, Package, Loader2, ExternalLink,
 } from "lucide-react";
-import { gasGet } from "../api/gasClient";
+import { gasGet, gasPost } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import {
   DEFAULT_TYP_MAPPINGS, DEFAULT_SKU_SPECS, EMPTY_KALKULATOR_SETTINGS,
@@ -387,6 +387,210 @@ function MaterialyLoxone({ settings, onSave }) {
   );
 }
 
+// ── Zakładka: Materiały pozostałe ─────────────────────────────────────────────
+
+const SHOP_CATEGORIES = [
+  { key: "smart_home", label: "Sprzęt Smart Home" },
+  { key: "cables",     label: "Kable i osprzęt" },
+  { key: "cabinet",    label: "Szafa sterownicza" },
+  { key: "audio",      label: "Audio / Video" },
+  { key: "security",   label: "Monitoring i bezpieczeństwo" },
+  { key: "other",      label: "Inne" },
+];
+
+function emptyMaterial() {
+  return { _id: `m-${Date.now()}`, name: "", price_pln: 0, link: "", shopCategory: "" };
+}
+
+function normalizeMaterial(item) {
+  return {
+    _id: `m-${Math.random().toString(36).slice(2)}`,
+    name:         item.name         ?? "",
+    price_pln:    item.price_pln    ?? 0,
+    link:         item.link ?? item.sku ?? "",
+    shopCategory: item.shopCategory ?? "",
+  };
+}
+
+function MaterialyPozostale() {
+  const [items,   setItems]   = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [saving,  setSaving]  = useState(false);
+
+  const handleLoad = async () => {
+    setLoading(true);
+    try {
+      const data = await gasGet("getMaterialyJson");
+      setItems(Array.isArray(data) ? data.map(normalizeMaterial) : []);
+    } catch (e) {
+      // brak połączenia z GAS
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { if (GAS_ON) handleLoad(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const update = (id, field, value) =>
+    setItems(prev => prev.map(it => it._id === id ? { ...it, [field]: value } : it));
+
+  const addItem = () => setItems(prev => [...prev, emptyMaterial()]);
+  const remove  = (id) => setItems(prev => prev.filter(it => it._id !== id));
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = items.map(({ name, price_pln, link, shopCategory }) => ({
+        name,
+        price_pln: Number(price_pln),
+        link,
+        shopCategory: shopCategory ?? "",
+      }));
+      await gasPost("saveMaterialyJson", { items: payload });
+    } catch (e) {
+      // błąd zapisu
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="font-semibold text-slate-900 text-sm">Materiały pozostałe</h3>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Edytor pliku materialy.json z folderu Materiały na Drive
+            {!GAS_ON && <span className="ml-1 text-amber-600">Wymagane połączenie z GAS.</span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleLoad}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            Odśwież
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-orange-500 text-white rounded-lg hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Zapisz
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="flex items-center gap-3 p-6 text-slate-400 text-sm">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Ładowanie…
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa</th>
+                  <th className="text-right px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-36">Cena (zł)</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Link</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide w-52">Kategoria zakupowa</th>
+                  <th className="w-10" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {items.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-10 text-slate-300 text-sm">
+                      Brak elementów — kliknij „Dodaj materiał"
+                    </td>
+                  </tr>
+                )}
+                {items.map(item => (
+                  <tr key={item._id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-4 py-2">
+                      <input
+                        value={item.name}
+                        onChange={e => update(item._id, "name", e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                        placeholder="Nazwa materiału"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="number" min="0" step="0.01"
+                        value={item.price_pln}
+                        onChange={e => update(item._id, "price_pln", e.target.value)}
+                        className="w-full text-right border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 tabular-nums"
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <input
+                          value={item.link}
+                          onChange={e => update(item._id, "link", e.target.value)}
+                          className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                          placeholder="https://..."
+                        />
+                        {item.link && (
+                          <a
+                            href={item.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 p-1 text-blue-400 hover:text-blue-600 transition-colors"
+                            title="Otwórz link"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={item.shopCategory}
+                        onChange={e => update(item._id, "shopCategory", e.target.value)}
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                      >
+                        <option value="">— brak —</option>
+                        {SHOP_CATEGORIES.map(c => (
+                          <option key={c.key} value={c.key}>{c.label}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <button
+                        onClick={() => remove(item._id)}
+                        className="p-1 rounded text-slate-300 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-50 border-t border-slate-200">
+                  <td colSpan={5} className="px-4 py-2.5">
+                    <button
+                      onClick={addItem}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Dodaj materiał
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Główny eksport ────────────────────────────────────────────────────────────
 
 export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS, onUpdateKalkulatorSettings }) {
@@ -411,7 +615,8 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   };
 
   const TABS = [
-    { id: "kalkulator", label: "Kalkulator", icon: Calculator },
+    { id: "kalkulator",          label: "Kalkulator",          icon: Calculator },
+    { id: "materialy_pozostale", label: "Materiały pozostałe", icon: Package },
   ];
 
   const KALKULATOR_SUB_TABS = [
@@ -477,6 +682,10 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
             />
           )}
         </div>
+      )}
+
+      {activeTab === "materialy_pozostale" && (
+        <MaterialyPozostale />
       )}
     </div>
   );
