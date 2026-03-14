@@ -55,7 +55,7 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
     for (const [typ, override] of Object.entries(settings.typMappings ?? {})) {
       if (!result[typ]) {
         result[typ] = {
-          resourceType: RESOURCE.RELAY, defaultDevice: "uncontrolled",
+          defaultDevice: "uncontrolled",
           ioCount: 1, uncontrolled: false, slaveGetsDevice: false, ...override,
         };
       }
@@ -81,7 +81,7 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
   const addRow = () => {
     const t = newTyp.trim();
     if (!t || rows.some(r => r.typ === t)) return;
-    setRows(prev => [...prev, { typ: t, resourceType: RESOURCE.RELAY, defaultDevice: "uncontrolled", ioCount: 1, uncontrolled: false, slaveGetsDevice: false }]);
+    setRows(prev => [...prev, { typ: t, defaultDevice: "uncontrolled", ioCount: 1, uncontrolled: false, slaveGetsDevice: false }]);
     setNewTyp("");
     setDirty(true);
   };
@@ -131,7 +131,6 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Typ</th>
-                <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Typ zasobu</th>
                 <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Urządzenie domyślne</th>
                 <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Kanałów/pkt</th>
                 <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Niesterowane</th>
@@ -143,13 +142,6 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
               {rows.map((row, idx) => (
                 <tr key={row.typ} className="hover:bg-slate-50/50 transition-colors">
                   <td className="px-4 py-2 font-medium text-slate-800 text-sm whitespace-nowrap">{row.typ}</td>
-                  <td className="px-3 py-2 min-w-[160px]">
-                    <Select
-                      value={row.resourceType}
-                      onChange={v => update(idx, "resourceType", v)}
-                      options={RESOURCE_OPTIONS}
-                    />
-                  </td>
                   <td className="px-3 py-2 min-w-[200px]">
                     <Select
                       value={row.defaultDevice}

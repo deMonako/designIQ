@@ -10,30 +10,29 @@ import { RESOURCE } from "./resourceTypes.js";
 /**
  * Domyślne mapowania typów instalacji.
  * Każdy wpis definiuje:
- *   resourceType      – typ zasobu (RESOURCE.*)
  *   defaultDevice     – domyślne urządzenie sterujące (ID z katalogu lub "uncontrolled")
  *   ioCount           – ile kanałów zajmuje 1 punkt tego typu
  *   uncontrolled      – czy zawsze niesterowane (bez urządzenia sterującego)
  *   slaveGetsDevice   – czy slave też dostaje urządzenie (wyjątek od ogólnej reguły)
  */
 export const DEFAULT_TYP_MAPPINGS = {
-  "Włączniki LOXONE":          { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "lox-switch",          ioCount: 1, uncontrolled: false, slaveGetsDevice: true  },
-  "Czujniki obecności LOXONE": { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "lox-presence-sensor", ioCount: 1, uncontrolled: false, slaveGetsDevice: true  },
-  "Kontaktrony":               { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "lox-kontaktron",      ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Monitoring":                { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Sterowanie":                { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Sieć internetowa":          { resourceType: RESOURCE.DIGITAL_IN, defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
-  "Oświetlenie 24V":           { resourceType: RESOURCE.DIMMER,     defaultDevice: "lox-dimmer-24v",       ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Oświetlenie zewn. 24V":     { resourceType: RESOURCE.DIMMER,     defaultDevice: "lox-dimmer-24v",       ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Rolety":                    { resourceType: RESOURCE.MOTOR,      defaultDevice: "lox-tree-relay-14",    ioCount: 2, uncontrolled: false, slaveGetsDevice: false },
-  "Audio":                     { resourceType: RESOURCE.RELAY,      defaultDevice: "lox-audio-master",     ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Oświetlenie 230V":          { resourceType: RESOURCE.RELAY,      defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Oświetlenie zewn. 230V":    { resourceType: RESOURCE.RELAY,      defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Gniazda sterowane":         { resourceType: RESOURCE.RELAY,      defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Gniazda niesterowane":      { resourceType: RESOURCE.RELAY,      defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
-  "Gniazda 3F":                { resourceType: RESOURCE.RELAY,      defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Zasilanie":                 { resourceType: RESOURCE.RELAY,      defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
-  "Inne":                      { resourceType: RESOURCE.RELAY,      defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
+  "Włączniki LOXONE":          { defaultDevice: "lox-switch",          ioCount: 1, uncontrolled: false, slaveGetsDevice: true  },
+  "Czujniki obecności LOXONE": { defaultDevice: "lox-presence-sensor", ioCount: 1, uncontrolled: false, slaveGetsDevice: true  },
+  "Kontaktrony":               { defaultDevice: "lox-kontaktron",      ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Monitoring":                { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Sterowanie":                { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Sieć internetowa":          { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
+  "Oświetlenie 24V":           { defaultDevice: "lox-dimmer-24v",       ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Oświetlenie zewn. 24V":     { defaultDevice: "lox-dimmer-24v",       ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Rolety":                    { defaultDevice: "lox-tree-relay-14",    ioCount: 2, uncontrolled: false, slaveGetsDevice: false },
+  "Audio":                     { defaultDevice: "lox-audio-master",     ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Oświetlenie 230V":          { defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Oświetlenie zewn. 230V":    { defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Gniazda sterowane":         { defaultDevice: "lox-tree-relay-14",    ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Gniazda niesterowane":      { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
+  "Gniazda 3F":                { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Zasilanie":                 { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: false, slaveGetsDevice: false },
+  "Inne":                      { defaultDevice: "uncontrolled",         ioCount: 1, uncontrolled: true,  slaveGetsDevice: false },
 };
 
 /**
@@ -69,7 +68,6 @@ export function buildEffectiveMappings(settings = {}) {
   for (const [typ, override] of Object.entries(settings.typMappings ?? {})) {
     if (!typMappings[typ]) {
       typMappings[typ] = {
-        resourceType:    RESOURCE.RELAY,
         defaultDevice:   "uncontrolled",
         ioCount:         1,
         uncontrolled:    false,

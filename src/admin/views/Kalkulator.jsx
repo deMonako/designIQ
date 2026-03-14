@@ -50,7 +50,6 @@ function attribsToRows(attribs, floorName, typMappings) {
     const rawTyp = a.typ ?? "";
     const rola   = a.rola ?? "";
     const typConfig    = typMappings?.[rawTyp];
-    const resourceType = typConfig?.resourceType ?? "relay_output";
     const controlDevice = resolveDefaultDevice(rawTyp, rola, typMappings);
     const ioCount = typConfig?.ioCount ?? 1;
     rows.push({
@@ -66,7 +65,6 @@ function attribsToRows(attribs, floorName, typMappings) {
       wariant:      a.wariant      ?? "",
       kolor:        a.kolor        ?? "",
       // kalkulatorowe
-      resourceType,
       rawTyp,
       controlDevice,
       ioCount,
@@ -1076,7 +1074,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                                 <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
                               </div>
                             ) : col.key === "typ" ? (
-                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: effectiveMappings.typMappings[v]?.resourceType ?? "relay_output", rawTyp: v })} />
+                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
                             ) : (
                               <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
                             )}
