@@ -54,6 +54,7 @@ export default function AdminLayout({
   projects = [], tasks = [], clients = [],
   onAddTask, onOpenProject, onNavigateToClient,
   syncStatus = "synced",
+  onRefresh,
   children,
 }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -226,9 +227,20 @@ export default function AdminLayout({
               </div>
             )}
             {syncStatus === "synced" && (
-              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 text-xs font-medium">
-                <CheckCircle2 className="w-3 h-3" />
-                <span>Zsynchronizowano</span>
+              <div className="hidden sm:flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 text-xs font-medium rounded-lg overflow-hidden">
+                <div className="flex items-center gap-1.5 px-2.5 py-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  <span>Zsynchronizowano</span>
+                </div>
+                {onRefresh && (
+                  <button
+                    onClick={onRefresh}
+                    title="Odśwież dane"
+                    className="px-1.5 py-1 hover:bg-green-100 border-l border-green-200 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                )}
               </div>
             )}
             {syncStatus === "error" && (

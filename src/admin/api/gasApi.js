@@ -157,9 +157,9 @@ export async function deleteProjectDoc(id) {
   return gasPost("deleteProjectDoc", { id });
 }
 
-/** Przełącza widoczność dokumentu dla klienta */
-export async function toggleDocClientVisible(id) {
-  return gasPost("toggleDocClientVisible", { id });
+/** Ustawia widoczność dokumentu dla klienta */
+export async function toggleDocClientVisible(id, clientVisible) {
+  return gasPost("toggleDocClientVisible", { id, clientVisible });
 }
 
 // ────────────────────────────────────────────────────────────────────────────────

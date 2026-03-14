@@ -364,10 +364,40 @@ export default function Admin() {
   };
 
   const handleToggleDocClientVisible = async (id) => {
-    setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !d.clientVisible } : d));
-    await gasSync(() => GAS.toggleDocClientVisible(id), () =>
+    const doc = projectDocs.find(d => d.id === id);
+    const newVisible = !(doc?.clientVisible ?? false);
+    setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: newVisible } : d));
+    await gasSync(() => GAS.toggleDocClientVisible(id, newVisible), () =>
       syncErr("Błąd zmiany widoczności dokumentu")
     );
+  };
+
+  // ── Odświeżanie danych z GAS ──────────────────────────────────────────────
+  const handleRefresh = async () => {
+    if (!GAS_ON) return;
+    setSyncStatus("syncing");
+    try {
+      const [c, p, t, cl, m, d, l] = await Promise.all([
+        GAS.getClients(),
+        GAS.getProjects(),
+        GAS.getTasks(),
+        GAS.getChecklists(),
+        GAS.getMaterials(),
+        GAS.getProjectDocs(),
+        GAS.getLeads(),
+      ]);
+      setClients(c);
+      setProjects(p);
+      setTasks(t);
+      setChecklists(cl);
+      setMaterials(m);
+      setProjectDocs(d);
+      setLeads(l);
+      setSyncStatus("synced");
+    } catch (e) {
+      setSyncError("Błąd odświeżania danych: " + e.message);
+      setSyncStatus("error");
+    }
   };
 
   // ── Nawigacja ─────────────────────────────────────────────────────────────
@@ -476,6 +506,7 @@ export default function Admin() {
         onOpenProject={openProject}
         onNavigateToClient={navigateToClient}
         syncStatus={syncStatus}
+        onRefresh={GAS_ON ? handleRefresh : undefined}
       >
         {renderView()}
       </AdminLayout>
