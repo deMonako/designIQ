@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
   MapPin, Tag, CheckCircle2, Clock, AlertTriangle, ChevronRight,
   Edit3, Trash2, X, StickyNote, FileText, Eye, EyeOff, ExternalLink,
   DollarSign, Save, List, Key, Layers, Receipt, Download, Upload,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, RefreshCw,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
 import { uploadFile, getProjectFiles } from "../api/gasApi";
@@ -212,13 +212,18 @@ function ProjectDetail({
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
   const [driveFiles,        setDriveFiles]        = useState([]);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(GAS_ON);
 
-  useEffect(() => {
+  const loadDriveFiles = useCallback(() => {
     if (!GAS_ON) return;
+    setDriveFilesLoading(true);
     getProjectFiles(project.id, project.code)
       .then(files => setDriveFiles(Array.isArray(files) ? files : []))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setDriveFilesLoading(false));
   }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadDriveFiles(); }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -412,7 +417,7 @@ function ProjectDetail({
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
+    { id: "dokumentacja", label: `Dokumentacja (${driveFilesLoading ? "…" : projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -1221,7 +1226,12 @@ function ProjectDetail({
           {/* ══ DOKUMENTACJA ══ */}
           {activeTab === "dokumentacja" && (
             <div className="space-y-3">
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <button onClick={loadDriveFiles} disabled={driveFilesLoading}
+                  className="p-2 text-slate-400 hover:text-blue-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
+                  title="Odśwież pliki z Drive">
+                  <RefreshCw className={`w-4 h-4 ${driveFilesLoading ? "animate-spin" : ""}`} />
+                </button>
                 <button onClick={() => setShowAddDoc(!showAddDoc)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
                   <Plus className="w-4 h-4" /> Dodaj dokument
@@ -1375,39 +1385,61 @@ function ProjectDetail({
                       {projectDocList.length > 0 && (
                         <div className="flex items-center gap-2 pt-1">
                           <div className="flex-1 border-t border-slate-200" />
-                          <span className="text-xs text-slate-400 font-medium">Pliki na dysku (widoczne dla klienta)</span>
+                          <span className="text-xs text-slate-400 font-medium">Pliki na dysku (niezarejestrowane)</span>
                           <div className="flex-1 border-t border-slate-200" />
                         </div>
                       )}
-                      {driveOnlyFiles.map(f => (
-                        <div key={f.id} className="bg-blue-50/40 rounded-xl border border-blue-200/60 p-4 flex items-start gap-3">
-                          <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                            <FileText className="w-4 h-4 text-blue-500" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
-                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                              {f.modifiedTime && (
-                                <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>
+                      {driveOnlyFiles.map(f => {
+                        const ext = f.name.split('.').pop()?.toLowerCase() ?? "";
+                        const promoteDoc = (clientVisible) => {
+                          onAddProjectDoc({
+                            id: `doc-${Date.now()}-${f.id}`,
+                            projectId: project.id,
+                            name: f.name,
+                            type: EXT_TYPE[ext] ?? "pdf",
+                            description: "",
+                            url: f.webViewLink,
+                            driveId: f.id,
+                            date: TODAY,
+                            clientVisible,
+                          });
+                        };
+                        return (
+                          <div key={f.id} className="bg-blue-50/40 rounded-xl border border-blue-200/60 p-4 flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                              <FileText className="w-4 h-4 text-blue-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
+                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                {f.modifiedTime && (
+                                  <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>
+                                )}
+                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                                  <Eye className="w-3 h-3" /> Widoczny dla klienta
+                                </span>
+                                <span className="text-xs text-slate-400">Dysk Google</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                onClick={() => promoteDoc(false)}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Ukryj przed klientem">
+                                <EyeOff className="w-4 h-4" />
+                              </button>
+                              <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                              {f.webContentLink && (
+                                <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
+                                  <Download className="w-4 h-4" />
+                                </a>
                               )}
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                                <Eye className="w-3 h-3" /> Widoczny dla klienta
-                              </span>
-                              <span className="text-xs text-slate-400">Dysk Google</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
-                              <ExternalLink className="w-4 h-4" />
-                            </a>
-                            {f.webContentLink && (
-                              <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
-                                <Download className="w-4 h-4" />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </>
                   )}
                 </>

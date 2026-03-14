@@ -10,60 +10,10 @@ import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
-import { buildCatalogFromCennik } from "../../lib/shoppingList/productCatalog";
+import { buildCatalogFromCennikWithSpecs } from "../../lib/shoppingList/productCatalog";
+import { buildEffectiveMappings, EMPTY_KALKULATOR_SETTINGS } from "../../lib/shoppingList/kalkulatorDefaults";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-
-// ── Mapowania ────────────────────────────────────────────────────────────────
-
-const UNCONTROLLED_TYPES = new Set([
-  "Gniazda niesterowane", "Sieć internetowa", "Inne",
-]);
-
-const TYP_MAP = {
-  "Włączniki LOXONE":          "digital_input",
-  "Czujniki obecności LOXONE": "digital_input",
-  "Kontaktrony":               "digital_input",
-  "Monitoring":                "digital_input",
-  "Sterowanie":                "digital_input",
-  "Sieć internetowa":          "digital_input",
-  "Oświetlenie 24V":           "dimmer_output",
-  "Oświetlenie zewn. 24V":     "dimmer_output",
-  "Rolety":                    "motor_output",
-  "Audio":                     "relay_output",
-  "Oświetlenie 230V":          "relay_output",
-  "Oświetlenie zewn. 230V":    "relay_output",
-  "Gniazda sterowane":         "relay_output",
-  "Gniazda niesterowane":      "relay_output",
-  "Gniazda 3F":                "relay_output",
-  "Zasilanie":                 "relay_output",
-  "Inne":                      "relay_output",
-};
-
-// Domyślne urządzenie wg nazwy typu
-const DEFAULT_DEVICE_BY_TYP = {
-  "Audio":                     "lox-audio-master",   // slave → niesterowane
-  "Czujniki obecności LOXONE": "lox-presence-sensor",// slave też dostaje urządzenie
-  "Gniazda sterowane":         "lox-tree-relay-14",
-  "Kontaktrony":               "lox-kontaktron",
-  "Oświetlenie 230V":          "lox-tree-relay-14",
-  "Oświetlenie zewn. 230V":    "lox-tree-relay-14",
-  "Oświetlenie 24V":           "lox-dimmer-24v",
-  "Oświetlenie zewn. 24V":     "lox-dimmer-24v",
-  "Rolety":                    "lox-tree-relay-14",
-  "Włączniki LOXONE":          "lox-switch",         // slave też dostaje urządzenie
-};
-
-// Domyślna liczba zajmowanych kanałów na punkt
-const DEFAULT_IO_BY_TYP = {
-  "Rolety": 2,
-};
-
-// Typy, dla których slave dostaje urządzenie (wyjątek od ogólnej reguły)
-const SLAVE_GETS_DEVICE = new Set([
-  "Włączniki LOXONE",
-  "Czujniki obecności LOXONE",
-]);
 
 
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
@@ -83,27 +33,26 @@ const COLS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function resolveDefaultDevice(rawTyp, rola) {
-  const isSlave = (rola ?? "").toLowerCase().includes("slave");
+function resolveDefaultDevice(rawTyp, rola, typMappings) {
+  const isSlave   = (rola ?? "").toLowerCase().includes("slave");
+  const typConfig = typMappings?.[rawTyp];
 
-  if (UNCONTROLLED_TYPES.has(rawTyp)) return "uncontrolled";
-  if (isSlave && !SLAVE_GETS_DEVICE.has(rawTyp)) return "uncontrolled";
+  if (typConfig?.uncontrolled) return "uncontrolled";
+  if (isSlave && !typConfig?.slaveGetsDevice) return "uncontrolled";
 
-  const byTyp = DEFAULT_DEVICE_BY_TYP[rawTyp];
-  if (byTyp) return byTyp;
-
-  return "uncontrolled";
+  return typConfig?.defaultDevice ?? "uncontrolled";
 }
 
-function attribsToRows(attribs, floorName) {
+function attribsToRows(attribs, floorName, typMappings) {
   const rows = [];
   for (const [handle, a] of Object.entries(attribs)) {
     if (handle === "_meta" || !a || typeof a !== "object") continue;
     const rawTyp = a.typ ?? "";
     const rola   = a.rola ?? "";
-    const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
-    const controlDevice = resolveDefaultDevice(rawTyp, rola);
-    const ioCount = DEFAULT_IO_BY_TYP[rawTyp] ?? 1;
+    const typConfig    = typMappings?.[rawTyp];
+    const resourceType = typConfig?.resourceType ?? "relay_output";
+    const controlDevice = resolveDefaultDevice(rawTyp, rola, typMappings);
+    const ioCount = typConfig?.ioCount ?? 1;
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
@@ -611,7 +560,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
 // PointCalculator — główny komponent kalkulatora
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PointCalculator({ projects }) {
+function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS }) {
   // Dane
   const [rows, setRows] = useState([]);
   const [catalog, setCatalog] = useState([]);
@@ -661,6 +610,15 @@ function PointCalculator({ projects }) {
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
+  // Efektywne mapowania (defaults + nadpisania z ustawień użytkownika)
+  const effectiveMappings = useMemo(
+    () => buildEffectiveMappings(kalkulatorSettings),
+    [kalkulatorSettings]
+  );
+  // Ref do użycia wewnątrz useCallback bez dodawania do deps
+  const effectiveMappingsRef = useRef(effectiveMappings);
+  useEffect(() => { effectiveMappingsRef.current = effectiveMappings; }, [effectiveMappings]);
+
   // Wczytaj katalog Loxone + cennik + materiały
   useEffect(() => {
     if (!GAS_ON) return;
@@ -670,9 +628,8 @@ function PointCalculator({ projects }) {
       gasGet("getMaterialyJson").catch(() => []),
     ]).then(([loxData, cennikData, matData]) => {
       const cennikArr = Array.isArray(cennikData) ? cennikData : [];
-      // Buduj katalog: loxone.json z Drive (jeśli dostępny), uzupełniony
-      // o urządzenia znalezione w cennik.json po SKU
-      const fromCennik = buildCatalogFromCennik(cennikArr);
+      // Buduj katalog z nadpisaniami SKU z ustawień użytkownika
+      const fromCennik = buildCatalogFromCennikWithSpecs(cennikArr, effectiveMappingsRef.current.skuSpecs);
       if (Array.isArray(loxData) && loxData.length > 0) {
         const loxIds = new Set(loxData.map(p => p.id));
         setCatalog([...loxData, ...fromCennik.filter(p => !loxIds.has(p.id))]);
@@ -682,7 +639,7 @@ function PointCalculator({ projects }) {
       setCennik(cennikArr);
       setMatList(Array.isArray(matData) ? matData : []);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const matOptions = useMemo(() => {
     const all = [
@@ -732,7 +689,7 @@ function PointCalculator({ projects }) {
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
             if (!floor.attribs || typeof floor.attribs !== "object") continue;
-            loaded.push(...attribsToRows(floor.attribs, floor.name));
+            loaded.push(...attribsToRows(floor.attribs, floor.name, effectiveMappingsRef.current.typMappings));
           }
         }
 
@@ -762,7 +719,8 @@ function PointCalculator({ projects }) {
     try {
       const rowOverrides = {};
       for (const r of rows) {
-        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== (DEFAULT_IO_BY_TYP[r.rawTyp] ?? 1) || r.requiresAttention;
+        const defaultIo = effectiveMappingsRef.current.typMappings[r.rawTyp]?.ioCount ?? 1;
+        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== defaultIo || r.requiresAttention;
         if (hasOverride) {
           rowOverrides[r._id] = {
             controlDevice:     r.controlDevice,
@@ -1118,7 +1076,7 @@ function PointCalculator({ projects }) {
                                 <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
                               </div>
                             ) : col.key === "typ" ? (
-                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
+                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: effectiveMappings.typMappings[v]?.resourceType ?? "relay_output", rawTyp: v })} />
                             ) : (
                               <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
                             )}
@@ -1287,7 +1245,7 @@ function PointCalculator({ projects }) {
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Kalkulator({ projects = [] }) {
+export default function Kalkulator({ projects = [], kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS }) {
   return (
     <div className="p-4 lg:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -1299,7 +1257,7 @@ export default function Kalkulator({ projects = [] }) {
           <p className="text-xs text-slate-400">Edytuj punkty instalacyjne, przypisuj urządzenia i generuj zestawienie</p>
         </div>
       </div>
-      <PointCalculator projects={projects} />
+      <PointCalculator projects={projects} kalkulatorSettings={kalkulatorSettings} />
     </div>
   );
 }

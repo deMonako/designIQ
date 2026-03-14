@@ -12,7 +12,9 @@ import Materialy    from "../admin/views/Materialy";
 import MateriałyJson from "../admin/views/MateriałyJson";
 import ZakupyView   from "../admin/views/Zakupy";
 import Kalkulator   from "../admin/views/Kalkulator";
+import Ustawienia   from "../admin/views/Ustawienia";
 import AddProjectModal from "../admin/AddProjectModal";
+import { EMPTY_KALKULATOR_SETTINGS } from "../lib/shoppingList/kalkulatorDefaults";
 import {
   mockProjects, mockTasks, mockChecklists, mockMaterials,
   mockProjectDocs, mockClients, TODAY,
@@ -97,6 +99,9 @@ export default function Admin() {
   const [materials,   setMaterials]   = useState(() => GAS_ON ? [] : ls("diq_materials",   mockMaterials));
   const [projectDocs, setProjectDocs] = useState(() => GAS_ON ? [] : ls("diq_projectDocs", mockProjectDocs));
   const [leads,       setLeads]       = useState(() => GAS_ON ? [] : ls("diq_leads", []));
+  const [kalkulatorSettings, setKalkulatorSettings] = useState(() =>
+    ls("diq_kalkulator_settings", EMPTY_KALKULATOR_SETTINGS)
+  );
 
   // ── Ładowanie danych z GAS (jednorazowo po zalogowaniu) ───────────────────
   useEffect(() => {
@@ -130,6 +135,7 @@ export default function Admin() {
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_materials",   JSON.stringify(materials));   }, [materials]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_projectDocs", JSON.stringify(projectDocs)); }, [projectDocs]);
   useEffect(() => { if (!GAS_ON) localStorage.setItem("diq_leads",       JSON.stringify(leads));       }, [leads]);
+  useEffect(() => { localStorage.setItem("diq_kalkulator_settings", JSON.stringify(kalkulatorSettings)); }, [kalkulatorSettings]);
 
   const handleLogout = () => {
     localStorage.removeItem("designiq_admin_auth");
@@ -446,9 +452,14 @@ export default function Admin() {
           />
         );
       case "kalkulator":
-        return <Kalkulator projects={projects} />;
+        return <Kalkulator projects={projects} kalkulatorSettings={kalkulatorSettings} />;
       case "ustawienia":
-        return <PlaceholderView title="Ustawienia" />;
+        return (
+          <Ustawienia
+            kalkulatorSettings={kalkulatorSettings}
+            onUpdateKalkulatorSettings={setKalkulatorSettings}
+          />
+        );
       default:
         return <PlaceholderView title={currentView} />;
     }

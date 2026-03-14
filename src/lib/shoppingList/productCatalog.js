@@ -70,6 +70,42 @@ export function loadProductCatalog() {
 }
 
 /**
+ * Buduje katalog jak buildCatalogFromCennik, ale z możliwością nadpisania
+ * specyfikacji SKU (np. outputsPerUnit) oraz dodania nowych SKU
+ * spoza CENNIK_SKU_SPECS (zdefiniowanych przez użytkownika w Ustawieniach).
+ *
+ * @param {Array<{ sku: string|number, name: string, price_pln?: number }>} cennikItems
+ * @param {Record<string, object>} extraSpecs – nadpisania/rozszerzenia SKU specs
+ * @returns {ProductDefinition[]}
+ */
+export function buildCatalogFromCennikWithSpecs(cennikItems, extraSpecs = {}) {
+  const mergedSpecs = {};
+  for (const [sku, spec] of Object.entries(CENNIK_SKU_SPECS)) {
+    mergedSpecs[sku] = { ...spec, ...(extraSpecs[sku] ?? {}) };
+  }
+  for (const [sku, spec] of Object.entries(extraSpecs)) {
+    if (!mergedSpecs[sku]) mergedSpecs[sku] = spec;
+  }
+
+  const result = [];
+  for (const item of cennikItems) {
+    const sku  = String(item.sku ?? "");
+    const spec = mergedSpecs[sku];
+    if (!spec) continue;
+    result.push({
+      id:             spec.id,
+      name:           item.name,
+      partNumber:     sku,
+      resourceType:   spec.resourceType,
+      outputsPerUnit: spec.outputsPerUnit,
+      unit:           spec.unit ?? "szt.",
+      notes:          spec.notes ?? "",
+    });
+  }
+  return result;
+}
+
+/**
  * Zwraca produkty obsługujące dany typ zasobu.
  * @param {string} resourceType
  * @param {ProductDefinition[]} catalog - aktualny katalog
