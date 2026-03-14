@@ -163,13 +163,15 @@ function calculateSummary(rows, catalog, matList, cennik) {
   }).filter(Boolean);
   // Materiały wybrane jako element sterujący → zawsze w sekcji urządzeń sterujących
   const controlMatItems = Object.entries(controlMatCount).map(([name, qty]) => ({
-    id: `ctrl-mat-${name}`, name, partNumber: null,
+    id: `ctrl-mat-${name}`, name,
+    partNumber: allPrices.find(c => c.name === name)?.sku ? String(allPrices.find(c => c.name === name).sku) : null,
     totalIO: qty, outputsPerUnit: 1, quantity: qty,
     unit: "szt.",
     priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
   }));
   const materialItems = Object.entries(matCount).map(([name, qty]) => ({
     id: `mat-${name}`, name, quantity: qty, unit: "szt.",
+    partNumber: allPrices.find(c => c.name === name)?.sku ? String(allPrices.find(c => c.name === name).sku) : null,
     priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
   }));
   return { deviceItems: [...deviceItems, ...controlMatItems], materialItems };
@@ -215,7 +217,7 @@ function exportXLSX(rows, catalog, summary) {
         d.priceEst || "", d.priceEst ? d.quantity * d.priceEst : "",
       ]),
       ...summary.materialItems.map(m => [
-        "Materia\u0142", m.name, "", m.quantity, m.unit,
+        "Materia\u0142", m.name, m.partNumber ?? "", m.quantity, m.unit,
         m.priceEst || "", m.priceEst ? m.quantity * m.priceEst : "",
       ]),
     ];
@@ -568,6 +570,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
               <thead>
                 <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
                   <th className="text-left px-3 py-2">Materiał</th>
+                  <th className="text-left px-3 py-2 w-24">Nr kat.</th>
                   <th className="text-center px-3 py-2 w-16">Ilość</th>
                   <th className="text-right px-3 py-2 w-24">Cena</th>
                   <th className="text-right px-3 py-2 w-24">Wartość</th>
@@ -577,6 +580,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
                 {materialItems.map(m => (
                   <tr key={m.id}>
                     <td className="px-3 py-2 text-slate-800">{m.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-400">{m.partNumber}</td>
                     <td className="px-3 py-2 text-center font-bold text-orange-600">{m.quantity}</td>
                     <td className="px-3 py-2 text-right text-xs text-slate-500">{m.priceEst > 0 ? `${m.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-700">{m.priceEst > 0 ? `${(m.quantity * m.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
