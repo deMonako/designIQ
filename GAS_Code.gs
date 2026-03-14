@@ -502,11 +502,22 @@ function doGet(e) {
         if (!project) return err("Projekt nie znaleziony: " + code);
 
         var allDocs   = sheetToObjects("Dokumenty");
-        var visibleDocs = allDocs.filter(function(d) {
-          return String(d.projectId) === String(project.id) && d.clientVisible;
-        });
+        var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
+        var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible; });
         // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
-        var driveFiles  = getDriveFiles(project.code || project.id);
+        // Wykluczamy pliki, które mają wpis w Dokumenty z clientVisible=false
+        var hiddenUrls    = {};
+        var hiddenDriveIds = {};
+        projectDocs.forEach(function(d) {
+          if (!d.clientVisible) {
+            if (d.url)     hiddenUrls[d.url]         = true;
+            if (d.driveId) hiddenDriveIds[d.driveId] = true;
+          }
+        });
+        var allDriveFiles = getDriveFiles(project.code || project.id);
+        var driveFiles = allDriveFiles.filter(function(f) {
+          return !hiddenUrls[f.webViewLink] && !hiddenDriveIds[f.id];
+        });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
         });

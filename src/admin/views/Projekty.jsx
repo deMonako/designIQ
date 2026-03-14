@@ -1396,7 +1396,7 @@ function ProjectDetail({
                             id: `doc-${Date.now()}-${f.id}`,
                             projectId: project.id,
                             name: f.name,
-                            type: EXT_TYPE[ext] ?? "pdf",
+                            type: EXT_TYPE[ext] ?? "inne",
                             description: "",
                             url: f.webViewLink,
                             driveId: f.id,
