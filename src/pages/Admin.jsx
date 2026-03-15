@@ -499,7 +499,7 @@ export default function Admin() {
 
       <AdminLayout
         currentView={currentView}
-        setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); }}
+        setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); if (view !== "zakupy") setZakupyInitProjectId(null); }}
         onLogout={handleLogout}
         projects={projects} tasks={tasks} clients={clients}
         onAddTask={handleAddTask}

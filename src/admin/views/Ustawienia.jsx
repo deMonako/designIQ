@@ -251,6 +251,13 @@ function MaterialyLoxone({ settings, onSave }) {
       if (!sku || baseSpecs[sku]) continue;
       rows.push({ sku, name: c.name, id: "", resourceType: RESOURCE.RELAY, outputsPerUnit: 1, notes: "", fromCennik: true, isNew: true });
     }
+    // Sortuj: najpierw elementy których id nie zaczyna się na "custom"
+    rows.sort((a, b) => {
+      const aCustom = String(a.id || "").startsWith("custom");
+      const bCustom = String(b.id || "").startsWith("custom");
+      if (aCustom === bCustom) return 0;
+      return aCustom ? 1 : -1;
+    });
     return rows;
   }, [cennik, baseSpecs]);
 

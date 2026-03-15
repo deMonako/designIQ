@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, BookOpen, Terminal, Link2, FolderOpen, Plus, X,
-  Search, ExternalLink, Trash2, Package, Cpu, Upload,
+  Search, ExternalLink, Trash2, Package, Cpu, Upload, Library,
 } from "lucide-react";
 import { uploadFile } from "../api/gasApi";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -293,6 +293,17 @@ export default function Materialy({ materials, onAddMaterial, onDeleteMaterial }
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
+      {/* Nagłówek */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+          <Library className="w-4 h-4 text-slate-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Baza wiedzy</h2>
+          <p className="text-xs text-slate-400">Dokumentacje, instrukcje i zasoby systemowe</p>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2 flex-1">
