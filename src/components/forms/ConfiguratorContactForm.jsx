@@ -38,7 +38,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     wiadomosc: ""
   });
 
-  const { isSubmitting, errorMessage, submit } = useGasSubmit();
+  const { isSubmitting, errorMessage, submit } = useGasSubmit(process.env.REACT_APP_GAS_CONTACT_URL);
 
   const handleChange = useCallback((field) => (e) => {
     setContactData(prev => ({ ...prev, [field]: e.target.value }));

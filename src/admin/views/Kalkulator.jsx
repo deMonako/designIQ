@@ -221,13 +221,13 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
     if (query.length < 3) return [];
     const q = query.toLowerCase();
     const devs = catalog
-      .filter(p => p.name.toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
+      .filter(p => (p.name ?? "").toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
       .map(p => ({ value: p.id, label: p.name, sub: p.partNumber || null }));
-    const devNames = new Set(devs.map(d => d.label.toLowerCase()));
+    const devNames = new Set(devs.map(d => (d.label ?? "").toLowerCase()));
     const mats = matOptions
       .filter(m =>
-        (m.name.toLowerCase().includes(q) || (m.sku != null && String(m.sku).toLowerCase().includes(q)))
-        && !devNames.has(m.name.toLowerCase())
+        ((m.name ?? "").toLowerCase().includes(q) || (m.sku != null && String(m.sku).toLowerCase().includes(q)))
+        && !devNames.has((m.name ?? "").toLowerCase())
       )
       .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.sku || null }));
     return [...devs, ...mats].slice(0, 12);
