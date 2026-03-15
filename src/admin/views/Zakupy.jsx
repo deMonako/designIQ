@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   ShoppingCart, FolderKanban, Save, Plus, Trash2, Loader2,
-  RefreshCw, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon,
+  RefreshCw, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getZakupy, upsertZakupy } from "../api/gasApi";
@@ -372,6 +372,17 @@ export default function Zakupy({ projects = [], initialProjectId }) {
   return (
     <div className="p-4 lg:p-6 space-y-4">
 
+      {/* Nagłówek */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+          <Package className="w-4 h-4 text-slate-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Zakupy</h2>
+          <p className="text-xs text-slate-400">Listy zakupów materiałów i urządzeń dla projektów</p>
+        </div>
+      </div>
+
       {/* Pasek górny */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 transition-all flex-1 min-w-64">
@@ -407,7 +418,7 @@ export default function Zakupy({ projects = [], initialProjectId }) {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-semibold hover:shadow-md disabled:opacity-50 transition-all"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Zapisz

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, CheckCircle2, Circle, Globe, Layers, BookOpen, X, Trash2 } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Globe, Layers, BookOpen, X, Trash2, ClipboardList } from "lucide-react";
 
 const TYPE_LABELS = { globalna: "Globalna", etapowa: "Etapowa", projektowa: "Projektowa" };
 const TYPE_ICONS = { globalna: Globe, etapowa: Layers, projektowa: BookOpen };
@@ -239,6 +239,17 @@ export default function Checklisty({ projects, checklists, onToggleItem, onAddIt
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
+      {/* Nagłówek */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+          <ClipboardList className="w-4 h-4 text-slate-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Checklisty</h2>
+          <p className="text-xs text-slate-400">Listy kontrolne projektów i etapów realizacji</p>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2">

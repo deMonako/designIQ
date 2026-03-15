@@ -26,10 +26,16 @@ var DRIVE_FOLDER_ID = "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6";
 var SVG_FOLDER_ID = "1a0l_Az9JTxyHWo1Go2EO--RIxHfR7THO";
 
 /** Email administratora – powiadomienia z konfiguratora i kontaktu */
-var ADMIN_EMAIL = "";
+var ADMIN_EMAIL = "obsługa.designiq@gmail.com";
 
-/** URL webhoooka Loxone (irytacja) – np. "http://192.168.1.77/dev/sps/io/Irytacja/pulse" */
-var LOXONE_URL = "";
+/** Dane połączenia z Loxone Miniserver (irytacja instalatora) */
+var LOXONE_HOST        = "dns.loxonecloud.com/504F94D10B9B";
+var LOXONE_USER        = "web";
+var LOXONE_PASS        = "web1212";
+var LOXONE_CONTROL     = "WebButton";
+
+/** URL webhooka Loxone – generowany automatycznie z powyższych stałych */
+var LOXONE_URL = "http://" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
 
 // ─── NAGŁÓWKI KOLUMN ────────────────────────────────────────────────────────────
 var HEADERS = {
@@ -53,7 +59,7 @@ var HEADERS = {
     "id", "projectId", "title", "type", "stage", "items"
   ],
   "Materiały": [
-    "id", "title", "category", "device", "description", "url", "date"
+    "id", "title", "category", "device", "description", "url", "date", "shopCategory"
   ],
   "Dokumenty": [
     "id", "projectId", "name", "type", "description", "url", "driveId", "date", "clientVisible"
@@ -73,7 +79,7 @@ var HEADERS = {
   ],
   // ── Log zdarzeń Loxone (irytacja) ────────────────────────────────────────────
   "Wkurwienia": [
-    "id", "date", "note"
+    "id", "date", "action", "note", "loxoneStatus"
   ],
   // ── Wyceny projektów ─────────────────────────────────────────────────────────
   "Wyceny": [
@@ -105,7 +111,11 @@ function setupSheets() {
     "✅ Zakładki gotowe!\n\n" +
     "Zakładki: Klienci, Projekty, Zadania, Checklists, Materiały, Dokumenty,\n" +
     "          Leady, Wiadomosci, Kontakty, Wkurwienia, Wyceny, Zakupy\n\n" +
-    "Uzupełnij ADMIN_EMAIL i LOXONE_URL w sekcji konfiguracji, a następnie wdróż Web App."
+    "Konfiguracja ustawiona:\n" +
+    "  ADMIN_EMAIL = obsługa.designiq@gmail.com\n" +
+    "  LOXONE_HOST = dns.loxonecloud.com/504F94D10B9B\n" +
+    "  LOXONE_CONTROL = WebButton\n\n" +
+    "Wdróż: Deploy → New deployment → Web App (Execute as: Me, Access: Anyone)."
   );
 }
 
@@ -456,6 +466,24 @@ function doGet(e) {
         return err("Plik cennik.json nie znaleziony w folderze Materiały");
       }
 
+      // Odczytuje config.json z folderu projektu (konfiguracja kalkulatora)
+      // GET ?action=getKalkulatorConfig&projectCode=KOW-2026-001
+      case "getKalkulatorConfig": {
+        var cfgCode = e.parameter.projectCode;
+        if (!cfgCode) return ok(null);
+        var cfgFolder = getProjectFolder(cfgCode);
+        if (!cfgFolder) return ok(null);
+        var cfgFiles = cfgFolder.getFiles();
+        while (cfgFiles.hasNext()) {
+          var cfgFile = cfgFiles.next();
+          if (cfgFile.getName().toLowerCase() === "config.json") {
+            try { return ok(JSON.parse(cfgFile.getBlob().getDataAsString("UTF-8"))); }
+            catch(ex) { return ok(null); }
+          }
+        }
+        return ok(null);
+      }
+
       case "getLeads":
         return ok(sheetToObjects("Leady"));
 
@@ -484,11 +512,22 @@ function doGet(e) {
         if (!project) return err("Projekt nie znaleziony: " + code);
 
         var allDocs   = sheetToObjects("Dokumenty");
-        var visibleDocs = allDocs.filter(function(d) {
-          return String(d.projectId) === String(project.id) && d.clientVisible;
-        });
+        var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
+        var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible; });
         // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
-        var driveFiles  = getDriveFiles(project.code || project.id);
+        // Wykluczamy pliki, które mają wpis w Dokumenty z clientVisible=false
+        var hiddenUrls    = {};
+        var hiddenDriveIds = {};
+        projectDocs.forEach(function(d) {
+          if (!d.clientVisible) {
+            if (d.url)     hiddenUrls[d.url]         = true;
+            if (d.driveId) hiddenDriveIds[d.driveId] = true;
+          }
+        });
+        var allDriveFiles = getDriveFiles(project.code || project.id);
+        var driveFiles = allDriveFiles.filter(function(f) {
+          return !hiddenUrls[f.webViewLink] && !hiddenDriveIds[f.id];
+        });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
         });
@@ -596,16 +635,26 @@ function doGet(e) {
       // GET ?action=zirytujMnie&key=zirytuj_mnie
       case "zirytujMnie": {
         if (e.parameter.key !== "zirytuj_mnie") return err("Nieprawidłowy klucz");
+        var loxoneStatus = "Brak konfiguracji LOXONE_URL";
+        if (LOXONE_URL) {
+          try {
+            var loxResp = UrlFetchApp.fetch(LOXONE_URL, {
+              method: "get",
+              headers: { "Authorization": "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS) },
+              muteHttpExceptions: true
+            });
+            loxoneStatus = loxResp.getResponseCode() === 200 ? "Sukces (200 OK)" : "Loxone Error: " + loxResp.getResponseCode();
+          } catch(ex) { loxoneStatus = "Błąd krytyczny: " + ex.toString(); }
+        }
         var logEntry = {
-          id:   "iryt-" + Date.now(),
-          date: nowIso(),
-          note: e.parameter.note || ""
+          id:           "iryt-" + Date.now(),
+          date:         nowIso(),
+          action:       "Irytacja instalatora",
+          note:         e.parameter.note || "",
+          loxoneStatus: loxoneStatus
         };
         insertRow("Wkurwienia", logEntry);
-        if (LOXONE_URL) {
-          try { UrlFetchApp.fetch(LOXONE_URL, { method: "get", muteHttpExceptions: true }); } catch(ex) {}
-        }
-        return ok({ logged: true, date: logEntry.date });
+        return ok({ logged: true, date: logEntry.date, loxoneStatus: loxoneStatus });
       }
 
       default:
@@ -742,9 +791,21 @@ function doPost(e) {
         return ok({ saved: true, count: body.items.length });
       }
 
-      // ── Leady (admin) ─────────────────────────────────────────────────────────
+      // Zapisuje config.json do folderu projektu (konfiguracja kalkulatora)
+      case "saveKalkulatorConfig": {
+        if (!body.projectCode || !body.config) return err("Brak danych");
+        var kcFolder = getOrCreateProjectFolder(body.projectCode);
+        if (!kcFolder) return err("Nie można uzyskać dostępu do folderu projektu");
+        var kcOld = kcFolder.getFiles();
+        while (kcOld.hasNext()) {
+          var kcF = kcOld.next();
+          if (kcF.getName().toLowerCase() === "config.json") { kcF.setTrashed(true); break; }
+        }
+        kcFolder.createFile("config.json", JSON.stringify(body.config, null, 2), "application/json");
+        return ok({ saved: true });
+      }
 
-      // Tworzenie leada z formularza kontaktowego lub konfiguratora
+      // ── Leady (admin) ─────────────────────────────────────────────────────────────────────────────rzenie leada z formularza kontaktowego lub konfiguratora
       // body: { lead: { id, name, email, phone, notes, pipelineStatus, status, source, date, ... } }
       case "createLead": {
         var newLeadObj = body.lead || {};
@@ -996,17 +1057,35 @@ function doPost(e) {
         };
         insertRow("Kontakty", contact);
 
+        // Powiadomienie do admina
         if (ADMIN_EMAIL) {
           try {
             GmailApp.sendEmail(
               ADMIN_EMAIL,
               "📩 Formularz kontaktowy – " + contact.name,
-              "Nowa wiadomość z formularza kontaktowego:\n\n" +
-              "Imię: " + contact.name + "\n" +
+              "Nowa wiadomość z formularza kontaktowego designIQ:\n\n" +
+              "Imię i nazwisko: " + contact.name + "\n" +
               "Email: " + contact.email + "\n" +
               "Telefon: " + contact.phone + "\n\n" +
               "Wiadomość:\n" + contact.message + "\n\n" +
               "Data: " + contact.date
+            );
+          } catch(ex) {}
+        }
+
+        // Potwierdzenie do klienta
+        if (contact.email) {
+          try {
+            GmailApp.sendEmail(
+              contact.email,
+              "Potwierdzenie wiadomości – designIQ",
+              "Dzień dobry " + (contact.name || "") + ",\n\n" +
+              "Dziękujemy za kontakt z designIQ.\n" +
+              "Otrzymaliśmy Twoją wiadomość i skontaktujemy się z Tobą wkrótce.\n\n" +
+              "Treść Twojej wiadomości:\n" +
+              "\"" + contact.message + "\"\n\n" +
+              "Pozdrawiamy,\nZespół designIQ\n" +
+              "obsługa.designiq@gmail.com"
             );
           } catch(ex) {}
         }
@@ -1016,16 +1095,26 @@ function doPost(e) {
 
       // Irytacja (alternatywnie przez POST)
       case "zirytujMnie": {
+        var iLoxoneStatus = "Brak konfiguracji LOXONE_URL";
+        if (LOXONE_URL) {
+          try {
+            var iLoxResp = UrlFetchApp.fetch(LOXONE_URL, {
+              method: "get",
+              headers: { "Authorization": "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS) },
+              muteHttpExceptions: true
+            });
+            iLoxoneStatus = iLoxResp.getResponseCode() === 200 ? "Sukces (200 OK)" : "Loxone Error: " + iLoxResp.getResponseCode();
+          } catch(ex) { iLoxoneStatus = "Błąd krytyczny: " + ex.toString(); }
+        }
         var iEntry = {
-          id:   "iryt-" + Date.now(),
-          date: nowIso(),
-          note: body.note || ""
+          id:           "iryt-" + Date.now(),
+          date:         nowIso(),
+          action:       "Irytacja instalatora",
+          note:         body.note || "",
+          loxoneStatus: iLoxoneStatus
         };
         insertRow("Wkurwienia", iEntry);
-        if (LOXONE_URL) {
-          try { UrlFetchApp.fetch(LOXONE_URL, { method: "get", muteHttpExceptions: true }); } catch(ex) {}
-        }
-        return ok({ logged: true, date: iEntry.date });
+        return ok({ logged: true, date: iEntry.date, loxoneStatus: iLoxoneStatus });
       }
 
       default:

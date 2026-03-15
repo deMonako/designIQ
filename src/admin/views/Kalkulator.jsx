@@ -1,63 +1,30 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
+import ReactDOM from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Plus, Download, Search,
   ShoppingCart, CheckCircle2, AlertCircle, ChevronDown, ChevronRight,
-  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu,
+  X, ChevronUp, SlidersHorizontal, BarChart3, Package, Cpu, Save, FolderOpen,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
-import { loadProductCatalog } from "../../lib/shoppingList/productCatalog";
+import { buildCatalogFromCennikWithSpecs } from "../../lib/shoppingList/productCatalog";
+import { buildEffectiveMappings, EMPTY_KALKULATOR_SETTINGS } from "../../lib/shoppingList/kalkulatorDefaults";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-const FALLBACK_CATALOG = loadProductCatalog();
 
-// ── Mapowania ────────────────────────────────────────────────────────────────
-
-const UNCONTROLLED_TYPES = new Set([
-  "Gniazda niesterowane", "Sieć internetowa", "Inne",
-]);
-
-const TYP_MAP = {
-  "Włączniki LOXONE":          "digital_input",
-  "Czujniki obecności LOXONE": "digital_input",
-  "Kontaktrony":               "digital_input",
-  "Monitoring":                "digital_input",
-  "Sterowanie":                "digital_input",
-  "Sieć internetowa":          "digital_input",
-  "Oświetlenie 24V":           "dimmer_output",
-  "Oświetlenie zewn. 24V":     "dimmer_output",
-  "Rolety":                    "motor_output",
-  "Audio":                     "relay_output",
-  "Oświetlenie 230V":          "relay_output",
-  "Oświetlenie zewn. 230V":    "relay_output",
-  "Gniazda sterowane":         "relay_output",
-  "Gniazda niesterowane":      "relay_output",
-  "Gniazda 3F":                "relay_output",
-  "Zasilanie":                 "relay_output",
-  "Inne":                      "relay_output",
-};
-
-const DEFAULT_CONTROL = {
-  relay_output:  "lox-relay-ext",
-  dimmer_output: "lox-dimmer-ext",
-  rgbw_output:   "lox-rgbw-dimmer",
-  motor_output:  "lox-blind-ctrl",
-  digital_input: "lox-extension",
-  analog_input:  "lox-analog-ext",
-};
 
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true  },
+  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true,  narrow: true  },
   { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true  },
   { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
   { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
   { key: "rola",          label: "Rola",           sortable: true,  defaultVisible: true  },
-  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: true  },
+  { key: "uwagi",         label: "Uwagi",          sortable: false, defaultVisible: false },
   { key: "przewód",       label: "Przewód",        sortable: false, defaultVisible: false },
   { key: "wysokość",      label: "Wysokość",       sortable: false, defaultVisible: false },
   { key: "wariant",       label: "Wariant",        sortable: false, defaultVisible: false },
@@ -66,32 +33,43 @@ const COLS = [
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function attribsToRows(attribs, floorName, catalog) {
+function resolveDefaultDevice(rawTyp, rola, typMappings) {
+  const isSlave   = (rola ?? "").toLowerCase().includes("slave");
+  const typConfig = typMappings?.[rawTyp];
+
+  if (typConfig?.uncontrolled) return "uncontrolled";
+  if (isSlave && !typConfig?.slaveGetsDevice) return "uncontrolled";
+
+  return typConfig?.defaultDevice ?? "uncontrolled";
+}
+
+function attribsToRows(attribs, floorName, typMappings) {
   const rows = [];
   for (const [handle, a] of Object.entries(attribs)) {
     if (handle === "_meta" || !a || typeof a !== "object") continue;
     const rawTyp = a.typ ?? "";
-    const resourceType = TYP_MAP[rawTyp] ?? "relay_output";
-    const defaultId = DEFAULT_CONTROL[resourceType];
-    const exists = catalog.some(p => p.id === defaultId);
+    const rola   = a.rola ?? "";
+    const typConfig    = typMappings?.[rawTyp];
+    const controlDevice = resolveDefaultDevice(rawTyp, rola, typMappings);
+    const ioCount = typConfig?.ioCount ?? 1;
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",
       typ:          rawTyp,
-      rola:         a.rola         ?? "",
+      rola,
       uwagi:        a.uwagi        ?? "",
       przewód:      a.przewód      ?? "",
       wysokość:     a.wysokość     ?? "",
       wariant:      a.wariant      ?? "",
       kolor:        a.kolor        ?? "",
       // kalkulatorowe
-      resourceType,
       rawTyp,
-      controlDevice: (UNCONTROLLED_TYPES.has(rawTyp) || !exists) ? "uncontrolled" : defaultId,
-      ioCount:       1,
-      materials:     [],
+      controlDevice,
+      ioCount,
+      materials:         [],
+      requiresAttention: false,
     });
   }
   return rows;
@@ -99,13 +77,14 @@ function attribsToRows(attribs, floorName, catalog) {
 
 function calculateSummary(rows, catalog, matList, cennik) {
   const deviceIO = {};
-  const matCount = {};
+  const controlMatCount = {}; // materiały wybrane jako element sterujący
+  const matCount = {};        // dodatkowe materiały per punkt
   for (const r of rows) {
     if (r.controlDevice && r.controlDevice !== "uncontrolled") {
       if (r.controlDevice.startsWith("mat:")) {
-        // Materiał jako element sterujący — liczy się jako ilość wg ioCount
+        // Materiał jako element sterujący — zalicza się do urządzeń sterujących
         const name = r.controlDevice.slice(4);
-        matCount[name] = (matCount[name] ?? 0) + (r.ioCount ?? 1);
+        controlMatCount[name] = (controlMatCount[name] ?? 0) + (r.ioCount ?? 1);
       } else {
         deviceIO[r.controlDevice] = (deviceIO[r.controlDevice] ?? 0) + (r.ioCount ?? 1);
       }
@@ -129,11 +108,20 @@ function calculateSummary(rows, catalog, matList, cennik) {
       priceEst: allPrices.find(c => String(c.sku) === product.partNumber)?.price_pln ?? 0,
     };
   }).filter(Boolean);
-  const materialItems = Object.entries(matCount).map(([name, qty]) => ({
-    id: `mat-${name}`, name, quantity: qty, unit: "szt.",
+  // Materiały wybrane jako element sterujący → zawsze w sekcji urządzeń sterujących
+  const controlMatItems = Object.entries(controlMatCount).map(([name, qty]) => ({
+    id: `ctrl-mat-${name}`, name,
+    partNumber: allPrices.find(c => c.name === name)?.sku ? String(allPrices.find(c => c.name === name).sku) : null,
+    totalIO: qty, outputsPerUnit: 1, quantity: qty,
+    unit: "szt.",
     priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
   }));
-  return { deviceItems, materialItems };
+  const materialItems = Object.entries(matCount).map(([name, qty]) => ({
+    id: `mat-${name}`, name, quantity: qty, unit: "szt.",
+    partNumber: allPrices.find(c => c.name === name)?.sku ? String(allPrices.find(c => c.name === name).sku) : null,
+    priceEst: allPrices.find(c => c.name === name)?.price_pln ?? 0,
+  }));
+  return { deviceItems: [...deviceItems, ...controlMatItems], materialItems };
 }
 
 // ── CSV export (bez zewnętrznych zależności, otwieralny w Excelu) ─────────────
@@ -176,13 +164,156 @@ function exportXLSX(rows, catalog, summary) {
         d.priceEst || "", d.priceEst ? d.quantity * d.priceEst : "",
       ]),
       ...summary.materialItems.map(m => [
-        "Materia\u0142", m.name, "", m.quantity, m.unit,
+        "Materia\u0142", m.name, m.partNumber ?? "", m.quantity, m.unit,
         m.priceEst || "", m.priceEst ? m.quantity * m.priceEst : "",
       ]),
     ];
     const csv2 = [toCsvRow(headers2), ...data2.map(toCsvRow)].join("\n");
     downloadCsv(csv2, "zestawienie.csv");
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ControlDevicePicker — picker z wyszukiwaniem urządzeń i materiałów
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const h = (e) => {
+      const inTrigger = triggerRef.current?.contains(e.target);
+      const inDropdown = dropdownRef.current?.contains(e.target);
+      if (!inTrigger && !inDropdown) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        setDropPos({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: Math.max(rect.width, 288), // min 288px = w-72
+        });
+      }
+      setTimeout(() => inputRef.current?.focus(), 30);
+    } else {
+      setQuery("");
+    }
+  }, [open]);
+
+  const label = value === "uncontrolled"
+    ? "— niesterowane —"
+    : value?.startsWith("mat:")
+      ? value.slice(4)
+      : catalog.find(p => p.id === value)?.name ?? value;
+
+  const suggestions = useMemo(() => {
+    if (query.length < 3) return [];
+    const q = query.toLowerCase();
+    const devs = catalog
+      .filter(p => (p.name ?? "").toLowerCase().includes(q) || (p.partNumber ?? "").includes(q))
+      .map(p => ({ value: p.id, label: p.name, sub: p.partNumber || null }));
+    const devNames = new Set(devs.map(d => (d.label ?? "").toLowerCase()));
+    const mats = matOptions
+      .filter(m =>
+        ((m.name ?? "").toLowerCase().includes(q) || (m.sku != null && String(m.sku).toLowerCase().includes(q)))
+        && !devNames.has((m.name ?? "").toLowerCase())
+      )
+      .map(m => ({ value: `mat:${m.name}`, label: m.name, sub: m.sku || null }));
+    return [...devs, ...mats].slice(0, 12);
+  }, [query, catalog, matOptions]);
+
+  const select = (val) => { onChange(val); setOpen(false); };
+
+  const dropdown = open && ReactDOM.createPortal(
+    <div
+      ref={dropdownRef}
+      className="absolute z-[9999] mt-0.5 bg-white border border-slate-200 rounded-xl shadow-lg"
+      style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
+    >
+      <div className="p-2 border-b border-slate-100">
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Szukaj urządzenia lub materiału (min. 3 znaki)…"
+          className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <div className="max-h-52 overflow-y-auto">
+        <button
+          type="button"
+          onClick={() => select("uncontrolled")}
+          className={`w-full text-left px-3 py-1.5 text-xs border-b border-slate-50 ${value === "uncontrolled" ? "bg-orange-50 text-orange-700 font-semibold" : "text-slate-500 hover:bg-slate-50"}`}
+        >
+          — niesterowane —
+        </button>
+
+        {query.length < 3 ? (
+          <>
+            {catalog.length > 0 && (
+              <>
+                <div className="px-3 pt-2 pb-0.5 text-[10px] font-bold text-slate-400 uppercase tracking-wide">Urządzenia Loxone</div>
+                {catalog.map(p => (
+                  <button
+                    type="button"
+                    key={p.id}
+                    onClick={() => select(p.id)}
+                    className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === p.id ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+                  >
+                    <span className="truncate">{p.name}</span>
+                    <span className="text-[10px] text-slate-400 shrink-0 font-mono">{p.partNumber}</span>
+                  </button>
+                ))}
+              </>
+            )}
+            <div className="px-3 py-2 text-[11px] text-slate-400 italic border-t border-slate-50">
+              Wpisz 3 znaki, aby wyszukać materiały…
+            </div>
+          </>
+        ) : suggestions.length > 0 ? (
+          suggestions.map(s => (
+            <button
+              type="button"
+              key={s.value}
+              onClick={() => select(s.value)}
+              className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between gap-2 hover:bg-orange-50 ${value === s.value ? "bg-orange-50 text-orange-700" : "text-slate-700"}`}
+            >
+              <span className="truncate">{s.label}</span>
+              <span className="text-[10px] text-slate-400 shrink-0">{s.sub}</span>
+            </button>
+          ))
+        ) : (
+          <div className="px-3 py-3 text-xs text-slate-400 text-center">Brak wyników dla &ldquo;{query}&rdquo;</div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+
+  return (
+    <div className="relative" ref={triggerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className={`flex items-center gap-1 w-full border rounded-lg px-2 py-1 text-xs bg-white transition-colors ${open ? "border-orange-400 ring-1 ring-orange-400/20" : "border-slate-200 hover:border-orange-300"}`}
+      >
+        <span className={`flex-1 text-left truncate ${value === "uncontrolled" ? "text-slate-400" : "text-slate-700"}`}>{label}</span>
+        <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+      </button>
+      {dropdown}
+    </div>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -214,7 +345,12 @@ function AddMaterialRow({ matOptions, onAdd }) {
   const suggestions = useMemo(() => {
     if (search.length < 2) return [];
     const q = search.toLowerCase();
-    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 6);
+    return matOptions.filter(m =>
+      m.name && (
+        m.name.toLowerCase().includes(q) ||
+        (m.sku != null && String(m.sku).toLowerCase().includes(q))
+      )
+    ).slice(0, 6);
   }, [search, matOptions]);
 
   useEffect(() => {
@@ -381,6 +517,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
               <thead>
                 <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase">
                   <th className="text-left px-3 py-2">Materiał</th>
+                  <th className="text-left px-3 py-2 w-24">Nr kat.</th>
                   <th className="text-center px-3 py-2 w-16">Ilość</th>
                   <th className="text-right px-3 py-2 w-24">Cena</th>
                   <th className="text-right px-3 py-2 w-24">Wartość</th>
@@ -390,6 +527,7 @@ function SummaryPanel({ deviceItems, materialItems }) {
                 {materialItems.map(m => (
                   <tr key={m.id}>
                     <td className="px-3 py-2 text-slate-800">{m.name}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-slate-400">{m.partNumber}</td>
                     <td className="px-3 py-2 text-center font-bold text-orange-600">{m.quantity}</td>
                     <td className="px-3 py-2 text-right text-xs text-slate-500">{m.priceEst > 0 ? `${m.priceEst.toLocaleString("pl-PL")} zł` : "—"}</td>
                     <td className="px-3 py-2 text-right font-semibold text-slate-700">{m.priceEst > 0 ? `${(m.quantity * m.priceEst).toLocaleString("pl-PL")} zł` : "—"}</td>
@@ -420,10 +558,10 @@ function SummaryPanel({ deviceItems, materialItems }) {
 // PointCalculator — główny komponent kalkulatora
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PointCalculator({ projects }) {
+function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS }) {
   // Dane
   const [rows, setRows] = useState([]);
-  const [catalog, setCatalog] = useState(FALLBACK_CATALOG);
+  const [catalog, setCatalog] = useState([]);
   const [cennik, setCennik] = useState([]);
   const [matList, setMatList] = useState([]);
 
@@ -438,12 +576,16 @@ function PointCalculator({ projects }) {
 
   // Filtrowanie
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [filterTyp, setFilterTyp] = useState("all");
   const [filterFloor, setFilterFloor] = useState("all");
   const [filterRoom, setFilterRoom] = useState("all");
 
   // Filtr master
   const [filterMasterOnly, setFilterMasterOnly] = useState(false);
+
+  // Filtr: wymaga uwagi
+  const [filterNeedsAttention, setFilterNeedsAttention] = useState(false);
 
   // Sortowanie
   const [sortKey, setSortKey] = useState("pomieszczenie");
@@ -455,11 +597,25 @@ function PointCalculator({ projects }) {
   );
   const [showColPicker, setShowColPicker] = useState(false);
 
-  // Zapis
+  // Zapis do zakupów
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState(null);
 
+  // Konfiguracja kalkulatora (config.json)
+  const [pendingConfig, setPendingConfig] = useState(null); // config czekający na decyzję
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configSaveResult, setConfigSaveResult] = useState(null); // "ok"|"err"|null
+
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
+
+  // Efektywne mapowania (defaults + nadpisania z ustawień użytkownika)
+  const effectiveMappings = useMemo(
+    () => buildEffectiveMappings(kalkulatorSettings),
+    [kalkulatorSettings]
+  );
+  // Ref do użycia wewnątrz useCallback bez dodawania do deps
+  const effectiveMappingsRef = useRef(effectiveMappings);
+  useEffect(() => { effectiveMappingsRef.current = effectiveMappings; }, [effectiveMappings]);
 
   // Wczytaj katalog Loxone + cennik + materiały
   useEffect(() => {
@@ -469,20 +625,44 @@ function PointCalculator({ projects }) {
       gasGet("getCennik").catch(() => []),
       gasGet("getMaterialyJson").catch(() => []),
     ]).then(([loxData, cennikData, matData]) => {
-      if (Array.isArray(loxData) && loxData.length > 0) setCatalog(loxData);
-      setCennik(Array.isArray(cennikData) ? cennikData : []);
+      const cennikArr = Array.isArray(cennikData) ? cennikData : [];
+      // Buduj katalog z nadpisaniami SKU z ustawień użytkownika
+      const fromCennik = buildCatalogFromCennikWithSpecs(cennikArr, effectiveMappingsRef.current.skuSpecs);
+      if (Array.isArray(loxData) && loxData.length > 0) {
+        const loxIds = new Set(loxData.map(p => p.id));
+        setCatalog([...loxData, ...fromCennik.filter(p => !loxIds.has(p.id))]);
+      } else {
+        setCatalog(fromCennik);
+      }
+      setCennik(cennikArr);
       setMatList(Array.isArray(matData) ? matData : []);
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const matOptions = useMemo(() => {
     const all = [
-      ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln })),
-      ...matList.map(m => ({ name: m.name, price_pln: m.price_pln })),
+      ...cennik.map(c => ({ name: c.name, price_pln: c.price_pln, sku: c.sku ?? null })),
+      ...matList.map(m => ({ name: m.name, price_pln: m.price_pln, sku: null })),
     ];
     const seen = new Set();
     return all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name));
   }, [cennik, matList]);
+
+  // Zastosuj konfigurację do wierszy
+  const applyConfig = useCallback((baseRows, cfg) => {
+    if (!cfg?.rows) return baseRows;
+    return baseRows.map(r => {
+      const override = cfg.rows[r._id];
+      if (!override) return r;
+      return {
+        ...r,
+        controlDevice:     override.controlDevice     ?? r.controlDevice,
+        ioCount:           override.ioCount           ?? r.ioCount,
+        materials:         override.materials          ?? r.materials,
+        requiresAttention: override.requiresAttention ?? r.requiresAttention,
+      };
+    });
+  }, []);
 
   // Wczytaj punkty z Google Drive
   const handleLoadPoints = useCallback(async () => {
@@ -492,31 +672,68 @@ function PointCalculator({ projects }) {
     setRows([]);
     setExpandedId(null);
     setActiveTab("table");
+    setPendingConfig(null);
+    setConfigSaveResult(null);
 
     try {
       let loaded = [];
 
       if (GAS_ON) {
-        const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
+        const [result, cfg] = await Promise.all([
+          GAS.getDwgViewerContent(project.code).catch(() => null),
+          GAS.getKalkulatorConfig(project.code).catch(() => null),
+        ]);
+
         if (result?.floors?.length > 0) {
           for (const floor of result.floors) {
             if (!floor.attribs || typeof floor.attribs !== "object") continue;
-            loaded.push(...attribsToRows(floor.attribs, floor.name, catalog));
+            loaded.push(...attribsToRows(floor.attribs, floor.name, effectiveMappingsRef.current.typMappings));
           }
+        }
+
+        if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
+          setPendingConfig({ cfg, baseRows: loaded });
+          setRows(loaded); // wczytaj bez konfiguracji, czekaj na decyzję
+        } else {
+          setRows(loaded);
         }
       }
 
       if (loaded.length === 0) {
         setLoadError("Brak danych instalacyjnych. Wgraj projekt.json do folderu projektu na Google Drive.");
-      } else {
-        setRows(loaded);
       }
     } catch (e) {
       setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
     } finally {
       setLoading(false);
     }
-  }, [project, catalog]);
+  }, [project]);
+
+  // Zapisz konfigurację do config.json
+  const handleSaveConfig = useCallback(async () => {
+    if (!project || rows.length === 0) return;
+    setConfigSaving(true);
+    setConfigSaveResult(null);
+    try {
+      const rowOverrides = {};
+      for (const r of rows) {
+        const defaultIo = effectiveMappingsRef.current.typMappings[r.rawTyp]?.ioCount ?? 1;
+        const hasOverride = r.controlDevice !== "uncontrolled" || r.materials.length > 0 || r.ioCount !== defaultIo || r.requiresAttention;
+        if (hasOverride) {
+          rowOverrides[r._id] = {
+            controlDevice:     r.controlDevice,
+            ioCount:           r.ioCount,
+            materials:         r.materials,
+            requiresAttention: r.requiresAttention,
+          };
+        }
+      }
+      const config = { version: 1, savedAt: TODAY, rows: rowOverrides };
+      if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
+      setConfigSaveResult("ok");
+    } catch { setConfigSaveResult("err"); }
+    finally { setConfigSaving(false); }
+  }, [project, rows]);
 
   // Filtrowanie i sortowanie
   const { uniqueTypy, uniqueFloors } = useMemo(() => ({
@@ -533,13 +750,14 @@ function PointCalculator({ projects }) {
   useEffect(() => { setFilterRoom("all"); }, [filterFloor]);
 
   const filteredRows = useMemo(() => {
-    const q = search.toLowerCase();
+    const q = deferredSearch.toLowerCase();
     return rows
       .filter(r => {
         if (filterTyp   !== "all" && r.typ          !== filterTyp)   return false;
         if (filterFloor !== "all" && r.kondygnacja  !== filterFloor) return false;
         if (filterRoom  !== "all" && r.pomieszczenie !== filterRoom)  return false;
         if (filterMasterOnly && !(r.rola ?? "").toLowerCase().includes("master")) return false;
+        if (filterNeedsAttention && !r.requiresAttention) return false;
         if (q && !["tag","rola","pomieszczenie","uwagi","typ","wariant"].some(k => (r[k] ?? "").toLowerCase().includes(q))) return false;
         return true;
       })
@@ -548,7 +766,7 @@ function PointCalculator({ projects }) {
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
       });
-  }, [rows, search, filterTyp, filterFloor, filterRoom, filterMasterOnly, sortKey, sortDir]);
+  }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, filterNeedsAttention, sortKey, sortDir]);
 
   const handleSort = (key) => {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -566,14 +784,34 @@ function PointCalculator({ projects }) {
 
   // Widoczne kolumny do wyświetlenia
   const activeCols = COLS.filter(c => visibleCols.has(c.key));
-  const totalColSpan = activeCols.length + 4; // +4 za typ-badge, el.sterujący, I/O, materiały
+  const totalColSpan = activeCols.length + 5; // +5 za el.sterujący, I/O, materiały, uwaga, (zapas)
 
   const handleSave = async () => {
     if (!project) return;
     setSaving(true); setSaveResult(null);
     try {
+      const getCategoryForItem = (item) => {
+        // Urządzenia z katalogu Loxone → zawsze sprzęt smart home
+        if (item.id.startsWith("dev-") || item.id.startsWith("ctrl-mat-")) {
+          const name = item.name;
+          const matEntry = matList.find(m => m.name === name);
+          if (matEntry?.shopCategory) return matEntry.shopCategory;
+          if (matEntry?.device === "Loxone") return "smart_home";
+          if (catalog.find(p => p.name === name)) return "smart_home";
+          // ctrl-mat domyślnie do smart_home (pełnią rolę elementu sterującego)
+          if (item.id.startsWith("dev-")) return "smart_home";
+          return "smart_home";
+        }
+        // Materiały dodatkowe → szukaj shopCategory, Loxone → smart_home, reszta → other
+        const name = item.name;
+        const matEntry = matList.find(m => m.name === name);
+        if (matEntry?.shopCategory) return matEntry.shopCategory;
+        if (matEntry?.device === "Loxone") return "smart_home";
+        if (catalog.find(p => p.name === name)) return "smart_home";
+        return "other";
+      };
       const allItems = [...summary.deviceItems, ...summary.materialItems].map(item => ({
-        id: item.id, name: item.name, category: item.id.startsWith("dev-") ? "smart_home" : "cables",
+        id: item.id, name: item.name, category: getCategoryForItem(item),
         quantity: item.quantity, unit: item.unit ?? "szt.",
         priceEst: item.priceEst ?? 0, link: "", status: "Oczekuje",
       }));
@@ -606,7 +844,7 @@ function PointCalculator({ projects }) {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
 
       {/* ── Nagłówek ── */}
       <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
@@ -666,6 +904,34 @@ function PointCalculator({ projects }) {
           </div>
         )}
 
+        {/* Baner: znaleziono zapisaną konfigurację */}
+        {pendingConfig && (
+          <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+            <FolderOpen className="w-4 h-4 text-blue-500 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-sm font-semibold text-blue-800">Znaleziono zapisaną konfigurację</span>
+              {pendingConfig.cfg.savedAt && (
+                <span className="text-xs text-blue-500 ml-2">z {pendingConfig.cfg.savedAt}</span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setRows(applyConfig(pendingConfig.baseRows, pendingConfig.cfg));
+                setPendingConfig(null);
+              }}
+              className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+            >
+              Wczytaj konfigurację
+            </button>
+            <button
+              onClick={() => setPendingConfig(null)}
+              className="px-3 py-1.5 border border-blue-200 text-blue-600 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
+            >
+              Użyj tylko projektu
+            </button>
+          </div>
+        )}
+
         {/* ── WIDOK: TABELA ── */}
         {activeTab === "table" && rows.length > 0 && (
           <>
@@ -714,6 +980,17 @@ function PointCalculator({ projects }) {
                 Tylko master
               </label>
 
+              {/* Filtr: wymaga uwagi */}
+              <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none whitespace-nowrap border rounded-lg px-2.5 py-2 transition-colors ${filterNeedsAttention ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+                <input
+                  type="checkbox"
+                  checked={filterNeedsAttention}
+                  onChange={e => setFilterNeedsAttention(e.target.checked)}
+                  className="rounded accent-amber-500"
+                />
+                Wymaga uwagi
+              </label>
+
               {/* Licznik */}
               <span className="text-xs text-slate-400 whitespace-nowrap">
                 {filteredRows.length} / {rows.length} pkt.
@@ -759,14 +1036,15 @@ function PointCalculator({ projects }) {
             </div>
 
             {/* Tabela */}
-            <div className="border border-slate-200 rounded-xl overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: "900px" }}>
-                <thead>
+            <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: "calc(100vh - 430px)" }}>
+              <table className="w-full text-sm" style={{ minWidth: "860px" }}>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                     {activeCols.map(col => (
                       <th
                         key={col.key}
-                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""}`}
+                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""} ${col.narrow ? "w-20" : ""}`}
                         onClick={() => col.sortable && handleSort(col.key)}
                       >
                         <div className="flex items-center gap-1">
@@ -775,6 +1053,7 @@ function PointCalculator({ projects }) {
                       </th>
                     ))}
                     {/* Stałe kolumny kalkulatora */}
+                    <th className="text-center px-3 py-1.5 w-16">Uwaga</th>
                     <th className="text-left px-3 py-1.5 w-48">Element sterujący</th>
                     <th className="text-center px-3 py-1.5 w-14">I/O</th>
                     <th className="text-left px-3 py-1.5 w-24">Materiały</th>
@@ -795,34 +1074,32 @@ function PointCalculator({ projects }) {
                                 <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
                               </div>
                             ) : col.key === "typ" ? (
-                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, resourceType: TYP_MAP[v] ?? "relay_output", rawTyp: v })} />
+                              <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
                             ) : (
                               <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
                             )}
                           </td>
                         ))}
 
+                        {/* Wymaga uwagi */}
+                        <td className="px-3 py-0.5 text-center">
+                          <input
+                            type="checkbox"
+                            checked={row.requiresAttention ?? false}
+                            onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
+                            className="rounded accent-amber-500 cursor-pointer w-4 h-4"
+                            title="Wymaga uwagi"
+                          />
+                        </td>
+
                         {/* Element sterujący */}
-                        <td className="px-3 py-0.5">
-                          <select
+                        <td className="px-3 py-0.5 min-w-[200px]">
+                          <ControlDevicePicker
                             value={row.controlDevice ?? "uncontrolled"}
-                            onChange={e => updateRow(row._id, { controlDevice: e.target.value })}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400 bg-white w-full"
-                          >
-                            <option value="uncontrolled">— niesterowane —</option>
-                            {catalog.length > 0 && (
-                              <optgroup label="Urządzenia Loxone">
-                                {catalog.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                              </optgroup>
-                            )}
-                            {matOptions.length > 0 && (
-                              <optgroup label="Materiały">
-                                {matOptions.map(m => (
-                                  <option key={`mat:${m.name}`} value={`mat:${m.name}`}>{m.name}</option>
-                                ))}
-                              </optgroup>
-                            )}
-                          </select>
+                            catalog={catalog}
+                            matOptions={matOptions}
+                            onChange={v => updateRow(row._id, { controlDevice: v })}
+                          />
                         </td>
 
                         {/* I/O */}
@@ -869,20 +1146,45 @@ function PointCalculator({ projects }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
 
             {/* Akcje pod tabelą */}
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between pt-1 gap-3">
               <div className="text-xs text-slate-400">
                 {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem ·{" "}
                 {rows.filter(r => r.materials.length > 0).length} z materiałami
+                {rows.filter(r => r.requiresAttention).length > 0 && (
+                  <span className="text-amber-500 ml-1">· {rows.filter(r => r.requiresAttention).length} wymaga uwagi</span>
+                )}
               </div>
-              <button
-                onClick={() => setActiveTab("summary")}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
-              >
-                <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
-              </button>
+              <div className="flex items-center gap-2">
+                <AnimatePresence>
+                  {configSaveResult === "ok" && (
+                    <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Konfiguracja zapisana
+                    </motion.span>
+                  )}
+                  {configSaveResult === "err" && (
+                    <span className="flex items-center gap-1 text-xs text-red-500"><AlertCircle className="w-3.5 h-3.5" /> Błąd zapisu</span>
+                  )}
+                </AnimatePresence>
+                <button
+                  onClick={handleSaveConfig}
+                  disabled={configSaving || !project}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
+                >
+                  {configSaving
+                    ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
+                    : <><Save className="w-3.5 h-3.5" /> Zapisz konfigurację</>}
+                </button>
+                <button
+                  onClick={() => setActiveTab("summary")}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors"
+                >
+                  <BarChart3 className="w-3.5 h-3.5" /> Oblicz zestawienie
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -941,7 +1243,7 @@ function PointCalculator({ projects }) {
 // MAIN EXPORT
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Kalkulator({ projects = [] }) {
+export default function Kalkulator({ projects = [], kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS }) {
   return (
     <div className="p-4 lg:p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -953,7 +1255,7 @@ export default function Kalkulator({ projects = [] }) {
           <p className="text-xs text-slate-400">Edytuj punkty instalacyjne, przypisuj urządzenia i generuj zestawienie</p>
         </div>
       </div>
-      <PointCalculator projects={projects} />
+      <PointCalculator projects={projects} kalkulatorSettings={kalkulatorSettings} />
     </div>
   );
 }

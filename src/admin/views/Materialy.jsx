@@ -2,13 +2,23 @@ import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, BookOpen, Terminal, Link2, FolderOpen, Plus, X,
-  Search, ExternalLink, Trash2, Package, Cpu, Upload,
+  Search, ExternalLink, Trash2, Package, Cpu, Upload, Library,
 } from "lucide-react";
 import { uploadFile } from "../api/gasApi";
 import { GAS_CONFIG } from "../api/gasConfig";
 
 const CATEGORIES = ["Dokumentacje", "Instrukcje", "Skrypty", "Linki", "Inne"];
 const DEVICES    = ["Fotowoltaika", "Rekuperacja", "Ogrzewanie", "Klimatyzacja", "Alarm", "KNX", "Loxone"];
+
+// Kategorie zakupowe (te same co w Zakupy.jsx)
+const SHOP_CATEGORIES = [
+  { key: "smart_home", label: "Sprzęt Smart Home" },
+  { key: "cables",     label: "Kable i osprzęt" },
+  { key: "cabinet",    label: "Szafa sterownicza" },
+  { key: "audio",      label: "Audio / Video" },
+  { key: "security",   label: "Monitoring i bezpieczeństwo" },
+  { key: "other",      label: "Inne" },
+];
 
 const CATEGORY_META = {
   "Dokumentacje": { icon: FileText,   color: "bg-blue-50 text-blue-600 border-blue-200",   dot: "bg-blue-500" },
@@ -64,6 +74,11 @@ function MaterialCard({ material, onDelete }) {
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <CategoryBadge category={material.category} />
           <DeviceBadge device={material.device} />
+          {material.shopCategory && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-orange-50 text-orange-700 border-orange-200">
+              {SHOP_CATEGORIES.find(c => c.key === material.shopCategory)?.label ?? material.shopCategory}
+            </span>
+          )}
           <span className="text-xs text-slate-400">{material.date}</span>
         </div>
       </div>
@@ -99,7 +114,7 @@ const EXT_TYPE_MAT = {
 
 function AddMaterialModal({ onAdd, onClose }) {
   const [form, setForm] = useState({
-    title: "", category: "Dokumentacje", device: "", description: "",
+    title: "", category: "Dokumentacje", device: "", description: "", shopCategory: "",
   });
   const [matFile,      setMatFile]      = useState(null);
   const [uploading,    setUploading]    = useState(false);
@@ -174,6 +189,14 @@ function AddMaterialModal({ onAdd, onClose }) {
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
               <option value="">Brak</option>
               {DEVICES.map(d => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1.5 font-medium">Kategoria zakupowa</label>
+            <select value={form.shopCategory} onChange={e => set("shopCategory", e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20">
+              <option value="">Brak (automatycznie)</option>
+              {SHOP_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
             </select>
           </div>
           <div>
@@ -270,6 +293,17 @@ export default function Materialy({ materials, onAddMaterial, onDeleteMaterial }
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
+      {/* Nagłówek */}
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
+          <Library className="w-4 h-4 text-slate-600" />
+        </div>
+        <div>
+          <h2 className="text-lg font-bold text-slate-900">Baza wiedzy</h2>
+          <p className="text-xs text-slate-400">Dokumentacje, instrukcje i zasoby systemowe</p>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="flex flex-wrap gap-2 flex-1">

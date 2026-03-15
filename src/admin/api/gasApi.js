@@ -157,9 +157,9 @@ export async function deleteProjectDoc(id) {
   return gasPost("deleteProjectDoc", { id });
 }
 
-/** Przełącza widoczność dokumentu dla klienta */
-export async function toggleDocClientVisible(id) {
-  return gasPost("toggleDocClientVisible", { id });
+/** Ustawia widoczność dokumentu dla klienta */
+export async function toggleDocClientVisible(id, clientVisible) {
+  return gasPost("toggleDocClientVisible", { id, clientVisible });
 }
 
 // ────────────────────────────────────────────────────────────────────────────────
@@ -277,4 +277,18 @@ export async function getZakupy(projectId) {
 /** Zapisuje / aktualizuje listę zakupów projektu */
 export async function upsertZakupy(zakupy) {
   return gasPost("upsertZakupy", { zakupy });
+}
+
+// ────────────────────────────────────────────────────────────────────────────────
+// KONFIGURACJA KALKULATORA (config.json w folderze projektu)
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Odczytuje zapisaną konfigurację kalkulatora dla projektu */
+export async function getKalkulatorConfig(projectCode) {
+  return gasGet("getKalkulatorConfig", { projectCode });
+}
+
+/** Zapisuje konfigurację kalkulatora do config.json w folderze projektu */
+export async function saveKalkulatorConfig(projectCode, config) {
+  return gasPost("saveKalkulatorConfig", { projectCode, config });
 }

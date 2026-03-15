@@ -18,7 +18,7 @@ export default function Instalator() {
     if (now - lastCallRef.current < 1000) return;
     lastCallRef.current = now;
     setIsConnecting(true);
-    fetch(GAS_URL).finally(() => {
+    fetch(GAS_URL).catch(() => {}).finally(() => {
       setTimeout(() => setIsConnecting(false), 800);
     });
   }, []);

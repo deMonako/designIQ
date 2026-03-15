@@ -356,6 +356,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const cleanupRef   = useRef(() => {});
   const overlayElRef = useRef(null);  // referencja do overlay SVG (filtrowanie typów)
   const floorsDataRef = useRef([]);   // pełne dane wszystkich pięter [{ name, svg, attribs }]
+  const loadIdRef    = useRef(0);     // guard przed podwójnym ładowaniem
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
@@ -515,12 +516,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   // ── Ładowanie danych z GAS ────────────────────────────────────────────────
   const load = useCallback(async (attempt = 0) => {
     if (!projectCode) return;
+    const myId = ++loadIdRef.current;  // unikalny id tego ładowania
     setLoadState("loading");
     setLoadProg({ pct: 5, label: "Pobieranie…" });
     colorCache.clear();
     try {
       setLoadProg({ pct: 20, label: "Pobieranie…" });
       const res = await getDwgViewerContent(projectCode);
+      if (myId !== loadIdRef.current) return;  // przestarzałe ładowanie – porzuć
       setLoadProg({ pct: 40, label: "Pobieranie…" });
 
       // GAS zwraca { floors: [...] }
@@ -545,6 +548,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       setActiveFloor(0);
       setLoadState("processing");
     } catch {
+      if (myId !== loadIdRef.current) return;  // przestarzałe ładowanie – porzuć
       if (attempt === 0) {
         // Automatyczny retry po 1.5s (pierwsze ładowanie czasem zawodzi)
         setTimeout(() => load(1), 1500);
