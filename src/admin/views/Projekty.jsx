@@ -406,9 +406,9 @@ function ProjectDetail({
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
   const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
   const sheetDocUrls      = new Set(projectDocList.map(d => d.url).filter(Boolean));
-  const SYSTEM_FILES      = new Set(["projekt.svg", "projekt.json"]);
+  const isDwgSystemFile   = (name) => /^projekt(_.*)?\.(?:svg|json)$/i.test(name);
   const driveOnlyFiles    = driveFiles.filter(f =>
-    !SYSTEM_FILES.has(f.name.toLowerCase()) &&
+    !isDwgSystemFile(f.name) &&
     !sheetDocUrls.has(f.webViewLink) &&
     !sheetDocUrls.has(f.webContentLink)
   );

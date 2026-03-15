@@ -41,7 +41,7 @@ function mapInvestmentResponse(data) {
       uploaded_date: d.date,
     })),
     ...files
-      .filter(f => f.name !== "projekt.svg" && f.name !== "projekt.json")
+      .filter(f => !/^projekt(_.*)?\.(?:svg|json)$/i.test(f.name))
       .map(f => ({
         name:          f.name,
         url:           f.webViewLink || f.webContentLink,
