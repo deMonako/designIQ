@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
   StickyNote, FolderKanban, Phone, Mail, Pencil, Plus,
+  TrendingUp, Zap,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -25,6 +26,61 @@ function formatDayShort(dateStr) {
   const s = dateStr ? String(dateStr).substring(0, 10) : "";
   if (!s) return "";
   return format(new Date(s + "T00:00:00"), "EEE d MMM", { locale: pl });
+}
+
+// ─── Circular progress ring ───────────────────────────────────────────────────
+
+function CircularRing({ done, total, size = 72 }) {
+  const r = (size - 10) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = total > 0 ? done / total : 0;
+  const offset = circ * (1 - pct);
+
+  return (
+    <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="#f1f5f9" strokeWidth={8} fill="none" />
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          stroke="url(#ringGrad)" strokeWidth={8} fill="none"
+          strokeDasharray={circ}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          style={{ transition: "stroke-dashoffset 0.6s ease" }}
+        />
+        <defs>
+          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#fb923c" />
+            <stop offset="100%" stopColor="#ea580c" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-sm font-bold text-slate-800 leading-none tabular-nums">
+          {done}/{total}
+        </span>
+        <span className="text-[9px] text-slate-400 font-medium mt-0.5">dziś</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat card ────────────────────────────────────────────────────────────────
+
+function StatCard({ icon, value, label, color }) {
+  const colors = {
+    orange: "bg-orange-50 border-orange-100 text-orange-600",
+    red:    "bg-red-50   border-red-100   text-red-600",
+    slate:  "bg-slate-50 border-slate-100 text-slate-600",
+    green:  "bg-green-50 border-green-100 text-green-600",
+  };
+  return (
+    <div className={`flex flex-col items-center justify-center rounded-2xl border px-3 py-2.5 min-w-[64px] ${colors[color]}`}>
+      <div className="mb-1 opacity-70">{icon}</div>
+      <span className="text-xl font-extrabold tabular-nums leading-none">{value}</span>
+      <span className="text-[10px] font-semibold opacity-60 mt-0.5 whitespace-nowrap">{label}</span>
+    </div>
+  );
 }
 
 // ─── AgendaRow (zadanie lub wydarzenie na dziś) ───────────────────────────────
@@ -173,12 +229,12 @@ function ProjectCard({ project, client, onClick }) {
   const days = daysUntil(project.deadline);
 
   const deadlineClass =
-    days < 0  ? "text-red-500 font-semibold" :
+    days < 0   ? "text-red-500 font-semibold" :
     days <= 7  ? "text-orange-600 font-semibold" :
                  "text-slate-400";
 
   const deadlineText =
-    days < 0  ? `Termin minął ${Math.abs(days)} dni temu` :
+    days < 0   ? `Termin minął ${Math.abs(days)} dni temu` :
     days === 0 ? "Termin dziś!" :
                  `${days} dni do terminu`;
 
@@ -187,6 +243,11 @@ function ProjectCard({ project, client, onClick }) {
     "Wstrzymany": "bg-slate-100 text-slate-500",
     "Wstępny":    "bg-slate-100 text-slate-400",
   };
+
+  const progressColor =
+    project.progress >= 75 ? "from-green-400 to-green-500" :
+    project.progress >= 40 ? "from-orange-400 to-orange-500" :
+                              "from-slate-300 to-slate-400";
 
   return (
     <div
@@ -201,29 +262,29 @@ function ProjectCard({ project, client, onClick }) {
             </div>
           )}
           <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
-          <div
-            className="relative text-xs text-slate-400 truncate mt-0.5 cursor-default"
-            onMouseEnter={() => setShowContact(true)}
-            onMouseLeave={() => setShowContact(false)}
-          >
-            {client?.name ?? "—"}
-            {showContact && client && (client.phone || client.email) && (
-              <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2 text-xs whitespace-nowrap pointer-events-none">
-                {client.phone && (
-                  <div className="flex items-center gap-2 text-slate-700">
-                    <Phone className="w-3 h-3 text-slate-400 flex-shrink-0" />{client.phone}
-                  </div>
-                )}
-                {client.email && (
-                  <div className={`flex items-center gap-2 text-slate-500 ${client.phone ? "mt-1" : ""}`}>
-                    <Mail className="w-3 h-3 text-slate-400 flex-shrink-0" />{client.email}
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
+            <div
+              className="relative text-xs text-slate-400 truncate mt-0.5 cursor-default"
+              onMouseEnter={() => setShowContact(true)}
+              onMouseLeave={() => setShowContact(false)}
+            >
+              {client?.name ?? "—"}
+              {showContact && client && (client.phone || client.email) && (
+                <div className="absolute left-0 top-full mt-1 z-50 bg-white rounded-xl border border-slate-200 shadow-lg px-3 py-2 text-xs whitespace-nowrap pointer-events-none">
+                  {client.phone && (
+                    <div className="flex items-center gap-2 text-slate-700">
+                      <Phone className="w-3 h-3 text-slate-400 flex-shrink-0" />{client.phone}
+                    </div>
+                  )}
+                  {client.email && (
+                    <div className={`flex items-center gap-2 text-slate-500 ${client.phone ? "mt-1" : ""}`}>
+                      <Mail className="w-3 h-3 text-slate-400 flex-shrink-0" />{client.email}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${statusColors[project.status] ?? "bg-slate-100 text-slate-400"}`}>
           {project.status}
@@ -233,7 +294,7 @@ function ProjectCard({ project, client, onClick }) {
       <div className="flex items-center gap-2 mb-1.5">
         <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
-            className="h-full bg-brand-orange rounded-full transition-all"
+            className={`h-full bg-gradient-to-r ${progressColor} rounded-full transition-all`}
             style={{ width: `${project.progress}%` }}
           />
         </div>
@@ -298,6 +359,90 @@ function QuickNotes() {
   );
 }
 
+// ─── Priority breakdown widget ────────────────────────────────────────────────
+
+const PRIORITY_META = [
+  { key: "Krytyczny", color: "bg-red-500",    light: "bg-red-50",    text: "text-red-600"    },
+  { key: "Wysoki",    color: "bg-orange-500",  light: "bg-orange-50", text: "text-orange-600" },
+  { key: "Normalny",  color: "bg-blue-400",    light: "bg-blue-50",   text: "text-blue-600"   },
+  { key: "Niski",     color: "bg-slate-300",   light: "bg-slate-50",  text: "text-slate-500"  },
+];
+
+function PriorityBreakdown({ tasks }) {
+  const open = tasks.filter(t => t.status !== "Zrobione" && t.type !== "event");
+  const total = open.length || 1;
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 h-full">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-slate-400" />
+        <span className="text-sm font-semibold text-slate-700">Otwarte zadania</span>
+        <span className="ml-auto text-xs font-bold text-slate-400">{open.length}</span>
+      </div>
+
+      <div className="space-y-3">
+        {PRIORITY_META.map(({ key, color, light, text }) => {
+          const count = open.filter(t => t.priority === key).length;
+          const pct = Math.round((count / total) * 100);
+          return (
+            <div key={key}>
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-semibold ${text}`}>{key}</span>
+                <span className="text-xs text-slate-400 tabular-nums">{count}</span>
+              </div>
+              <div className={`h-2 ${light} rounded-full overflow-hidden`}>
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${pct}%` }}
+                  transition={{ duration: 0.6, delay: 0.1 }}
+                  className={`h-full ${color} rounded-full`}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Stacked bar summary */}
+      <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden flex">
+        {PRIORITY_META.map(({ key, color }) => {
+          const count = open.filter(t => t.priority === key).length;
+          const pct = (count / total) * 100;
+          return pct > 0 ? (
+            <motion.div
+              key={key}
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.7, delay: 0.2 }}
+              className={`h-full ${color}`}
+            />
+          ) : null;
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Section header ───────────────────────────────────────────────────────────
+
+function SectionHeader({ color = "orange", children, badge, action }) {
+  const accent = {
+    orange: "bg-orange-500",
+    red:    "bg-red-500",
+    slate:  "bg-slate-300",
+    blue:   "bg-blue-400",
+  };
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span className={`w-1 h-5 rounded-full flex-shrink-0 ${accent[color]}`} />
+      <span className="text-sm font-bold text-slate-800">{children}</span>
+      {badge !== undefined && (
+        <span className="text-xs text-slate-400 font-medium">({badge})</span>
+      )}
+      {action && <div className="ml-auto">{action}</div>}
+    </div>
+  );
+}
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
@@ -318,8 +463,9 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
     .filter(t => t.type !== "event" && isOverdue(String(t.dueDate || "").substring(0, 10), t.status))
     .sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9));
 
-  const totalDone     = tasks.filter(t => t.status === "Zrobione").length;
-  const todayDone     = tasks.filter(t => String(t.dueDate || "").substring(0, 10) === TODAY && t.status === "Zrobione").length;
+  const totalDone      = tasks.filter(t => t.status === "Zrobione").length;
+  const todayDone      = tasks.filter(t => String(t.dueDate || "").substring(0, 10) === TODAY && t.status === "Zrobione").length;
+  const todayTotal     = todayItems.length + todayDone;
   const activeProjects = projects
     .filter(p => p.status !== "Ukończony")
     .sort((a, b) => daysUntil(a.deadline) - daysUntil(b.deadline));
@@ -357,37 +503,6 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
     else onAddTask?.(taskData);
   };
 
-  // ── Stat chips ────────────────────────────────────────────────────────────
-
-  const chips = [
-    {
-      icon:  <Clock className="w-3.5 h-3.5" />,
-      value: todayItems.length,
-      label: "na dziś",
-      cls:   "bg-orange-50 text-orange-600 border-orange-200",
-    },
-    {
-      icon:  <AlertTriangle className="w-3.5 h-3.5" />,
-      value: overdueTasks.length,
-      label: "zaległe",
-      cls:   overdueTasks.length > 0
-               ? "bg-red-50 text-red-600 border-red-200"
-               : "bg-slate-50 text-slate-400 border-slate-200",
-    },
-    {
-      icon:  <FolderKanban className="w-3.5 h-3.5" />,
-      value: activeProjects.length,
-      label: "aktywne proj.",
-      cls:   "bg-slate-50 text-slate-600 border-slate-200",
-    },
-    {
-      icon:  <CheckCircle2 className="w-3.5 h-3.5" />,
-      value: totalDone,
-      label: "ukończone",
-      cls:   "bg-green-50 text-green-600 border-green-200",
-    },
-  ];
-
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -398,27 +513,44 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="flex flex-wrap items-end justify-between gap-4"
+        className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex flex-wrap items-center gap-4"
       >
-        <div>
-          <div className="text-4xl font-bold text-slate-900 capitalize tracking-tight leading-none">
+        {/* Data */}
+        <div className="flex-1 min-w-0">
+          <div className="text-3xl font-extrabold text-slate-900 capitalize tracking-tight leading-none">
             {weekday}
           </div>
-          <div className="text-base text-slate-400 mt-1 font-medium">{dateFull}</div>
+          <div className="text-sm text-slate-400 mt-1 font-medium">{dateFull}</div>
+          {overdueTasks.length > 0 && (
+            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-100 rounded-lg text-xs font-semibold text-red-600">
+              <AlertTriangle className="w-3 h-3" />
+              {overdueTasks.length} zaległe {overdueTasks.length === 1 ? "zadanie" : "zadania"}
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {chips.map(c => (
-            <div key={c.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-sm ${c.cls}`}>
-              {c.icon}
-              <span className="text-lg font-bold tabular-nums leading-none">{c.value}</span>
-              <span className="text-xs font-medium opacity-70 hidden sm:block">{c.label}</span>
-            </div>
-          ))}
+        {/* Divider */}
+        <div className="hidden sm:block w-px h-14 bg-slate-100" />
+
+        {/* Ring + stats */}
+        <div className="flex items-center gap-4">
+          <CircularRing done={todayDone} total={todayTotal} size={72} />
+          <div className="flex flex-col gap-2">
+            <StatCard
+              icon={<FolderKanban className="w-3.5 h-3.5" />}
+              value={activeProjects.length}
+              label="projekty"
+              color="slate"
+            />
+            <StatCard
+              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+              value={totalDone}
+              label="ukończone"
+              color="green"
+            />
+          </div>
         </div>
       </motion.div>
-
-      <div className="h-px bg-slate-200" />
 
       {/* ── Główna siatka (2 kolumny) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -428,21 +560,24 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
 
           {/* Agenda dnia */}
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-1 h-5 rounded-full bg-orange-500 flex-shrink-0" />
-              <span className="text-sm font-bold text-slate-800">Agenda dnia</span>
+            <SectionHeader
+              color="orange"
+              action={
+                <button
+                  onClick={() => setEditingTask({ dueDate: TODAY, status: "Niezrobione", priority: "Normalny", type: "task" })}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 border border-orange-200 transition-colors"
+                >
+                  <Plus className="w-3 h-3" /> Dodaj
+                </button>
+              }
+            >
+              Agenda dnia
               {todayDone > 0 && (
-                <span className="text-xs text-green-600 font-medium flex items-center gap-1">
+                <span className="text-xs text-green-600 font-medium flex items-center gap-1 ml-1">
                   <CheckCircle2 className="w-3 h-3" /> {todayDone} zrobione
                 </span>
               )}
-              <button
-                onClick={() => setEditingTask({ dueDate: TODAY, status: "Niezrobione", priority: "Normalny", type: "task" })}
-                className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-orange-600 hover:bg-orange-50 border border-orange-200 transition-colors"
-              >
-                <Plus className="w-3 h-3" /> Dodaj
-              </button>
-            </div>
+            </SectionHeader>
             <AnimatePresence>
               {todayItems.length > 0 ? (
                 <div className="space-y-1.5">
@@ -480,10 +615,9 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-1 h-5 rounded-full bg-red-500 flex-shrink-0" />
-                  <span className="text-sm font-bold text-red-600">Zaległe ({overdueTasks.length})</span>
-                </div>
+                <SectionHeader color="red" badge={overdueTasks.length}>
+                  <span className="text-red-600">Zaległe</span>
+                </SectionHeader>
                 <div className="space-y-1.5">
                   {overdueTasks.map(t => (
                     <OverdueRow
@@ -502,10 +636,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
           {/* Nadchodzące – tutaj gdy mało zadań na dziś (≤ 3) */}
           {fewTasksToday && (
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-1 h-5 rounded-full bg-slate-300 flex-shrink-0" />
-                <span className="text-sm font-bold text-slate-800">Nadchodzące</span>
-              </div>
+              <SectionHeader color="slate">Nadchodzące</SectionHeader>
               {Object.keys(upcomingByDate).length > 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                   {Object.entries(upcomingByDate).map(([date, items], i) => (
@@ -541,11 +672,9 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
 
           {/* Aktywne projekty */}
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-1 h-5 rounded-full bg-slate-400 flex-shrink-0" />
-              <span className="text-sm font-bold text-slate-800">Aktywne projekty</span>
-              <span className="ml-auto text-xs text-slate-400">{activeProjects.length}</span>
-            </div>
+            <SectionHeader color="slate" badge={activeProjects.length}>
+              Aktywne projekty
+            </SectionHeader>
             <div className="space-y-2">
               {activeProjects.map(p => (
                 <ProjectCard
@@ -564,10 +693,7 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
           {/* Nadchodzące – tutaj gdy dużo zadań na dziś (> 3) */}
           {!fewTasksToday && (
             <section>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-1 h-5 rounded-full bg-slate-300 flex-shrink-0" />
-                <span className="text-sm font-bold text-slate-800">Nadchodzące</span>
-              </div>
+              <SectionHeader color="slate">Nadchodzące</SectionHeader>
               {Object.keys(upcomingByDate).length > 0 ? (
                 <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                   {Object.entries(upcomingByDate).map(([date, items], i) => (
@@ -599,10 +725,13 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
         </div>
       </div>
 
-      {/* ── Notatki ── */}
-      <QuickNotes />
+      {/* ── Dolny rząd: Notatki + Priority breakdown ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <QuickNotes />
+        <PriorityBreakdown tasks={tasks} />
+      </div>
 
-      {/* ── Modal edycji zadania (nadchodzące) ── */}
+      {/* ── Modal edycji zadania ── */}
       <AnimatePresence>
         {editingTask && (
           <TaskModal
