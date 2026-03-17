@@ -171,6 +171,8 @@ function calcIOFromRows(rows, catalog) {
 
 function generateBOM(circuits, loxoneModules) {
   const items = [];
+
+  // Wyłączniki z obwodów zdefiniowanych przez użytkownika
   const breakerGroups = {};
   circuits.forEach(c => {
     const { breakerA, breakerType } = calcCircuit(c);
@@ -185,22 +187,8 @@ function generateBOM(circuits, loxoneModules) {
       quantity: qty, unit: "szt.", priceEst: 0, link: "", status: "Oczekuje",
     });
   });
-  items.push({
-    id: genId("bom"), name: "Wyłącznik nadprądowy 3P 40A (główny)", category: "cabinet",
-    quantity: 1, unit: "szt.", priceEst: 65, link: "", status: "Oczekuje",
-  });
-  items.push({
-    id: genId("bom"), name: "Ogranicznik przepięć T2 3P+N", category: "cabinet",
-    quantity: 1, unit: "szt.", priceEst: 130, link: "", status: "Oczekuje",
-  });
-  items.push({
-    id: genId("bom"), name: "Listwa N+PE 12-torowa", category: "cabinet",
-    quantity: Math.max(1, Math.ceil(circuits.length / 10)), unit: "szt.", priceEst: 18, link: "", status: "Oczekuje",
-  });
-  items.push({
-    id: genId("bom"), name: "Szyna DIN 35mm 1m", category: "cabinet",
-    quantity: Math.max(1, Math.ceil((circuits.length + 6) / 12)), unit: "szt.", priceEst: 12, link: "", status: "Oczekuje",
-  });
+
+  // Moduły Loxone z kalkulatora I/O
   const grouped = {};
   loxoneModules.forEach(m => {
     const k = m.key;
@@ -213,6 +201,7 @@ function generateBOM(circuits, loxoneModules) {
       quantity: m.qty, unit: "szt.", priceEst: m.price ?? 0, link: "", status: "Oczekuje",
     });
   });
+
   return items;
 }
 
