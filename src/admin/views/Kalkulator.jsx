@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
 import ReactDOM from "react-dom";
+import * as XLSX from "xlsx";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
@@ -73,31 +74,25 @@ function attribsToRows(attribs, floorName, typMappings) {
   return rows;
 }
 
-// ── CSV / XLSX export ─────────────────────────────────────────────────────────
+// ── XLSX export ───────────────────────────────────────────────────────────────
 
-function toCsvRow(cells) {
-  return cells.map(v => {
-    const s = String(v ?? "").replace(/"/g, '""');
-    return `"${s}"`;
-  }).join(",");
-}
-
-function downloadCsv(content, filename) {
-  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-function exportXLSX(rows, catalog) {
+function exportXLSX(rows, catalog, projectName = "projekt") {
   const headers = [
-    "ID/Tag","Kondygnacja","Pomieszczenie","Typ","Rola","Uwagi",
-    "Przewod","Wysokosc","Wariant","Kolor","El. sterujacy","I/O",
+    "ID/Tag", "Kondygnacja", "Pomieszczenie", "Typ", "Rola", "Uwagi",
+    "Przewód", "Wysokość", "Wariant", "Kolor", "Element sterujący", "I/O",
   ];
+
   const data = rows.map(r => [
-    r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
-    r.przewód, r.wysokość, r.wariant, r.kolor,
+    r.tag,
+    r.kondygnacja,
+    r.pomieszczenie,
+    r.typ,
+    r.rola,
+    r.uwagi,
+    r.przewód,
+    r.wysokość,
+    r.wariant,
+    r.kolor,
     r.controlDevice === "uncontrolled"
       ? "niesterowane"
       : r.controlDevice.startsWith("mat:")
@@ -105,8 +100,35 @@ function exportXLSX(rows, catalog) {
         : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
     r.controlDevice !== "uncontrolled" ? r.ioCount : "",
   ]);
-  const csv = [toCsvRow(headers), ...data.map(toCsvRow)].join("\n");
-  downloadCsv(csv, "punkty_instalacyjne.csv");
+
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+
+  // Szerokości kolumn
+  ws["!cols"] = [
+    { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 16 },
+    { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
+    { wch: 28 }, { wch: 6 },
+  ];
+
+  // Styl nagłówka (bold + fill)
+  headers.forEach((_, ci) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: ci });
+    if (!ws[cellRef]) return;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "EA580C" } },
+      alignment: { horizontal: "center" },
+    };
+  });
+
+  // Zamrożenie pierwszego wiersza
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Punkty instalacyjne");
+
+  const safeName = projectName.replace(/[\\/:*?"<>|]/g, "_");
+  XLSX.writeFile(wb, `punkty_instalacyjne_${safeName}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -642,7 +664,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
 
             {/* Eksport XLSX */}
             <button
-              onClick={() => exportXLSX(rows, catalog)}
+              onClick={() => exportXLSX(rows, catalog, project?.code ?? "projekt")}
               className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
             >
               <Download className="w-3.5 h-3.5" /> Eksport XLSX

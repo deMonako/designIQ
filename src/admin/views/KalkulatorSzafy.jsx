@@ -142,18 +142,30 @@ function calcLoxoneModules(io) {
 
 function calcIOFromRows(rows, catalog) {
   let needRO = 0, needDIM = 0, needDI = 0;
+
   for (const r of rows) {
     if (!r.controlDevice || r.controlDevice === "uncontrolled") continue;
-    const dev = catalog.find(p => p.id === r.controlDevice);
-    const cat = detectCategory(r.rawTyp);
-    if (dev) {
-      needRO  += dev.outputsPerUnit ?? 1;
+
+    const ioCount = r.ioCount ?? 1;
+    const rawTyp  = (r.rawTyp ?? "").toLowerCase();
+    const isDimmer = /dim|ściemni|dimm/.test(rawTyp);
+    const cat      = detectCategory(r.rawTyp);
+
+    // Wyjścia: DIM dla ściemniaczy, RO dla reszty
+    if (isDimmer) {
+      needDIM += ioCount;
     } else {
-      if (cat === "lighting" || cat === "motor") needRO += 1;
-      else needRO += 1;
+      needRO += ioCount;
     }
-    needDI += 2; // przycisk + kontaktron (szacunek)
+
+    // Wejścia cyfrowe: 1 DI na przycisk (rolety mają 2 przyciski)
+    if (cat === "motor") {
+      needDI += 2; // góra + dół
+    } else if (cat !== "heating" && cat !== "hvac") {
+      needDI += 1; // standardowy włącznik/przycisk
+    }
   }
+
   return { miniservers: 1, needRO, needDIM, needDI, needAI: 2, needTemp: 2 };
 }
 
