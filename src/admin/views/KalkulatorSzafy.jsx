@@ -166,7 +166,7 @@ function calcIOFromRows(rows, catalog) {
     }
   }
 
-  return { miniservers: 1, needRO, needDIM, needDI, needAI: 2, needTemp: 2 };
+  return { miniservers: 1, needRO, needDIM, needDI, needAI: 0, needTemp: 0 };
 }
 
 function generateBOM(circuits, loxoneModules) {
