@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue } from "react";
 import ReactDOM from "react-dom";
+import * as XLSX from "xlsx";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
@@ -73,7 +74,7 @@ function attribsToRows(attribs, floorName, typMappings) {
   return rows;
 }
 
-// ── Excel export (SpreadsheetML — bez zewnętrznych bibliotek) ─────────────────
+// ── XLSX export ───────────────────────────────────────────────────────────────
 
 function exportXLSX(rows, catalog, projectName = "projekt") {
   const headers = [
@@ -81,46 +82,45 @@ function exportXLSX(rows, catalog, projectName = "projekt") {
     "Przewód", "Wysokość", "Wariant", "Kolor", "Element sterujący", "I/O",
   ];
 
-  const esc = (v) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-  const headerRow = headers.map(h =>
-    `<th style="background:#EA580C;color:#fff;font-weight:bold;border:1px solid #bbb;padding:4px 8px;white-space:nowrap">${esc(h)}</th>`
-  ).join("");
-
-  const dataRows = rows.map(r => {
-    const device = r.controlDevice === "uncontrolled"
+  const data = rows.map(r => [
+    r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
+    r.przewód, r.wysokość, r.wariant, r.kolor,
+    r.controlDevice === "uncontrolled"
       ? "niesterowane"
       : r.controlDevice.startsWith("mat:")
         ? r.controlDevice.slice(4)
-        : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice);
-    const cells = [
-      r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
-      r.przewód, r.wysokość, r.wariant, r.kolor, device,
-      r.controlDevice !== "uncontrolled" ? r.ioCount : "",
-    ];
-    const tds = cells.map(v =>
-      `<td style="border:1px solid #eee;padding:3px 7px">${esc(v)}</td>`
-    ).join("");
-    return `<tr>${tds}</tr>`;
-  }).join("\n");
+        : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
+    r.controlDevice !== "uncontrolled" ? r.ioCount : "",
+  ]);
 
-  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-  xmlns:x="urn:schemas-microsoft-com:office:excel"
-  xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8"><!--[if gte mso 9]><xml>
-<x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
-<x:Name>Punkty instalacyjne</x:Name>
-<x:WorksheetOptions><x:FreezePanes/><x:FrozenNoSplit/><x:SplitHorizontal>1</x:SplitHorizontal><x:TopRowBottomPane>1</x:TopRowBottomPane></x:WorksheetOptions>
-</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
-</xml><![endif]--></head>
-<body><table>${"<tr>" + headerRow + "</tr>"}${dataRows}</table></body></html>`;
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
 
-  const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  // Szerokości kolumn
+  ws["!cols"] = [
+    { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 16 },
+    { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
+    { wch: 28 }, { wch: 6 },
+  ];
+
+  // Styl nagłówka (bold + fill) — wymaga xlsx-style lub xlsx z opcją cellStyles
+  headers.forEach((_, ci) => {
+    const cellRef = XLSX.utils.encode_cell({ r: 0, c: ci });
+    if (!ws[cellRef]) return;
+    ws[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { patternType: "solid", fgColor: { rgb: "EA580C" } },
+      alignment: { horizontal: "center" },
+    };
+  });
+
+  // Zamrożenie pierwszego wiersza
+  ws["!freeze"] = { xSplit: 0, ySplit: 1 };
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Punkty instalacyjne");
+
   const safeName = projectName.replace(/[\\/:*?"<>|]/g, "_");
-  a.href = url; a.download = `punkty_instalacyjne_${safeName}.xls`; a.click();
-  URL.revokeObjectURL(url);
+  XLSX.writeFile(wb, `punkty_instalacyjne_${safeName}.xlsx`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -659,7 +659,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               onClick={() => exportXLSX(rows, catalog, project?.code ?? "projekt")}
               className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
             >
-              <Download className="w-3.5 h-3.5" /> Eksport Excel
+              <Download className="w-3.5 h-3.5" /> Eksport XLSX
             </button>
           </div>
 
