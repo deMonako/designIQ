@@ -556,11 +556,14 @@ export default function Analityka({ projects, tasks, checklists, clients = [], o
 
       {/* ── Nagłówek ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-orange-500" /> Analityka studia
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">Finanse, harmonogram i kondycja projektów · {TODAY}</p>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+            <BarChart2 className="w-4 h-4 text-orange-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Analityka studia</h2>
+            <p className="text-xs text-slate-400">Finanse, harmonogram i kondycja projektów · {TODAY}</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <button

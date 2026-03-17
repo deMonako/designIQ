@@ -2,25 +2,51 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, FolderKanban, CheckSquare, ClipboardList,
-  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell,
+  BarChart2, Package, Settings, LogOut, Menu, X, Zap, Bell, Boxes,
   ChevronRight, Users, Search, Plus, User, Calendar,
   CheckCircle2, AlertCircle, RefreshCw, Calculator, BookOpen, ShoppingCart,
 } from "lucide-react";
 import { TODAY } from "./mockData";
+import { genId } from "./utils/id";
 
 const PRIORITIES = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
-const NAV_ITEMS = [
-  { id: "dashboard",  label: "Dashboard",  icon: LayoutDashboard },
-  { id: "projekty",   label: "Projekty",   icon: FolderKanban,   badge: "projekty" },
-  { id: "klienci",    label: "Klienci",    icon: Users,          badge: "klienci" },
-  { id: "zadania",    label: "Zadania",    icon: CheckSquare,    badge: "zadania" },
-  { id: "checklisty",  label: "Checklisty",  icon: ClipboardList },
-  { id: "zakupy",      label: "Zakupy",      icon: ShoppingCart },
-  { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
-  { id: "analityka",   label: "Analityka",   icon: BarChart2 },
-  { id: "kalkulator", label: "Kalkulator", icon: Calculator },
+// ── Zgrupowana nawigacja ────────────────────────────────────────────────────
+const NAV_GROUPS = [
+  {
+    label: "Sprzedaż",
+    items: [
+      { id: "klienci", label: "Klienci", icon: Users, badge: "klienci" },
+    ],
+  },
+  {
+    label: "Realizacja",
+    items: [
+      { id: "dashboard",  label: "Dashboard",  icon: LayoutDashboard },
+      { id: "projekty",   label: "Projekty",   icon: FolderKanban,  badge: "projekty" },
+      { id: "zadania",    label: "Zadania",     icon: CheckSquare,   badge: "zadania" },
+      { id: "checklisty", label: "Checklisty", icon: ClipboardList },
+    ],
+  },
+  {
+    label: "Zakupy",
+    items: [
+      { id: "zakupy",          label: "Zakupy",         icon: ShoppingCart },
+      { id: "kalkulator",      label: "Pkt instalacyjne", icon: Calculator },
+      { id: "kalkulator_szafy", label: "Szafa sterownicza", icon: Boxes },
+    ],
+  },
+  {
+    label: "Narzędzia",
+    items: [
+      { id: "analityka",   label: "Analityka",   icon: BarChart2 },
+      { id: "baza_wiedzy", label: "Baza wiedzy", icon: BookOpen },
+    ],
+  },
 ];
+
+// Płaska lista wszystkich pozycji (do badge'ów i tytułów)
+const NAV_ITEMS = NAV_GROUPS.flatMap(g => g.items);
 const NAV_BOTTOM = [{ id: "ustawienia", label: "Ustawienia", icon: Settings }];
 
 function NavLink({ item, active, onClick, badge }) {
@@ -67,7 +93,7 @@ export default function AdminLayout({
   const submitQuickAdd = () => {
     if (!qaForm.title.trim() || !onAddTask) return;
     onAddTask({
-      id: `t-${Date.now()}`,
+      id: genId("t"),
       type: qaForm.type,
       projectId: qaForm.projectId || null,
       title: qaForm.title.trim(),
@@ -122,7 +148,7 @@ export default function AdminLayout({
     dashboard: "Dashboard", projekty: "Projekty", klienci: "Klienci",
     zadania: "Zadania", checklisty: "Checklisty", zakupy: "Zakupy",
     baza_wiedzy: "Baza wiedzy",
-    analityka: "Analityka", kalkulator: "Kalkulator", ustawienia: "Ustawienia",
+    analityka: "Analityka", kalkulator: "Kalkulator", kalkulator_szafy: "Szafa sterownicza", ustawienia: "Ustawienia",
   };
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
@@ -139,14 +165,23 @@ export default function AdminLayout({
         </div>
       </div>
 
-      <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(item => (
-          <NavLink
-            key={item.id} item={item}
-            active={currentView === item.id}
-            onClick={(id) => { setCurrentView(id); setSidebarOpen(false); }}
-            badge={item.badge ? badges[item.badge] : undefined}
-          />
+      <nav className="flex-1 px-2 py-3 overflow-y-auto space-y-4">
+        {NAV_GROUPS.map(group => (
+          <div key={group.label}>
+            <p className="px-3 mb-1 text-[9px] font-bold text-slate-600 uppercase tracking-[0.12em]">
+              {group.label}
+            </p>
+            <div className="space-y-0.5">
+              {group.items.map(item => (
+                <NavLink
+                  key={item.id} item={item}
+                  active={currentView === item.id}
+                  onClick={(id) => { setCurrentView(id); setSidebarOpen(false); }}
+                  badge={item.badge ? badges[item.badge] : undefined}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </nav>
 

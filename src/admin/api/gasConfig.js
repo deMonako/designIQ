@@ -5,7 +5,7 @@ export const GAS_CONFIG = {
   enabled: true,
 
   /** URL deployment Google Apps Script */
-  scriptUrl: "https://script.google.com/macros/s/AKfycbxRLFP0ebHQFCbut-tkUY0JyRvllN40aj1gwt9hezj_0BI3UFc8GBAEsXtTv528qSQzoQ/exec",
+  scriptUrl: "https://script.google.com/macros/s/AKfycbzuZHT1uIAOgtlMhoSPAlbeXmdxw_L1jHmM2kICbVXfk9Ts5SHuuXp7caXF76jXYbdQ0g/exec",
 
   /** ID arkusza Google Sheets */
   sheetId: "1aq3kmpw5mOGcy7JHB29C0s6OiR3evdEWY1gS08EE2FU",

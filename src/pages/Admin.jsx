@@ -10,7 +10,8 @@ import Checklisty   from "../admin/views/Checklisty";
 import Analityka    from "../admin/views/Analityka";
 import Materialy    from "../admin/views/Materialy";
 import ZakupyView   from "../admin/views/Zakupy";
-import Kalkulator   from "../admin/views/Kalkulator";
+import Kalkulator      from "../admin/views/Kalkulator";
+import KalkulatorSzafy from "../admin/views/KalkulatorSzafy";
 import Ustawienia   from "../admin/views/Ustawienia";
 import AddProjectModal from "../admin/AddProjectModal";
 import { EMPTY_KALKULATOR_SETTINGS } from "../lib/shoppingList/kalkulatorDefaults";
@@ -20,6 +21,8 @@ import {
 } from "../admin/mockData";
 import { GAS_CONFIG } from "../admin/api/gasConfig";
 import * as GAS from "../admin/api/gasApi";
+import { toast } from "sonner";
+import { DESIGNIQ_PROJECT_ID } from "../admin/constants";
 
 // true gdy GAS jest w pełni skonfigurowany (enabled + scriptUrl)
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
@@ -251,7 +254,38 @@ export default function Admin() {
 
   const handleUpdateTask = async (t) => {
     const snap = tasks.find(x => x.id === t.id);
-    setTasks(prev => prev.map(x => x.id === t.id ? t : x));
+    const updatedTasks = tasks.map(x => x.id === t.id ? t : x);
+    setTasks(updatedTasks);
+
+    // ── Auto-postęp etapu projektu ──────────────────────────────────────────
+    // Gdy wszystkie zadania (nie-eventy) projektu są ukończone → zaproponuj
+    // przejście do następnego etapu.
+    if (
+      t.status === "Zrobione" &&
+      t.projectId &&
+      t.projectId !== DESIGNIQ_PROJECT_ID &&
+      t.type !== "event"
+    ) {
+      const project = projects.find(p => p.id === t.projectId);
+      if (project && project.stageIndex < (project.stages?.length ?? 1) - 1) {
+        const projectTasks = updatedTasks.filter(
+          x => x.projectId === t.projectId && x.type !== "event"
+        );
+        if (projectTasks.length > 0 && projectTasks.every(x => x.status === "Zrobione")) {
+          const nextStage = project.stages[project.stageIndex + 1];
+          toast.success("Wszystkie zadania ukończone!", {
+            description: `Projekt może przejść do etapu: „${nextStage}"`,
+            action: {
+              label: "Zatwierdź →",
+              onClick: () =>
+                handleUpdateProject({ ...project, stageIndex: project.stageIndex + 1 }),
+            },
+            duration: 10000,
+          });
+        }
+      }
+    }
+
     await gasSync(() => GAS.updateTask(t), () => {
       if (snap) setTasks(prev => prev.map(x => x.id === t.id ? snap : x));
       syncErr("Błąd aktualizacji zadania");
@@ -372,6 +406,17 @@ export default function Admin() {
     );
   };
 
+  // ── Eksport BOM z KalkulatorSzafy do Zakupów ─────────────────────────────
+  const handleExportBomToZakupy = async (projectId, bomItems) => {
+    // Zapisz/nadpisz listę zakupów projektu
+    const zakupy = { projectId, items: bomItems };
+    if (GAS_ON) await GAS.upsertZakupy(zakupy);
+    // Przejdź do zakupów tego projektu
+    setZakupyInitProjectId(projectId);
+    setCurrentView("zakupy");
+    toast.success("BOM wyeksportowany do Zakupów");
+  };
+
   // ── Odświeżanie danych z GAS ──────────────────────────────────────────────
   const handleRefresh = async () => {
     if (!GAS_ON) return;
@@ -480,6 +525,8 @@ export default function Admin() {
         );
       case "kalkulator":
         return <Kalkulator projects={projects} kalkulatorSettings={kalkulatorSettings} />;
+      case "kalkulator_szafy":
+        return <KalkulatorSzafy projects={projects} kalkulatorSettings={kalkulatorSettings} onExportToZakupy={handleExportBomToZakupy} />;
       case "ustawienia":
         return (
           <Ustawienia

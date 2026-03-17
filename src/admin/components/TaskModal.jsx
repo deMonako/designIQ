@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Flag, Calendar, Trash2 } from "lucide-react";
+import { X, Flag, Calendar, Trash2, AlertTriangle } from "lucide-react";
 import { TODAY } from "../mockData";
+import { genId } from "../utils/id";
 
 const PRIORITY_OPTIONS = ["Niski", "Normalny", "Wysoki", "Krytyczny"];
 
@@ -33,7 +34,7 @@ export default function TaskModal({ projects = [], task, defaultDate, onSave, on
     onSave({
       ...(task ?? {}),
       ...form,
-      id:        task?.id       ?? `t-${Date.now()}`,
+      id:        task?.id       ?? genId("t"),
       status:    task?.status   ?? "Niezrobione",
       assignee:  task?.assignee ?? "Adam",
       projectId: form.projectId === "none" ? null : form.projectId,
@@ -140,6 +141,14 @@ export default function TaskModal({ projects = [], task, defaultDate, onSave, on
               />
             </div>
           </div>
+
+          {/* Ostrzeżenie: termin w przeszłości */}
+          {form.dueDate && form.dueDate < TODAY && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium">
+              <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+              Wybrany termin jest w przeszłości ({form.dueDate})
+            </div>
+          )}
 
           {/* Opis */}
           <div>

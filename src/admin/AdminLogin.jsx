@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { Lock, Eye, EyeOff, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 
-const ADMIN_PASSWORD = "admin";
+// Hasło z .env (REACT_APP_ADMIN_PASSWORD), fallback na "admin" jeśli nie ustawione.
+// Ustaw własne hasło w .env żeby nie było widoczne w kodzie źródłowym.
+const ADMIN_PASSWORD = process.env.REACT_APP_ADMIN_PASSWORD || "admin";
 
 export default function AdminLogin({ onLogin }) {
   const [password, setPassword] = useState("");

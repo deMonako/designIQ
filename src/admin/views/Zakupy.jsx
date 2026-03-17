@@ -374,8 +374,8 @@ export default function Zakupy({ projects = [], initialProjectId }) {
 
       {/* Nagłówek */}
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center">
-          <Package className="w-4 h-4 text-slate-600" />
+        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+          <Package className="w-4 h-4 text-orange-600" />
         </div>
         <div>
           <h2 className="text-lg font-bold text-slate-900">Zakupy</h2>

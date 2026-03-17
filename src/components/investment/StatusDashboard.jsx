@@ -3,6 +3,9 @@ import PropTypes from "prop-types";
 import { Card, CardContent } from "../ui/card";
 import { Calendar, DollarSign, ShoppingCart, Map, FileText } from "lucide-react";
 import { motion } from "framer-motion";
+import InvestmentTimeline from "./InvestmentTimeline";
+import FileUploadSection from "./FileUploadSection";
+
 // Bezpieczna konwersja daty – obsługuje ISO strings z timezone (np. "2025-03-31T22:00:00.000Z")
 function safeDate(dateStr) {
   if (!dateStr) return null;
@@ -13,9 +16,6 @@ function formatDatePL(dateStr, opts = { day: "2-digit", month: "long", year: "nu
   const d = safeDate(dateStr);
   return d ? d.toLocaleDateString("pl-PL", opts) : "---";
 }
-import InvestmentTimeline from "./InvestmentTimeline";
-import FileUploadSection from "./FileUploadSection";
-
 export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
   const getProgressPercentage = () => {
     if (!investment) return 0;
