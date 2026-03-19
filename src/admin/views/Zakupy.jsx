@@ -338,9 +338,21 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
     getZakupy(projectId)
       .then(z => {
         setZakupyId(z?.id ?? null);
-        // Jeśli przekazano initialItems (eksport z kalkulatora) — zachowaj je jako treść
         if (initialItems === null) {
           setItems(Array.isArray(z?.items) ? z.items : []);
+        } else {
+          // Scal: ręcznie dodane pozycje zachowaj, eksportowane dodaj/zaktualizuj
+          const existing = Array.isArray(z?.items) ? z.items : [];
+          const exportedNames = new Set(initialItems.map(i => i.name));
+          // Pozycje istniejące, których nie ma w eksporcie — zachowaj w całości
+          const manualItems = existing.filter(i => !exportedNames.has(i.name));
+          // Pozycje eksportowane — jeśli już istnieją, zachowaj status/link/vat z oryginału
+          const mergedExport = initialItems.map(exported => {
+            const prev = existing.find(e => e.name === exported.name);
+            if (!prev) return exported;
+            return { ...exported, status: prev.status, link: prev.link ?? exported.link, vat: prev.vat ?? exported.vat };
+          });
+          setItems([...manualItems, ...mergedExport]);
         }
       })
       .catch(() => {})
