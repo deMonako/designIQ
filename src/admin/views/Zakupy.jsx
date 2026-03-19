@@ -314,16 +314,20 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
     });
   }, []);
 
-  // Załaduj zakupy projektu (pomijamy gdy przekazano initialItems — dane już mamy)
+  // Załaduj zakupy projektu
+  // Gdy przekazano initialItems — używamy ich jako treść, ale i tak pobieramy id z GAS
+  // żeby zapis (handleSave) aktualizował istniejący rekord zamiast tworzyć duplikat.
   useEffect(() => {
     if (!projectId) { setItems([]); setZakupyId(null); return; }
-    if (initialItems !== null) return; // dane przekazane bezpośrednio — nie ładuj z GAS
     if (!GAS_ON)    { setItems([]); setZakupyId(null); return; }
     setLoading(true);
     getZakupy(projectId)
       .then(z => {
         setZakupyId(z?.id ?? null);
-        setItems(Array.isArray(z?.items) ? z.items : []);
+        // Jeśli przekazano initialItems (eksport z kalkulatora) — zachowaj je jako treść
+        if (initialItems === null) {
+          setItems(Array.isArray(z?.items) ? z.items : []);
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));

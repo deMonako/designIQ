@@ -409,9 +409,8 @@ export default function Admin() {
 
   // ── Eksport BOM z KalkulatorSzafy do Zakupów ─────────────────────────────
   const handleExportBomToZakupy = async (projectId, bomItems) => {
-    // Zapisz w GAS (best-effort — widok zakupów i tak dostaje itemsy bezpośrednio)
-    if (GAS_ON) GAS.upsertZakupy({ projectId, items: bomItems }).catch(() => {});
-    // Przekaż itemsy bezpośrednio do ZakupyView przez stan
+    // Przekaż itemsy bezpośrednio do ZakupyView — widok załaduje istniejące id z GAS
+    // i na Zapisz zaktualizuje lub utworzy rekord (bez duplikatów)
     setZakupyInitProjectId(projectId);
     setZakupyInitItems(bomItems);
     setCurrentView("zakupy");

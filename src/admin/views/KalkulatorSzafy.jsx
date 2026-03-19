@@ -592,7 +592,8 @@ export default function KalkulatorSzafy({
       // "mat:NazwaUrządzenia" — materiał z cennika, nie ze skuSpecs Loxone
       if (devId.startsWith("mat:")) {
         const matName = devId.slice(4);
-        result.push({ devId, name: matName, qty: totalIO, totalIO, outputsPerUnit: 1, sku: "", price: 0 });
+        const matOpt = matOptions.find(m => m.name === matName);
+        result.push({ devId, name: matName, qty: totalIO, totalIO, outputsPerUnit: 1, sku: "", price: matOpt?.price_pln ?? 0 });
         continue;
       }
       const spec = deviceSpecs[devId];
@@ -606,23 +607,24 @@ export default function KalkulatorSzafy({
     }
 
     return result.sort((a, b) => a.name.localeCompare(b.name, "pl"));
-  }, [effectiveRows, effectiveMappings, catalog]);
+  }, [effectiveRows, effectiveMappings, catalog, matOptions]);
 
   const handleExportAllMaterials = async () => {
     if (!project || !onExportToZakupy) return;
     const items = [];
-    // Urządzenia sterujące
+    // Urządzenia sterujące — cena z katalogu/cennika
     for (const d of loxoneDevices) {
       items.push({
         id: genId("zak"), name: d.name, category: "smart_home",
-        quantity: d.qty, unit: "szt.", priceEst: 0, link: "", status: "Oczekuje",
+        quantity: d.qty, unit: "szt.", priceEst: d.price ?? 0, link: "", status: "Oczekuje",
       });
     }
-    // Materiały z punktów
+    // Materiały z punktów — cena z matOptions (cennik + materiały)
     for (const m of allMaterials) {
+      const matOpt = matOptions.find(o => o.name === m.name);
       items.push({
         id: genId("zak"), name: m.name, category: "cabinet",
-        quantity: m.qty, unit: m.unit, priceEst: 0, link: "", status: "Oczekuje",
+        quantity: m.qty, unit: m.unit, priceEst: matOpt?.price_pln ?? 0, link: "", status: "Oczekuje",
       });
     }
     if (items.length === 0) return;
