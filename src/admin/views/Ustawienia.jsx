@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Settings, Calculator, Plus, Trash2, Save, RefreshCw,
   ChevronDown, Info, RotateCcw, Package, Loader2, ExternalLink,
@@ -202,6 +202,53 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
   );
 }
 
+// ── MatSearchInput — wyszukiwarka materiału (min. 3 znaki) ───────────────────
+
+function MatSearchInput({ value, onChange, matOptions, placeholder }) {
+  const [query, setQuery] = useState(value ?? "");
+  const [open, setOpen]   = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => { setQuery(value ?? ""); }, [value]);
+
+  const suggestions = useMemo(() => {
+    if (query.length < 3) return [];
+    const q = query.toLowerCase();
+    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 8);
+  }, [query, matOptions]);
+
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <input
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange(e.target.value); setOpen(true); }}
+        onFocus={() => query.length >= 3 && setOpen(true)}
+        placeholder={placeholder ?? "— brak —"}
+        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute left-0 top-full mt-0.5 w-72 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-40 overflow-y-auto">
+          {suggestions.map(m => (
+            <li
+              key={m.name}
+              onMouseDown={() => { setQuery(m.name); onChange(m.name); setOpen(false); }}
+              className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer truncate"
+            >
+              {m.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Zakładka: Materiały Loxone (SKU specs) ────────────────────────────────────
 
 function MaterialyLoxone({ settings, onSave }) {
@@ -364,29 +411,21 @@ function MaterialyLoxone({ settings, onSave }) {
                         className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
                       />
                     </td>
-                    <td className="px-3 py-2 min-w-[180px]">
-                      <input
-                        list={`cable-list-${row.sku}`}
+                    <td className="px-3 py-2 min-w-[200px]">
+                      <MatSearchInput
                         value={row.defaultCable ?? ""}
-                        onChange={e => update(idx, "defaultCable", e.target.value)}
-                        placeholder="— brak —"
-                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                        onChange={v => update(idx, "defaultCable", v)}
+                        matOptions={matOptions}
+                        placeholder="— brak (wpisz 3 znaki) —"
                       />
-                      <datalist id={`cable-list-${row.sku}`}>
-                        {matOptions.map(m => <option key={m.name} value={m.name} />)}
-                      </datalist>
                     </td>
-                    <td className="px-3 py-2 min-w-[180px]">
-                      <input
-                        list={`terminal-list-${row.sku}`}
+                    <td className="px-3 py-2 min-w-[200px]">
+                      <MatSearchInput
                         value={row.defaultTerminal ?? ""}
-                        onChange={e => update(idx, "defaultTerminal", e.target.value)}
-                        placeholder="— brak —"
-                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                        onChange={v => update(idx, "defaultTerminal", v)}
+                        matOptions={matOptions}
+                        placeholder="— brak (wpisz 3 znaki) —"
                       />
-                      <datalist id={`terminal-list-${row.sku}`}>
-                        {matOptions.map(m => <option key={m.name} value={m.name} />)}
-                      </datalist>
                     </td>
                     <td className="px-3 py-2 min-w-[160px]">
                       <input

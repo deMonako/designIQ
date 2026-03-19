@@ -247,6 +247,16 @@ function applyRowsConfig(baseRows, cfg) {
   });
 }
 
+// ─── rolaBadge helper ─────────────────────────────────────────────────────────
+
+function rolaBadge(rola) {
+  if (!rola) return null;
+  const r = rola.toLowerCase();
+  if (r.includes("slave"))  return <span className="inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-600">Slave</span>;
+  if (r.includes("master")) return <span className="inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Master</span>;
+  return <span className="inline-block text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{rola}</span>;
+}
+
 // ─── AddCabinetMaterialRow — szybkie dodawanie materiału szafy ───────────────
 
 function AddCabinetMaterialRow({ matOptions, onAdd }) {
@@ -814,7 +824,7 @@ export default function KalkulatorSzafy({
               const tabRows = isSmartHome
                 ? effectiveRows.filter(r => r.controlDevice && r.controlDevice !== "uncontrolled")
                 : effectiveRows.filter(r => !r.controlDevice || r.controlDevice === "uncontrolled");
-              const colSpan = isSmartHome ? 6 : 5;
+              const colSpan = isSmartHome ? 7 : 6;
               return (
                 <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
                   <p className="text-xs text-slate-400">
@@ -833,6 +843,7 @@ export default function KalkulatorSzafy({
                           <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                             <th className="text-left px-3 py-1.5 w-8" />
                             <th className="text-left px-3 py-1.5">Tag</th>
+                            <th className="text-left px-3 py-1.5 w-20">Rola</th>
                             <th className="text-left px-3 py-1.5">Kondygnacja</th>
                             <th className="text-left px-3 py-1.5">Pomieszczenie</th>
                             {isSmartHome && <th className="text-left px-3 py-1.5">El. sterujący</th>}
@@ -857,6 +868,7 @@ export default function KalkulatorSzafy({
                                     </button>
                                   </td>
                                   <td className="px-3 py-1.5 font-mono text-xs text-slate-600">{row.tag}</td>
+                                  <td className="px-3 py-1.5">{rolaBadge(row.rola)}</td>
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.kondygnacja}</td>
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.pomieszczenie}</td>
                                   {isSmartHome && <td className="px-3 py-1.5 text-xs text-slate-500">{deviceLabel(row.controlDevice)}</td>}
