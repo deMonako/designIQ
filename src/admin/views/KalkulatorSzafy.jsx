@@ -566,13 +566,14 @@ export default function KalkulatorSzafy({
     return Object.values(byName).sort((a, b) => a.name.localeCompare(b.name, "pl"));
   }, [szafaPoints]);
 
-  // Zestawienie — urządzenia sterujące Loxone wyliczone z punktów Smart Home (wg skuSpecs)
+  // Zestawienie — urządzenia sterujące wyliczone z punktów Smart Home (wg skuSpecs)
   const loxoneDevices = useMemo(() => {
-    // Mapa: deviceId → { outputsPerUnit, sku }
+    // Mapa: deviceId → { outputsPerUnit, sku, price }
     const deviceSpecs = {};
     for (const [sku, spec] of Object.entries(effectiveMappings.skuSpecs)) {
       if (spec.id && spec.id !== "uncontrolled") {
-        deviceSpecs[spec.id] = { ...spec, sku };
+        const catItem = catalog.find(p => p.id === spec.id);
+        deviceSpecs[spec.id] = { ...spec, sku, price: catItem?.price_pln ?? 0 };
       }
     }
 
@@ -588,11 +589,20 @@ export default function KalkulatorSzafy({
     // Oblicz ilość sztuk każdego urządzenia
     const result = [];
     for (const [devId, totalIO] of Object.entries(demand)) {
+      // "mat:NazwaUrządzenia" — materiał z cennika, nie ze skuSpecs Loxone
+      if (devId.startsWith("mat:")) {
+        const matName = devId.slice(4);
+        result.push({ devId, name: matName, qty: totalIO, totalIO, outputsPerUnit: 1, sku: "", price: 0 });
+        continue;
+      }
       const spec = deviceSpecs[devId];
       const outputsPerUnit = spec?.outputsPerUnit ?? 1;
       const qty = Math.ceil(totalIO / outputsPerUnit);
-      const name = catalog.find(p => p.id === devId)?.name ?? devId;
-      result.push({ devId, name, qty, totalIO, outputsPerUnit });
+      const catItem = catalog.find(p => p.id === devId);
+      const name = catItem?.name ?? devId;
+      const price = spec?.price ?? catItem?.price_pln ?? 0;
+      const sku = spec?.sku ?? "";
+      result.push({ devId, name, qty, totalIO, outputsPerUnit, sku, price });
     }
 
     return result.sort((a, b) => a.name.localeCompare(b.name, "pl"));
@@ -947,21 +957,41 @@ export default function KalkulatorSzafy({
                       <thead>
                         <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                           <th className="text-left px-4 py-2">Urządzenie</th>
-                          <th className="text-right px-3 py-2 w-28">Kanały (suma)</th>
-                          <th className="text-right px-3 py-2 w-28">Kanały/szt.</th>
-                          <th className="text-right px-4 py-2 w-20">Ilość</th>
+                          <th className="text-left px-3 py-2 w-24">SKU</th>
+                          <th className="text-right px-3 py-2 w-24">Kanały</th>
+                          <th className="text-right px-3 py-2 w-24">Kan./szt.</th>
+                          <th className="text-right px-3 py-2 w-20">Ilość</th>
+                          <th className="text-right px-4 py-2 w-28">Cena/szt.</th>
+                          <th className="text-right px-4 py-2 w-28">Razem</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {loxoneDevices.map(d => (
                           <tr key={d.devId} className="hover:bg-slate-50/60">
                             <td className="px-4 py-2 text-sm text-slate-800">{d.name}</td>
+                            <td className="px-3 py-2 font-mono text-xs text-slate-400">{d.sku || "—"}</td>
                             <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">{d.totalIO}</td>
                             <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">{d.outputsPerUnit}</td>
-                            <td className="px-4 py-2 text-right font-semibold text-orange-600 tabular-nums">{d.qty} szt.</td>
+                            <td className="px-3 py-2 text-right font-semibold text-orange-600 tabular-nums">{d.qty} szt.</td>
+                            <td className="px-4 py-2 text-right text-xs text-slate-500 tabular-nums">
+                              {d.price > 0 ? d.price.toLocaleString("pl-PL") + " zł" : "—"}
+                            </td>
+                            <td className="px-4 py-2 text-right font-semibold text-slate-700 tabular-nums">
+                              {d.price > 0 ? (d.price * d.qty).toLocaleString("pl-PL") + " zł" : "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
+                      {loxoneDevices.some(d => d.price > 0) && (
+                        <tfoot className="bg-slate-50 border-t-2 border-slate-200">
+                          <tr>
+                            <td colSpan={6} className="px-4 py-2 text-xs font-semibold text-slate-500 text-right">Łącznie urządzenia</td>
+                            <td className="px-4 py-2 text-right font-bold text-orange-600 tabular-nums">
+                              {loxoneDevices.reduce((s, d) => s + d.price * d.qty, 0).toLocaleString("pl-PL")} zł
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
                     </table>
                   </div>
                 )}

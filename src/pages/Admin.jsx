@@ -79,6 +79,7 @@ export default function Admin() {
   const [syncError,          setSyncError]          = useState(null);
   const [syncStatus,         setSyncStatus]         = useState("synced"); // "synced" | "syncing" | "error"
   const [zakupyInitProjectId, setZakupyInitProjectId] = useState(null);
+  const [zakupyInitItems,     setZakupyInitItems]     = useState(null);
 
   // ── State (inicjalizacja zależy od trybu) ──────────────────────────────────
   const [clients, setClients] = useState(() =>
@@ -408,13 +409,12 @@ export default function Admin() {
 
   // ── Eksport BOM z KalkulatorSzafy do Zakupów ─────────────────────────────
   const handleExportBomToZakupy = async (projectId, bomItems) => {
-    // Zapisz/nadpisz listę zakupów projektu
-    const zakupy = { projectId, items: bomItems };
-    if (GAS_ON) await GAS.upsertZakupy(zakupy);
-    // Przejdź do zakupów tego projektu
+    // Zapisz w GAS (best-effort — widok zakupów i tak dostaje itemsy bezpośrednio)
+    if (GAS_ON) GAS.upsertZakupy({ projectId, items: bomItems }).catch(() => {});
+    // Przekaż itemsy bezpośrednio do ZakupyView przez stan
     setZakupyInitProjectId(projectId);
+    setZakupyInitItems(bomItems);
     setCurrentView("zakupy");
-    toast.success("BOM wyeksportowany do Zakupów");
   };
 
   // ── Odświeżanie danych z GAS ──────────────────────────────────────────────
@@ -513,7 +513,7 @@ export default function Admin() {
           />
         );
       case "zakupy":
-        return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} />;
+        return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} initialItems={zakupyInitItems} />;
       case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
       case "analityka":
@@ -546,7 +546,7 @@ export default function Admin() {
 
       <AdminLayout
         currentView={currentView}
-        setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); if (view !== "zakupy") setZakupyInitProjectId(null); }}
+        setCurrentView={(view) => { setCurrentView(view); setSelectedProject(null); if (view !== "zakupy") { setZakupyInitProjectId(null); setZakupyInitItems(null); } }}
         onLogout={handleLogout}
         projects={projects} tasks={tasks} clients={clients}
         onAddTask={handleAddTask}

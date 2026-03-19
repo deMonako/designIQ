@@ -291,9 +291,9 @@ function CategorySection({ cat, items, cennik, onUpdateItem, onRemoveItem, onAdd
 }
 
 // ─── główny widok ─────────────────────────────────────────────────────────────
-export default function Zakupy({ projects = [], initialProjectId }) {
+export default function Zakupy({ projects = [], initialProjectId, initialItems = null }) {
   const [projectId,  setProjectId]  = useState(initialProjectId ?? "");
-  const [items,      setItems]      = useState([]);
+  const [items,      setItems]      = useState(initialItems ?? []);
   const [zakupyId,   setZakupyId]   = useState(null);
   const [loading,    setLoading]    = useState(false);
   const [saving,     setSaving]     = useState(false);
@@ -314,9 +314,10 @@ export default function Zakupy({ projects = [], initialProjectId }) {
     });
   }, []);
 
-  // Załaduj zakupy projektu
+  // Załaduj zakupy projektu (pomijamy gdy przekazano initialItems — dane już mamy)
   useEffect(() => {
     if (!projectId) { setItems([]); setZakupyId(null); return; }
+    if (initialItems !== null) return; // dane przekazane bezpośrednio — nie ładuj z GAS
     if (!GAS_ON)    { setItems([]); setZakupyId(null); return; }
     setLoading(true);
     getZakupy(projectId)
@@ -326,7 +327,7 @@ export default function Zakupy({ projects = [], initialProjectId }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [projectId]);
+  }, [projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateItem = useCallback((id, field, value) => {
     setItems(prev => prev.map(it =>
