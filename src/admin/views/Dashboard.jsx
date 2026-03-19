@@ -2,8 +2,8 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
-  StickyNote, FolderKanban, Phone, Mail, Pencil, Plus,
-  TrendingUp, Zap,
+  FolderKanban, Phone, Mail, Pencil, Plus,
+  Zap,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -336,93 +336,6 @@ function UpcomingItem({ task, project, onClick }) {
   );
 }
 
-// ─── Quick Notes ─────────────────────────────────────────────────────────────
-
-function QuickNotes() {
-  const [notes, setNotes] = useState(() => localStorage.getItem("diq_notes") || "");
-  const save = (v) => { setNotes(v); localStorage.setItem("diq_notes", v); };
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 border-l-4 border-l-orange-300 shadow-sm p-4 flex flex-col h-full">
-      <div className="flex items-center gap-2 mb-3">
-        <StickyNote className="w-4 h-4 text-orange-400" />
-        <span className="text-sm font-semibold text-slate-700">Szybkie notatki</span>
-        {notes && <span className="ml-auto text-xs text-slate-300">zapisano lokalnie</span>}
-      </div>
-      <textarea
-        value={notes}
-        onChange={e => save(e.target.value)}
-        placeholder="Wpisz notatkę, numer telefonu, przypomnienie…"
-        className="flex-1 min-h-[100px] text-sm text-slate-700 resize-none outline-none placeholder-slate-300 leading-relaxed bg-transparent"
-      />
-    </div>
-  );
-}
-
-// ─── Priority breakdown widget ────────────────────────────────────────────────
-
-const PRIORITY_META = [
-  { key: "Krytyczny", color: "bg-red-500",    light: "bg-red-50",    text: "text-red-600"    },
-  { key: "Wysoki",    color: "bg-orange-500",  light: "bg-orange-50", text: "text-orange-600" },
-  { key: "Normalny",  color: "bg-blue-400",    light: "bg-blue-50",   text: "text-blue-600"   },
-  { key: "Niski",     color: "bg-slate-300",   light: "bg-slate-50",  text: "text-slate-500"  },
-];
-
-function PriorityBreakdown({ tasks }) {
-  const open = tasks.filter(t => t.status !== "Zrobione" && t.type !== "event");
-  const total = open.length || 1;
-
-  return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <TrendingUp className="w-4 h-4 text-slate-400" />
-        <span className="text-sm font-semibold text-slate-700">Otwarte zadania</span>
-        <span className="ml-auto text-xs font-bold text-slate-400">{open.length}</span>
-      </div>
-
-      <div className="space-y-3">
-        {PRIORITY_META.map(({ key, color, light, text }) => {
-          const count = open.filter(t => t.priority === key).length;
-          const pct = Math.round((count / total) * 100);
-          return (
-            <div key={key}>
-              <div className="flex items-center justify-between mb-1">
-                <span className={`text-xs font-semibold ${text}`}>{key}</span>
-                <span className="text-xs text-slate-400 tabular-nums">{count}</span>
-              </div>
-              <div className={`h-2 ${light} rounded-full overflow-hidden`}>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${pct}%` }}
-                  transition={{ duration: 0.6, delay: 0.1 }}
-                  className={`h-full ${color} rounded-full`}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Stacked bar summary */}
-      <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden flex">
-        {PRIORITY_META.map(({ key, color }) => {
-          const count = open.filter(t => t.priority === key).length;
-          const pct = (count / total) * 100;
-          return pct > 0 ? (
-            <motion.div
-              key={key}
-              initial={{ width: 0 }}
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.7, delay: 0.2 }}
-              className={`h-full ${color}`}
-            />
-          ) : null;
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── Section header ───────────────────────────────────────────────────────────
 
 function SectionHeader({ color = "orange", children, badge, action }) {
@@ -723,12 +636,6 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
             </section>
           )}
         </div>
-      </div>
-
-      {/* ── Dolny rząd: Notatki + Priority breakdown ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <QuickNotes />
-        <PriorityBreakdown tasks={tasks} />
       </div>
 
       {/* ── Modal edycji zadania ── */}

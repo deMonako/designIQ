@@ -566,12 +566,56 @@ export default function KalkulatorSzafy({
     return Object.values(byName).sort((a, b) => a.name.localeCompare(b.name, "pl"));
   }, [szafaPoints]);
 
+  // Zestawienie — urządzenia sterujące Loxone wyliczone z punktów Smart Home (wg skuSpecs)
+  const loxoneDevices = useMemo(() => {
+    // Mapa: deviceId → { outputsPerUnit, sku }
+    const deviceSpecs = {};
+    for (const [sku, spec] of Object.entries(effectiveMappings.skuSpecs)) {
+      if (spec.id && spec.id !== "uncontrolled") {
+        deviceSpecs[spec.id] = { ...spec, sku };
+      }
+    }
+
+    // Zlicz zapotrzebowanie I/O per device
+    const demand = {};
+    for (const r of effectiveRows) {
+      if (!r.controlDevice || r.controlDevice === "uncontrolled") continue;
+      const dev = r.controlDevice;
+      if (!demand[dev]) demand[dev] = 0;
+      demand[dev] += (r.ioCount ?? 1);
+    }
+
+    // Oblicz ilość sztuk każdego urządzenia
+    const result = [];
+    for (const [devId, totalIO] of Object.entries(demand)) {
+      const spec = deviceSpecs[devId];
+      const outputsPerUnit = spec?.outputsPerUnit ?? 1;
+      const qty = Math.ceil(totalIO / outputsPerUnit);
+      const name = catalog.find(p => p.id === devId)?.name ?? devId;
+      result.push({ devId, name, qty, totalIO, outputsPerUnit });
+    }
+
+    return result.sort((a, b) => a.name.localeCompare(b.name, "pl"));
+  }, [effectiveRows, effectiveMappings, catalog]);
+
   const handleExportAllMaterials = async () => {
-    if (!project || !onExportToZakupy || allMaterials.length === 0) return;
-    const items = allMaterials.map(m => ({
-      id: genId("zak"), name: m.name, category: "cabinet",
-      quantity: m.qty, unit: m.unit, priceEst: 0, link: "", status: "Oczekuje",
-    }));
+    if (!project || !onExportToZakupy) return;
+    const items = [];
+    // Urządzenia sterujące
+    for (const d of loxoneDevices) {
+      items.push({
+        id: genId("zak"), name: d.name, category: "smart_home",
+        quantity: d.qty, unit: "szt.", priceEst: 0, link: "", status: "Oczekuje",
+      });
+    }
+    // Materiały z punktów
+    for (const m of allMaterials) {
+      items.push({
+        id: genId("zak"), name: m.name, category: "cabinet",
+        quantity: m.qty, unit: m.unit, priceEst: 0, link: "", status: "Oczekuje",
+      });
+    }
+    if (items.length === 0) return;
     setExporting(true);
     try {
       await onExportToZakupy(project.id, items);
@@ -875,26 +919,61 @@ export default function KalkulatorSzafy({
 
             {/* ══ TAB: Zestawienie ══ */}
             {tab === "zestawienie" && (
-              <motion.div key="zestawienie" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+              <motion.div key="zestawienie" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-5">
                 <div className="flex items-center justify-between">
                   <p className="text-xs text-slate-400">
-                    Wszystkie materiały dodane do punktów — zagregowane według nazwy.
+                    Urządzenia sterujące (wyliczone z I/O) oraz materiały dodane do punktów.
                   </p>
                   <button
                     onClick={handleExportAllMaterials}
-                    disabled={exporting || !onExportToZakupy || allMaterials.length === 0}
+                    disabled={exporting || !onExportToZakupy || (allMaterials.length === 0 && loxoneDevices.length === 0)}
                     className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold hover:from-orange-700 hover:to-orange-600 disabled:opacity-40 transition-all"
                   >
                     {exporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                     Dodaj do zakupów
                   </button>
                 </div>
-                {allMaterials.length === 0 ? (
-                  <div className="text-center py-10 text-slate-300 text-sm border border-dashed border-slate-200 rounded-xl">
-                    Brak materiałów — dodaj je w zakładkach Smart Home lub Klasyczna instalacja
+
+                {/* Urządzenia sterujące Loxone */}
+                {loxoneDevices.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-slate-200">
+                      <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-orange-500" /> Urządzenia sterujące
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Wyliczone na podstawie elementów sterujących i specyfikacji I/O z ustawień</p>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
+                          <th className="text-left px-4 py-2">Urządzenie</th>
+                          <th className="text-right px-3 py-2 w-28">Kanały (suma)</th>
+                          <th className="text-right px-3 py-2 w-28">Kanały/szt.</th>
+                          <th className="text-right px-4 py-2 w-20">Ilość</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {loxoneDevices.map(d => (
+                          <tr key={d.devId} className="hover:bg-slate-50/60">
+                            <td className="px-4 py-2 text-sm text-slate-800">{d.name}</td>
+                            <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">{d.totalIO}</td>
+                            <td className="px-3 py-2 text-right text-xs text-slate-500 tabular-nums">{d.outputsPerUnit}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-orange-600 tabular-nums">{d.qty} szt.</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                ) : (
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
+                )}
+
+                {/* Materiały z punktów */}
+                {allMaterials.length > 0 ? (
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="px-5 py-3 border-b border-slate-200">
+                      <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                        <Package className="w-4 h-4 text-orange-500" /> Materiały z punktów
+                      </h3>
+                    </div>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
@@ -925,7 +1004,11 @@ export default function KalkulatorSzafy({
                       </tfoot>
                     </table>
                   </div>
-                )}
+                ) : loxoneDevices.length === 0 ? (
+                  <div className="text-center py-10 text-slate-300 text-sm border border-dashed border-slate-200 rounded-xl">
+                    Brak materiałów — dodaj je w zakładkach Smart Home lub Klasyczna instalacja
+                  </div>
+                ) : null}
               </motion.div>
             )}
 

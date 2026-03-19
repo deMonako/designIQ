@@ -8,15 +8,9 @@ import { GAS_CONFIG } from "../api/gasConfig";
 import {
   DEFAULT_TYP_MAPPINGS, DEFAULT_SKU_SPECS, EMPTY_KALKULATOR_SETTINGS,
 } from "../../lib/shoppingList/kalkulatorDefaults";
-import { RESOURCE, RESOURCE_LABEL } from "../../lib/shoppingList/resourceTypes";
+import { RESOURCE } from "../../lib/shoppingList/resourceTypes";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-
-// Wszystkie dostępne typy zasobów
-const RESOURCE_OPTIONS = Object.entries(RESOURCE).map(([, v]) => ({
-  value: v,
-  label: RESOURCE_LABEL[v] ?? v,
-}));
 
 // Etykieta dla device ID
 function deviceLabel(id) {
@@ -317,7 +311,6 @@ function MaterialyLoxone({ settings, onSave }) {
                   <th className="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">SKU</th>
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa</th>
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">ID urządzenia</th>
-                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Typ zasobu</th>
                   <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Kanały/szt.</th>
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Uwagi</th>
                 </tr>
@@ -336,13 +329,6 @@ function MaterialyLoxone({ settings, onSave }) {
                         onChange={e => update(idx, "id", e.target.value)}
                         placeholder="np. lox-relay-14"
                         className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs font-mono outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                      />
-                    </td>
-                    <td className="px-3 py-2 min-w-[160px]">
-                      <Select
-                        value={row.resourceType}
-                        onChange={v => update(idx, "resourceType", v)}
-                        options={RESOURCE_OPTIONS}
                       />
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -364,7 +350,7 @@ function MaterialyLoxone({ settings, onSave }) {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-sm">
+                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
                       {GAS_ON ? "Brak danych z cennika." : "Tryb offline – brak cennika. Poniżej domyślne specyfikacje z kodu."}
                     </td>
                   </tr>
