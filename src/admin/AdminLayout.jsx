@@ -31,9 +31,9 @@ const NAV_GROUPS = [
   {
     label: "Zakupy",
     items: [
-      { id: "zakupy",          label: "Zakupy",         icon: ShoppingCart },
-      { id: "kalkulator",      label: "Pkt instalacyjne", icon: Calculator },
+      { id: "kalkulator",       label: "Pkt instalacyjne",  icon: Calculator },
       { id: "kalkulator_szafy", label: "Szafa sterownicza", icon: Boxes },
+      { id: "zakupy",           label: "Zakupy",            icon: ShoppingCart },
     ],
   },
   {

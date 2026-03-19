@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, SlidersHorizontal, Save, FolderOpen,
+  X, SlidersHorizontal, Save, FolderOpen, RotateCcw,
 } from "lucide-react";
 import * as GAS from "../api/gasApi";
 import { gasGet } from "../api/gasClient";
@@ -76,14 +76,26 @@ function attribsToRows(attribs, floorName, typMappings) {
 
 // ── XLSX export ───────────────────────────────────────────────────────────────
 
+function defaultSortRows(rows) {
+  const keys = ["typ", "kondygnacja", "pomieszczenie", "tag", "rola"];
+  return [...rows].sort((a, b) => {
+    for (const k of keys) {
+      const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+}
+
 function exportXLSX(rows, catalog, projectName = "projekt") {
   const headers = [
-    "ID/Tag", "Kondygnacja", "Pomieszczenie", "Typ", "Rola", "Uwagi",
-    "Przewód", "Wysokość", "Wariant", "Kolor", "Element sterujący", "I/O",
+    "Typ", "Kondygnacja", "Pomieszczenie", "ID/Tag", "Rola",
+    "Uwagi", "Przewód", "Wysokość", "Wariant", "Kolor", "Element sterujący", "I/O",
   ];
 
-  const data = rows.map(r => [
-    r.tag, r.kondygnacja, r.pomieszczenie, r.typ, r.rola, r.uwagi,
+  const sorted = defaultSortRows(rows);
+  const data = sorted.map(r => [
+    r.typ, r.kondygnacja, r.pomieszczenie, r.tag, r.rola, r.uwagi,
     r.przewód, r.wysokość, r.wariant, r.kolor,
     r.controlDevice === "uncontrolled"
       ? "niesterowane"
@@ -307,8 +319,8 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [filterMasterOnly, setFilterMasterOnly] = useState(false);
   const [filterNeedsAttention, setFilterNeedsAttention] = useState(false);
 
-  // Sortowanie
-  const [sortKey, setSortKey] = useState("pomieszczenie");
+  // Sortowanie (domyślnie: typ → kondygnacja → pomieszczenie → tag → rola)
+  const [sortKey, setSortKey] = useState("default");
   const [sortDir, setSortDir] = useState("asc");
 
   // Widoczność kolumn
@@ -321,6 +333,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [pendingConfig, setPendingConfig] = useState(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaveResult, setConfigSaveResult] = useState(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
@@ -449,6 +462,40 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     finally { setConfigSaving(false); }
   }, [project, rows, szafaData]);
 
+  // Auto-wczytaj po wyborze projektu
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    handleLoadPoints();
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset konfiguracji — wczytuje punkty bez zapisanego config.json
+  const handleResetConfig = useCallback(async () => {
+    if (!project) return;
+    setResetConfirmOpen(false);
+    setLoading(true);
+    setLoadError(null);
+    setRows([]);
+    setPendingConfig(null);
+    setConfigSaveResult(null);
+    setSzafaData(null);
+    try {
+      const result = await GAS.getDwgViewerContent(project.code).catch(() => null);
+      const loaded = [];
+      if (result?.floors?.length > 0) {
+        for (const floor of result.floors) {
+          if (!floor.attribs || typeof floor.attribs !== "object") continue;
+          loaded.push(...attribsToRows(floor.attribs, floor.name, effectiveMappingsRef.current.typMappings));
+        }
+      }
+      setRows(loaded);
+      if (loaded.length === 0) setLoadError("Brak danych instalacyjnych.");
+    } catch (e) {
+      setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
+    } finally {
+      setLoading(false);
+    }
+  }, [project]);
+
   // Filtrowanie i sortowanie
   const { uniqueTypy, uniqueFloors } = useMemo(() => ({
     uniqueTypy:  [...new Set(rows.map(r => r.typ).filter(Boolean))].sort(),
@@ -475,9 +522,17 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         return true;
       })
       .sort((a, b) => {
+        if (sortKey === "default") {
+          const keys = ["typ", "kondygnacja", "pomieszczenie", "tag", "rola"];
+          for (const k of keys) {
+            const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
+            if (cmp !== 0) return cmp;
+          }
+          return 0;
+        }
         const av = (a[sortKey] ?? "").toString().toLowerCase();
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
-        return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        return sortDir === "asc" ? av.localeCompare(bv, "pl") : bv.localeCompare(av, "pl");
       });
   }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, filterNeedsAttention, sortKey, sortDir]);
 
@@ -763,6 +818,14 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                 )}
               </AnimatePresence>
               <button
+                onClick={() => setResetConfirmOpen(true)}
+                disabled={!project || rows.length === 0}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:border-red-300 hover:text-red-500 disabled:opacity-40 transition-colors"
+                title="Zresetuj konfigurację — usuwa przypisania urządzeń"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+              <button
                 onClick={handleSaveConfig}
                 disabled={configSaving || !project}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
@@ -776,10 +839,41 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         </>
       )}
 
+      {/* Dialog potwierdzenia resetu */}
+      {resetConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">Zresetować konfigurację?</div>
+                <div className="text-xs text-slate-500 mt-0.5">Wszystkie przypisania urządzeń zostaną usunięte. Punkty instalacyjne zostaną wczytane bez zapisanej konfiguracji.</div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setResetConfirmOpen(false)}
+                className="px-4 py-2 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Anuluj
+              </button>
+              <button
+                onClick={handleResetConfig}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors"
+              >
+                Tak, resetuj
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Empty state */}
-      {rows.length === 0 && !loadError && (
+      {rows.length === 0 && !loadError && !loading && (
         <div className="text-center py-10 text-slate-300 text-sm">
-          {selectedProjectId ? "Kliknij \u201eWczytaj punkty\u201c aby za\u0142adowa\u0107 dane" : "Wybierz projekt aby rozpocz\u0105\u0107"}
+          {selectedProjectId ? "Trwa wczytywanie danych…" : "Wybierz projekt aby rozpocząć"}
         </div>
       )}
 

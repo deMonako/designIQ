@@ -4,7 +4,7 @@ import {
   Zap, Cpu, Package, Download, AlertTriangle,
   CheckCircle2, AlertCircle, Plus, X, Trash2, RefreshCw,
   FolderKanban, FolderOpen, Save, ChevronDown, ChevronRight,
-  Search, Info,
+  Search, Info, RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { genId } from "../utils/id";
@@ -354,11 +354,12 @@ export default function KalkulatorSzafy({
   const [loxoneIO, setLoxoneIO]       = useState(null); // null = nieobliczone
 
   // UI
-  const [tab, setTab]                   = useState("smart_home");
+  const [tab, setTab]                       = useState("smart_home");
   const [expandedPointId, setExpandedPointId] = useState(null);
-  const [saving, setSaving]             = useState(false);
-  const [saveResult, setSaveResult]     = useState(null);
-  const [exporting, setExporting]       = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [saveResult, setSaveResult]         = useState(null);
+  const [exporting, setExporting]           = useState(false);
+  const [szafaResetConfirmOpen, setSzafaResetConfirmOpen] = useState(false);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
@@ -368,6 +369,12 @@ export default function KalkulatorSzafy({
   );
   const effectiveMappingsRef = useRef(effectiveMappings);
   useEffect(() => { effectiveMappingsRef.current = effectiveMappings; }, [effectiveMappings]);
+
+  // Auto-wczytaj po wyborze projektu
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    handleLoadPoints();
+  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wczytaj katalog Loxone + cennik
   useEffect(() => {
@@ -475,6 +482,16 @@ export default function KalkulatorSzafy({
     } catch { setSaveResult("err"); }
     finally { setSaving(false); }
   }, [project, rows, existingRowsConfig, szafaPoints, circuits, loxoneIO]);
+
+  // Reset konfiguracji szafy (punkty, materiały, obwody, I/O)
+  const handleResetSzafa = useCallback(() => {
+    setSzafaPoints({});
+    setCircuits([]);
+    setLoxoneIO(null);
+    setSaveResult(null);
+    setSzafaResetConfirmOpen(false);
+    toast.success("Konfiguracja szafy zresetowana");
+  }, []);
 
   // Pomocnik: wczytaj konfigurację rows (pendingConfig)
   const applyPending = () => {
@@ -796,6 +813,13 @@ export default function KalkulatorSzafy({
                 )}
               </AnimatePresence>
               <button
+                onClick={() => setSzafaResetConfirmOpen(true)}
+                className="flex items-center gap-1.5 text-xs px-3 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-red-300 hover:text-red-500 transition-colors"
+                title="Zresetuj konfigurację szafy — usuwa wszystkie materiały i obwody"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset
+              </button>
+              <button
                 onClick={handleSave}
                 disabled={saving}
                 className="flex items-center gap-1.5 text-xs px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
@@ -844,14 +868,15 @@ export default function KalkulatorSzafy({
                             const pt = getPoint(row._id);
                             const mats = pt.cabinetMaterials ?? [];
                             const isExpanded = expandedPointId === row._id;
+                            const toggleExpand = () => setExpandedPointId(id => id === row._id ? null : row._id);
                             return (
                               <React.Fragment key={row._id}>
-                                <tr className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${isExpanded ? "bg-orange-50/30" : ""}`}>
-                                  <td className="px-3 py-1.5 text-center">
-                                    <button
-                                      onClick={() => setExpandedPointId(id => id === row._id ? null : row._id)}
-                                      className="text-slate-400 hover:text-orange-500"
-                                    >
+                                <tr
+                                  className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors cursor-pointer select-none ${isExpanded ? "bg-orange-50/30" : ""}`}
+                                  onClick={toggleExpand}
+                                >
+                                  <td className="px-3 py-1.5 text-center" onClick={e => e.stopPropagation()}>
+                                    <button onClick={toggleExpand} className="text-slate-400 hover:text-orange-500">
                                       {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                                     </button>
                                   </td>
@@ -1011,27 +1036,51 @@ export default function KalkulatorSzafy({
                         <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
                           <th className="text-left px-4 py-2">Nazwa materiału</th>
                           <th className="text-left px-3 py-2 w-20">Typ</th>
-                          <th className="text-right px-4 py-2 w-28">Ilość</th>
-                          <th className="text-left px-3 py-2 w-16">Jedn.</th>
+                          <th className="text-right px-4 py-2 w-24">Ilość</th>
+                          <th className="text-left px-3 py-2 w-14">Jedn.</th>
+                          <th className="text-right px-4 py-2 w-28">Cena/szt.</th>
+                          <th className="text-right px-4 py-2 w-28">Wartość</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {allMaterials.map((m, i) => (
-                          <tr key={i} className="hover:bg-slate-50/60">
-                            <td className="px-4 py-2 text-sm text-slate-800">{m.name}</td>
-                            <td className="px-3 py-2">
-                              <span className="text-[9px] font-bold text-orange-400 uppercase">{m.type}</span>
-                            </td>
-                            <td className="px-4 py-2 text-right font-semibold text-slate-700 tabular-nums">{m.qty}</td>
-                            <td className="px-3 py-2 text-xs text-slate-400">{m.unit}</td>
-                          </tr>
-                        ))}
+                        {allMaterials.map((m, i) => {
+                          const matOpt = matOptions.find(o => o.name === m.name);
+                          const price = matOpt?.price_pln ?? 0;
+                          const total = price * m.qty;
+                          return (
+                            <tr key={i} className="hover:bg-slate-50/60">
+                              <td className="px-4 py-2 text-sm text-slate-800">{m.name}</td>
+                              <td className="px-3 py-2">
+                                <span className="text-[9px] font-bold text-orange-400 uppercase">{m.type}</span>
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-slate-700 tabular-nums">{m.qty}</td>
+                              <td className="px-3 py-2 text-xs text-slate-400">{m.unit}</td>
+                              <td className="px-4 py-2 text-right text-xs text-slate-500 tabular-nums">
+                                {price > 0 ? price.toLocaleString("pl-PL") + " zł" : "—"}
+                              </td>
+                              <td className="px-4 py-2 text-right font-semibold text-slate-700 tabular-nums">
+                                {total > 0 ? total.toLocaleString("pl-PL") + " zł" : "—"}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                         <tr>
                           <td colSpan={4} className="px-4 py-2.5 text-xs text-slate-400 font-semibold">
                             {allMaterials.length} pozycji z {Object.values(szafaPoints).filter(p => (p.cabinetMaterials ?? []).length > 0).length} punktów
                           </td>
+                          {allMaterials.some(m => (matOptions.find(o => o.name === m.name)?.price_pln ?? 0) > 0) && (
+                            <>
+                              <td />
+                              <td className="px-4 py-2.5 text-right font-bold text-orange-600 tabular-nums">
+                                {allMaterials.reduce((s, m) => {
+                                  const p = matOptions.find(o => o.name === m.name)?.price_pln ?? 0;
+                                  return s + p * m.qty;
+                                }, 0).toLocaleString("pl-PL")} zł
+                              </td>
+                            </>
+                          )}
                         </tr>
                       </tfoot>
                     </table>
@@ -1367,9 +1416,40 @@ export default function KalkulatorSzafy({
       )}
 
       {/* Empty state */}
-      {rows.length === 0 && !loadError && (
+      {rows.length === 0 && !loadError && !loading && (
         <div className="text-center py-10 text-slate-300 text-sm">
-          {selectedProjectId ? "Kliknij \u201eWczytaj dane\u201c aby za\u0142adowa\u0107 projekt" : "Wybierz projekt aby rozpocz\u0105\u0107"}
+          {selectedProjectId ? "Trwa wczytywanie danych…" : "Wybierz projekt aby rozpocząć"}
+        </div>
+      )}
+
+      {/* Dialog potwierdzenia resetu szafy */}
+      {szafaResetConfirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-4 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <div className="font-bold text-slate-900">Zresetować konfigurację szafy?</div>
+                <div className="text-xs text-slate-500 mt-0.5">Wszystkie materiały z punktów, obwody i przypisania złączek zostaną usunięte. Tej operacji nie można cofnąć.</div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setSzafaResetConfirmOpen(false)}
+                className="px-4 py-2 text-sm border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Anuluj
+              </button>
+              <button
+                onClick={handleResetSzafa}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors"
+              >
+                Tak, resetuj
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
