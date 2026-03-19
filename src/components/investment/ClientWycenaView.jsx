@@ -503,6 +503,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
               if (items.length === 0) return null;
               const config = categoryConfig[key];
               const isExpanded = expandedCategories[key];
+              const catNet   = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
               const catTotal = items.reduce((sum, i) => sum + (i.quantity * i.unit_price * (1 + (i.vat_rate ?? 23) / 100)), 0);
               return (
                 <div key={key} className="bg-white">
@@ -520,8 +521,11 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                         <h4 className="font-bold text-slate-900 leading-tight tracking-tight break-words pr-2">
                           {config.label}
                         </h4>
+                        <span className="text-slate-400 font-medium text-xs whitespace-nowrap hidden sm:inline">
+                          {catNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł netto /
+                        </span>
                         <span className="text-orange-600 font-bold text-sm whitespace-nowrap">
-                          {catTotal.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                          {catTotal.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł brutto
                         </span>
                       </div>
                       <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 italic leading-tight">
@@ -539,31 +543,47 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                       <table className="w-full text-[11px] sm:text-xs table-fixed sm:table-auto">
                         <thead className="bg-slate-50 text-slate-400 uppercase text-[8px] sm:text-[9px] tracking-widest border-b border-slate-200">
                           <tr>
-                            <th className="p-2 sm:p-3 text-left w-[45%] sm:w-auto">Pozycja</th>
-                            <th className="p-2 sm:p-3 text-center w-[15%] sm:w-auto">Ilość</th>
-                            {/* Kolumna Netto ukryta na małych ekranach: hidden sm:table-cell */}
-                            <th className="p-2 sm:p-3 text-right hidden sm:table-cell">Cena jedn. Netto</th>
-                            <th className="p-2 sm:p-3 text-right w-[40%] sm:w-auto">Suma Brutto</th>
+                            <th className="p-2 sm:p-3 text-left w-[40%] sm:w-auto">Pozycja</th>
+                            <th className="p-2 sm:p-3 text-center w-[10%] sm:w-auto">Ilość</th>
+                            <th className="p-2 sm:p-3 text-right hidden sm:table-cell">Cena netto</th>
+                            <th className="p-2 sm:p-3 text-center hidden sm:table-cell w-12">VAT</th>
+                            <th className="p-2 sm:p-3 text-right hidden sm:table-cell">Netto</th>
+                            <th className="p-2 sm:p-3 text-right hidden sm:table-cell">VAT zł</th>
+                            <th className="p-2 sm:p-3 text-right w-[25%] sm:w-auto">Brutto</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {items.map((item, i) => (
-                            <tr key={i} className="text-slate-700 hover:bg-slate-50/50">
-                              <td className="p-2 sm:p-3 font-medium leading-tight break-words">
-                                {item.name}
-                              </td>
-                              <td className="p-2 sm:p-3 text-center text-slate-400">
-                                {item.quantity}
-                              </td>
-                              {/* Kolumna Netto ukryta na małych ekranach: hidden sm:table-cell */}
-                              <td className="p-2 sm:p-3 text-right text-slate-500 hidden sm:table-cell">
-                                {(item.unit_price).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
-                              </td>
-                              <td className="p-2 sm:p-3 text-right font-bold text-slate-900 whitespace-nowrap">
-                                {(item.quantity * item.unit_price * (1 + (item.vat_rate ?? 23) / 100)).toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
-                              </td>
-                            </tr>
-                          ))}
+                          {items.map((item, i) => {
+                            const lineNet   = item.quantity * item.unit_price;
+                            const vatRate   = item.vat_rate ?? 23;
+                            const lineVat   = lineNet * vatRate / 100;
+                            const lineGross = lineNet + lineVat;
+                            return (
+                              <tr key={i} className="text-slate-700 hover:bg-slate-50/50">
+                                <td className="p-2 sm:p-3 font-medium leading-tight break-words">
+                                  {item.name}
+                                </td>
+                                <td className="p-2 sm:p-3 text-center text-slate-400">
+                                  {item.quantity}
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-slate-500 hidden sm:table-cell">
+                                  {item.unit_price.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                </td>
+                                <td className="p-2 sm:p-3 text-center text-slate-400 hidden sm:table-cell text-[10px]">
+                                  {vatRate}%
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-slate-500 hidden sm:table-cell">
+                                  {lineNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                </td>
+                                <td className="p-2 sm:p-3 text-right text-slate-400 hidden sm:table-cell">
+                                  {lineVat.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                </td>
+                                <td className="p-2 sm:p-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                                  {lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
