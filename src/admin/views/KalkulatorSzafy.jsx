@@ -699,8 +699,9 @@ export default function KalkulatorSzafy({
     const typeToCategory = { cable: "cables", terminal: "cabinet", other: "other" };
     for (const m of allMaterials) {
       const matOpt = matOptions.find(o => o.name === m.name);
+      const category = matOpt?.shopCategory ?? typeToCategory[m.type] ?? "other";
       items.push({
-        id: genId("zak"), name: m.name, category: typeToCategory[m.type] ?? "cabinet",
+        id: genId("zak"), name: m.name, category,
         quantity: m.qty, unit: m.unit, priceEst: matOpt?.price_pln ?? 0, vat: 8, link: "", status: "Oczekuje",
       });
     }
