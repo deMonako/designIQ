@@ -345,6 +345,7 @@ export default function KalkulatorSzafy({
   // Dane projektu
   const [rows, setRows] = useState([]);
   const [catalog, setCatalog] = useState([]);
+  const [catalogLoaded, setCatalogLoaded] = useState(!GAS_ON); // true gdy katalog gotowy
   const [matOptions, setMatOptions] = useState([]);
   const [existingRowsConfig, setExistingRowsConfig] = useState(null); // rows config z Kalkulator.jsx — zachowujemy przy zapisie
 
@@ -370,11 +371,12 @@ export default function KalkulatorSzafy({
   const effectiveMappingsRef = useRef(effectiveMappings);
   useEffect(() => { effectiveMappingsRef.current = effectiveMappings; }, [effectiveMappings]);
 
-  // Auto-wczytaj po wyborze projektu
+  // Auto-wczytaj po wyborze projektu — czekaj aż katalog będzie gotowy,
+  // żeby deviceLabel() od razu pokazywał nazwy zamiast ID
   useEffect(() => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || !catalogLoaded) return;
     handleLoadPoints();
-  }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, catalogLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Wczytaj katalog Loxone + cennik
   useEffect(() => {
@@ -399,6 +401,7 @@ export default function KalkulatorSzafy({
       ];
       const seen = new Set();
       setMatOptions(all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name)));
+      setCatalogLoaded(true); // katalog gotowy — odblokuj auto-load punktów
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -529,14 +532,14 @@ export default function KalkulatorSzafy({
   }, [updatePoint]);
 
   // Szybkie przyciski materiałów
-  const addQuickMaterial = (rowId, type) => {
-    const defaults = {
-      cable:    { name: "LgY 0.75 CZ", qty: 1.5, unit: "m"   },
-      terminal: { name: "Złączka ZDU 1.5", qty: 1, unit: "szt." },
-      marker:   { name: "Koszulka ferulkowa", qty: 1, unit: "szt." },
-    };
-    const d = defaults[type];
-    addMaterial(rowId, { id: genId("cm"), type, ...d });
+  const addQuickMaterial = (rowId, type, name) => {
+    addMaterial(rowId, {
+      id: genId("cm"),
+      type,
+      name,
+      qty:  type === "cable" ? 1.5 : 1,
+      unit: type === "cable" ? "m"  : "szt.",
+    });
   };
 
   // Circuits
@@ -871,22 +874,40 @@ export default function KalkulatorSzafy({
                                   <tr className="bg-orange-50/30 border-b border-orange-100">
                                     <td colSpan={colSpan} className="px-4 py-3">
                                       <div className="max-w-xl space-y-3">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-slate-500 font-medium">Szybko dodaj:</span>
-                                          {[
-                                            { type: "cable",    label: "+ Kabel" },
-                                            { type: "terminal", label: "+ Złączka" },
-                                            { type: "marker",   label: "+ Koszulka" },
-                                          ].map(({ type, label }) => (
-                                            <button
-                                              key={type}
-                                              onClick={() => addQuickMaterial(row._id, type)}
-                                              className="px-2 py-1 text-xs border border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-orange-400 hover:text-orange-600 transition-colors"
-                                            >
-                                              {label}
-                                            </button>
-                                          ))}
-                                        </div>
+                                        {(() => {
+                                          // Pobierz defaultCable/defaultTerminal z skuSpecs dla urządzenia tego punktu
+                                          const devId = row.controlDevice;
+                                          let quickCable = null;
+                                          let quickTerminal = null;
+                                          if (devId && devId !== "uncontrolled" && !devId.startsWith("mat:")) {
+                                            const skuEntry = Object.entries(effectiveMappings.skuSpecs)
+                                              .find(([, s]) => s.id === devId);
+                                            if (skuEntry) {
+                                              quickCable    = skuEntry[1].defaultCable    || null;
+                                              quickTerminal = skuEntry[1].defaultTerminal || null;
+                                            }
+                                          }
+                                          const quickBtns = [
+                                            quickCable    && { type: "cable",    label: "+ Kabel",   name: quickCable },
+                                            quickTerminal && { type: "terminal", label: "+ Złączka", name: quickTerminal },
+                                          ].filter(Boolean);
+                                          if (quickBtns.length === 0) return null;
+                                          return (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-slate-500 font-medium">Szybko dodaj:</span>
+                                              {quickBtns.map(({ type, label, name }) => (
+                                                <button
+                                                  key={type}
+                                                  onClick={() => addQuickMaterial(row._id, type, name)}
+                                                  title={name}
+                                                  className="px-2 py-1 text-xs border border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-orange-400 hover:text-orange-600 transition-colors"
+                                                >
+                                                  {label}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          );
+                                        })()}
                                         {mats.length > 0 && (
                                           <div className="space-y-1 border-l-2 border-orange-200 pl-3">
                                             {mats.map(m => (

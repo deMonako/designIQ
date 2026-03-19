@@ -205,16 +205,26 @@ function KategorieMappings({ settings, onSave, deviceOptions }) {
 // ── Zakładka: Materiały Loxone (SKU specs) ────────────────────────────────────
 
 function MaterialyLoxone({ settings, onSave }) {
-  const [cennik, setCennik]   = useState([]);
-  const [loading, setLoading] = useState(GAS_ON);
+  const [cennik, setCennik]     = useState([]);
+  const [matOptions, setMatOptions] = useState([]);
+  const [loading, setLoading]   = useState(GAS_ON);
 
   useEffect(() => {
     if (!GAS_ON) { setLoading(false); return; }
     setLoading(true);
-    gasGet("getCennik")
-      .then(data => setCennik(Array.isArray(data) ? data : []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      gasGet("getCennik").catch(() => []),
+      gasGet("getMaterialyJson").catch(() => []),
+    ]).then(([cd, md]) => {
+      const cennikArr = Array.isArray(cd) ? cd : [];
+      setCennik(cennikArr);
+      const all = [
+        ...cennikArr.map(c => ({ name: c.name })),
+        ...(Array.isArray(md) ? md.map(m => ({ name: m.name })) : []),
+      ];
+      const seen = new Set();
+      setMatOptions(all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name)));
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   // Buduj tabelę: każdy wpis z DEFAULT_SKU_SPECS + cennik nieznane SKU
@@ -237,13 +247,13 @@ function MaterialyLoxone({ settings, onSave }) {
     // Najpierw już zdefiniowane SKU
     for (const [sku, spec] of Object.entries(baseSpecs)) {
       const cennikItem = cennik.find(c => String(c.sku) === sku);
-      rows.push({ sku, name: cennikItem?.name ?? spec.id, ...spec, fromCennik: !!cennikItem });
+      rows.push({ sku, name: cennikItem?.name ?? spec.id, ...spec, defaultCable: spec.defaultCable ?? "", defaultTerminal: spec.defaultTerminal ?? "", fromCennik: !!cennikItem });
     }
     // Potem pozostałe z cennika
     for (const c of cennik) {
       const sku = String(c.sku ?? "");
       if (!sku || baseSpecs[sku]) continue;
-      rows.push({ sku, name: c.name, id: "", resourceType: RESOURCE.RELAY, outputsPerUnit: 1, notes: "", fromCennik: true, isNew: true });
+      rows.push({ sku, name: c.name, id: "", resourceType: RESOURCE.RELAY, outputsPerUnit: 1, notes: "", defaultCable: "", defaultTerminal: "", fromCennik: true, isNew: true });
     }
     // Sortuj: najpierw elementy których id nie zaczyna się na "custom"
     rows.sort((a, b) => {
@@ -270,12 +280,25 @@ function MaterialyLoxone({ settings, onSave }) {
 
   const handleSave = () => {
     const skuSpecs = {};
-    for (const { sku, id, resourceType, outputsPerUnit, notes, isNew } of rows) {
+    for (const { sku, id, resourceType, outputsPerUnit, notes, defaultCable, defaultTerminal, isNew } of rows) {
       if (!sku) continue;
-      // Zapisz tylko te które zostały zmodyfikowane lub dodane (isNew i mają id)
       const defSpec = DEFAULT_SKU_SPECS[sku];
-      if (!defSpec || defSpec.outputsPerUnit !== Number(outputsPerUnit) || defSpec.resourceType !== resourceType || (id && id !== defSpec.id) || isNew) {
-        skuSpecs[sku] = { id: id || `custom-${sku}`, resourceType, outputsPerUnit: Number(outputsPerUnit) || 1, notes: notes ?? "" };
+      const hasChanges = !defSpec
+        || defSpec.outputsPerUnit !== Number(outputsPerUnit)
+        || defSpec.resourceType !== resourceType
+        || (id && id !== defSpec.id)
+        || isNew
+        || defaultCable
+        || defaultTerminal;
+      if (hasChanges) {
+        skuSpecs[sku] = {
+          id: id || `custom-${sku}`,
+          resourceType,
+          outputsPerUnit: Number(outputsPerUnit) || 1,
+          notes: notes ?? "",
+          ...(defaultCable    ? { defaultCable }    : {}),
+          ...(defaultTerminal ? { defaultTerminal } : {}),
+        };
       }
     }
     onSave({ skuSpecs });
@@ -312,6 +335,8 @@ function MaterialyLoxone({ settings, onSave }) {
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Nazwa</th>
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">ID urządzenia</th>
                   <th className="text-center px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Kanały/szt.</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Dom. kabel</th>
+                  <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Dom. złączka</th>
                   <th className="text-left px-3 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wide">Uwagi</th>
                 </tr>
               </thead>
@@ -339,6 +364,30 @@ function MaterialyLoxone({ settings, onSave }) {
                         className="w-16 border border-slate-200 rounded-lg px-2 py-1.5 text-sm text-center outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
                       />
                     </td>
+                    <td className="px-3 py-2 min-w-[180px]">
+                      <input
+                        list={`cable-list-${row.sku}`}
+                        value={row.defaultCable ?? ""}
+                        onChange={e => update(idx, "defaultCable", e.target.value)}
+                        placeholder="— brak —"
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                      />
+                      <datalist id={`cable-list-${row.sku}`}>
+                        {matOptions.map(m => <option key={m.name} value={m.name} />)}
+                      </datalist>
+                    </td>
+                    <td className="px-3 py-2 min-w-[180px]">
+                      <input
+                        list={`terminal-list-${row.sku}`}
+                        value={row.defaultTerminal ?? ""}
+                        onChange={e => update(idx, "defaultTerminal", e.target.value)}
+                        placeholder="— brak —"
+                        className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                      />
+                      <datalist id={`terminal-list-${row.sku}`}>
+                        {matOptions.map(m => <option key={m.name} value={m.name} />)}
+                      </datalist>
+                    </td>
                     <td className="px-3 py-2 min-w-[160px]">
                       <input
                         value={row.notes ?? ""}
@@ -350,7 +399,7 @@ function MaterialyLoxone({ settings, onSave }) {
                 ))}
                 {rows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-slate-400 text-sm">
+                    <td colSpan={7} className="px-4 py-8 text-center text-slate-400 text-sm">
                       {GAS_ON ? "Brak danych z cennika." : "Tryb offline – brak cennika. Poniżej domyślne specyfikacje z kodu."}
                     </td>
                   </tr>
