@@ -455,7 +455,7 @@ export default function KalkulatorSzafy({
       const matArr = Array.isArray(matData) ? matData : [];
       const all = [
         ...cennikArr.map(c => ({ name: c.name, price_pln: c.price_pln, sku: c.sku ? String(c.sku) : null })),
-        ...matArr.map(m => ({ name: m.name, price_pln: m.price_pln, sku: m.sku ? String(m.sku) : null })),
+        ...matArr.map(m => ({ name: m.name, price_pln: m.price_pln, sku: m.sku ? String(m.sku) : null, shopCategory: m.shopCategory ?? null })),
       ];
       const seen = new Set();
       setMatOptions(all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name)));
