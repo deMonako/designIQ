@@ -247,6 +247,11 @@ function applyRowsConfig(baseRows, cfg) {
   });
 }
 
+// ─── Tłumaczenie typów materiałów na polski ───────────────────────────────────
+
+const TYPE_LABELS = { cable: "Przewód", terminal: "Złączka", other: "Inne" };
+const typeLabel = (t) => TYPE_LABELS[t] ?? t;
+
 // ─── rolaBadge helper ─────────────────────────────────────────────────────────
 
 function rolaBadge(rola) {
@@ -924,7 +929,7 @@ export default function KalkulatorSzafy({
                                           <div className="space-y-1 border-l-2 border-orange-200 pl-3">
                                             {mats.map(m => (
                                               <div key={m.id} className="flex items-center gap-2 py-0.5">
-                                                <span className="text-[9px] font-bold text-orange-400 uppercase w-12 shrink-0">{m.type}</span>
+                                                <span className="text-[9px] font-bold text-orange-400 uppercase w-14 shrink-0">{typeLabel(m.type)}</span>
                                                 <span className="flex-1 text-xs text-slate-700 truncate">{m.name}</span>
                                                 <input
                                                   type="number" min="0.1" step="0.1"
@@ -1057,7 +1062,7 @@ export default function KalkulatorSzafy({
                             <tr key={i} className="hover:bg-slate-50/60">
                               <td className="px-4 py-2 text-sm text-slate-800">{m.name}</td>
                               <td className="px-3 py-2">
-                                <span className="text-[9px] font-bold text-orange-400 uppercase">{m.type}</span>
+                                <span className="text-[9px] font-bold text-orange-400 uppercase">{typeLabel(m.type)}</span>
                               </td>
                               <td className="px-4 py-2 text-right font-semibold text-slate-700 tabular-nums">{m.qty}</td>
                               <td className="px-3 py-2 text-xs text-slate-400">{m.unit}</td>

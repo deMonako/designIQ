@@ -77,7 +77,7 @@ function attribsToRows(attribs, floorName, typMappings) {
 // ── XLSX export ───────────────────────────────────────────────────────────────
 
 function defaultSortRows(rows) {
-  const keys = ["typ", "kondygnacja", "pomieszczenie", "tag", "rola"];
+  const keys = ["typ", "tag", "rola"];
   return [...rows].sort((a, b) => {
     for (const k of keys) {
       const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
@@ -522,7 +522,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       })
       .sort((a, b) => {
         if (sortKey === "default") {
-          const keys = ["typ", "kondygnacja", "pomieszczenie", "tag", "rola"];
+          const keys = ["typ", "tag", "rola"];
           for (const k of keys) {
             const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
             if (cmp !== 0) return cmp;
