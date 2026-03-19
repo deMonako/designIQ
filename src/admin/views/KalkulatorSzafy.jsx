@@ -291,6 +291,7 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
   const [search, setSearch] = useState("");
   const [qty, setQty] = useState(1);
   const [unit, setUnit] = useState("szt.");
+  const [type, setType] = useState("other");
   const [showSugg, setShowSugg] = useState(false);
   const ref = useRef(null);
 
@@ -306,10 +307,10 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
     return () => document.removeEventListener("mousedown", h);
   }, []);
 
-  const commit = (name = search) => {
+  const commit = (name = search, resolvedType = type) => {
     if (!name.trim()) return;
-    onAdd({ id: genId("cm"), type: "other", name: name.trim(), qty, unit });
-    setSearch(""); setQty(1); setUnit("szt."); setShowSugg(false);
+    onAdd({ id: genId("cm"), type: resolvedType, name: name.trim(), qty, unit });
+    setSearch(""); setQty(1); setUnit("szt."); setType("other"); setShowSugg(false);
   };
 
   return (
@@ -328,7 +329,17 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
             {suggestions.map(m => (
               <li
                 key={m.name}
-                onMouseDown={() => { setSearch(m.name); setShowSugg(false); }}
+                onMouseDown={() => {
+                  const inferredType = m.type ?? (
+                    /przewód|kabel|linka|drut|NYM|YDY|LgY/.test(m.name) ? "cable"
+                    : /złączka|szyna|listwa|zacisk/.test(m.name) ? "terminal"
+                    : "other"
+                  );
+                  setSearch(m.name);
+                  setType(inferredType);
+                  if (m.unit) setUnit(m.unit);
+                  setShowSugg(false);
+                }}
                 className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex justify-between"
               >
                 <span className="truncate">{m.name}</span>
@@ -338,6 +349,15 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
           </ul>
         )}
       </div>
+      <select
+        value={type}
+        onChange={e => setType(e.target.value)}
+        className="text-xs border border-slate-200 rounded px-1 py-1 outline-none bg-white focus:ring-1 focus:ring-orange-400 w-20"
+      >
+        <option value="cable">Przewód</option>
+        <option value="terminal">Złączka</option>
+        <option value="other">Inne</option>
+      </select>
       <input
         type="number" min="0.1" step="0.1" value={qty}
         onChange={e => setQty(Math.max(0.1, parseFloat(e.target.value) || 1))}
