@@ -6,7 +6,6 @@ import { motion } from "framer-motion";
 import InvestmentTimeline from "./InvestmentTimeline";
 import FileUploadSection from "./FileUploadSection";
 
-// Bezpieczna konwersja daty – obsługuje ISO strings z timezone (np. "2025-03-31T22:00:00.000Z")
 function safeDate(dateStr) {
   if (!dateStr) return null;
   const s = String(dateStr).substring(0, 10);
@@ -16,10 +15,38 @@ function formatDatePL(dateStr, opts = { day: "2-digit", month: "long", year: "nu
   const d = safeDate(dateStr);
   return d ? d.toLocaleDateString("pl-PL", opts) : "---";
 }
+
+const NAV_CARDS = [
+  {
+    key: "wycena",
+    icon: DollarSign,
+    title: "Wycena",
+    desc: "Szczegółowe koszty inwestycji",
+  },
+  {
+    key: "zakupy",
+    icon: ShoppingCart,
+    title: "Zakupy",
+    desc: "Lista materiałów do zamówienia",
+  },
+  {
+    key: "projekt",
+    icon: Map,
+    title: "Projekt (Rzut)",
+    desc: "Interaktywny plan Twojej instalacji",
+  },
+  {
+    key: "dokumenty",
+    icon: FileText,
+    title: "Dokumenty",
+    desc: "Pliki i dokumentacja projektu",
+    scrollTo: "dokumenty-section",
+  },
+];
+
 export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
   const getProgressPercentage = () => {
     if (!investment) return 0;
-    // Używaj progress z admina jeśli ustawiony, w przeciwnym razie licz na podstawie etapów
     if (typeof investment.progress === "number" && investment.progress > 0) return investment.progress;
     if (!investment.stages || investment.stages.length === 0) return 0;
     return Math.round((investment.current_stage / investment.stages.length) * 100);
@@ -27,7 +54,7 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
 
   return (
     <div className="space-y-8">
-      {/* Nagłówek Inwestycji */}
+      {/* Nagłówek inwestycji */}
       <Card className="border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-white shadow-xl">
         <CardContent className="p-6 lg:p-8">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -47,7 +74,7 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
             </div>
           </div>
 
-          <div className="mt-6 pt-6 border-t border-slate-200">
+          <div className="mt-6 pt-6 border-t border-orange-100">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-semibold text-slate-700">Postęp realizacji</span>
               <span className="text-lg font-bold text-orange-600">{getProgressPercentage()}%</span>
@@ -70,85 +97,42 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
         </CardContent>
       </Card>
 
-      {/* Karty Nawigacyjne - Układ 2x2 (Finanse -> Inżynieria) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* 1. WYCENA */}
-        <Card 
-          className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-          onClick={() => onNavigate("wycena")}
-        >
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-blue-200">
-              <DollarSign className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Wycena</h3>
-              <p className="text-sm text-slate-600">Szczegółowe koszty inwestycji</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 2. ZAKUPY */}
-        <Card 
-          className="border-2 border-green-200 bg-gradient-to-br from-green-50 to-white shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-          onClick={() => onNavigate("zakupy")}
-        >
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-14 h-14 bg-green-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-green-200">
-              <ShoppingCart className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Zakupy</h3>
-              <p className="text-sm text-slate-600">Lista materiałów do zamówienia</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 3. PROJEKT (Rzut DXF) */}
-        <Card 
-          className="border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-white shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-          onClick={() => onNavigate("projekt")}
-        >
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-14 h-14 bg-indigo-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-indigo-200">
-              <Map className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Projekt (Rzut)</h3>
-              <p className="text-sm text-slate-600">Interaktywny plan Twojej instalacji</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 4. DOKUMENTY */}
-        <Card
-          className="border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white shadow-lg hover:shadow-xl transition-all cursor-pointer group"
-          onClick={() => {
-            const el = document.getElementById("dokumenty-section");
-            if (el) el.scrollIntoView({ behavior: "smooth" });
-          }}
-        >
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="w-14 h-14 bg-purple-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-md shadow-purple-200">
-              <FileText className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold text-slate-900">Dokumenty</h3>
-              <p className="text-sm text-slate-600">Pliki i dokumentacja projektu</p>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Karty nawigacyjne */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {NAV_CARDS.map(({ key, icon: Icon, title, desc, scrollTo }) => (
+          <Card
+            key={key}
+            className="border-2 border-slate-200 bg-white shadow-sm hover:border-orange-300 hover:shadow-md transition-all cursor-pointer group"
+            onClick={() => {
+              if (scrollTo) {
+                const el = document.getElementById(scrollTo);
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              } else {
+                onNavigate(key);
+              }
+            }}
+          >
+            <CardContent className="p-6 flex items-center gap-4">
+              <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-100 transition-colors shrink-0">
+                <Icon className="w-6 h-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">{title}</h3>
+                <p className="text-sm text-slate-500">{desc}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* Oś czasu */}
       <div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center">
-          <Calendar className="w-6 h-6 mr-3 text-orange-600" />
+        <h2 className="text-2xl font-bold text-slate-900 mb-6 flex items-center gap-3">
+          <Calendar className="w-6 h-6 text-orange-600" />
           Etapy realizacji
         </h2>
-        <InvestmentTimeline 
-          stages={investment.stages} 
+        <InvestmentTimeline
+          stages={investment.stages}
           currentStage={investment.current_stage}
         />
       </div>
@@ -166,14 +150,14 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
 
 StatusDashboard.propTypes = {
   investment: PropTypes.shape({
-    project_name: PropTypes.string,
-    package_type: PropTypes.string,
-    start_date: PropTypes.string,
-    current_stage: PropTypes.number,
-    stages: PropTypes.array,
-    investment_code: PropTypes.string,
-    documents: PropTypes.array,
+    project_name:      PropTypes.string,
+    package_type:      PropTypes.string,
+    start_date:        PropTypes.string,
+    current_stage:     PropTypes.number,
+    stages:            PropTypes.array,
+    investment_code:   PropTypes.string,
+    documents:         PropTypes.array,
   }).isRequired,
   onNavigate: PropTypes.func.isRequired,
-  onRefresh: PropTypes.func.isRequired,
+  onRefresh:  PropTypes.func.isRequired,
 };
