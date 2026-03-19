@@ -442,9 +442,7 @@ export default function KalkulatorSzafy({
         }
 
         if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
-          // Zastosuj config rows (przypisania urządzeń)
-          setPendingConfig({ cfg, baseRows: loaded });
-          setRows(loaded);
+          setRows(applyRowsConfig(loaded, cfg)); // auto-apply saved config
         } else {
           setRows(loaded);
         }
@@ -754,31 +752,6 @@ export default function KalkulatorSzafy({
       {loadError && (
         <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 shrink-0" />{loadError}
-        </div>
-      )}
-
-      {/* Pending config banner */}
-      {pendingConfig && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-          <FolderOpen className="w-4 h-4 text-blue-500 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <span className="text-sm font-semibold text-blue-800">Znaleziono konfigurację urządzeń (z Pkt instalacyjne)</span>
-            {pendingConfig.cfg.savedAt && (
-              <span className="text-xs text-blue-500 ml-2">z {pendingConfig.cfg.savedAt}</span>
-            )}
-          </div>
-          <button
-            onClick={applyPending}
-            className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-          >
-            Zastosuj urządzenia
-          </button>
-          <button
-            onClick={() => setPendingConfig(null)}
-            className="px-3 py-1.5 border border-blue-200 text-blue-600 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors whitespace-nowrap"
-          >
-            Pomiń
-          </button>
         </div>
       )}
 
