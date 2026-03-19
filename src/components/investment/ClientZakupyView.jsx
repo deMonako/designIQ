@@ -3,7 +3,7 @@ import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import {
   ArrowLeft, ShoppingCart, Package, ExternalLink, CheckCircle2,
-  Clock, Truck, ChevronDown, ChevronUp, Search
+  Clock, Truck, ChevronDown, ChevronUp, Search,
 } from "lucide-react";
 
 const CATEGORY_LABELS = {
@@ -16,6 +16,15 @@ const CATEGORY_LABELS = {
 };
 
 const CATEGORY_ORDER = ["smart_home", "cables", "cabinet", "audio", "security", "other"];
+
+const CATEGORY_DOT = {
+  smart_home: "bg-orange-400",
+  cables:     "bg-yellow-400",
+  cabinet:    "bg-blue-400",
+  audio:      "bg-purple-400",
+  security:   "bg-red-400",
+  other:      "bg-slate-400",
+};
 
 const STATUS_CONFIG = {
   "Oczekuje":    { icon: Clock,        color: "text-slate-500",  bg: "bg-slate-100",  label: "Oczekuje" },
@@ -34,38 +43,41 @@ function StatusBadge({ status }) {
   );
 }
 
+function fmt(value) {
+  return value.toLocaleString("pl-PL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
 export default function ClientZakupyView({ investment, zakupy, onBack }) {
   const [collapsed, setCollapsed] = useState({});
-  const [search, setSearch] = useState("");
+  const [search, setSearch]       = useState("");
 
   const items = zakupy?.items || [];
 
-  // Filter by search
   const filtered = search.trim()
     ? items.filter(i => i.name?.toLowerCase().includes(search.toLowerCase()))
     : items;
 
-  // Group by category in defined order
   const groups = CATEGORY_ORDER
     .map(key => ({
       key,
       label: CATEGORY_LABELS[key] || key,
+      dot:   CATEGORY_DOT[key] || "bg-slate-400",
       items: filtered.filter(i => i.category === key),
     }))
     .filter(g => g.items.length > 0);
 
-  // Also collect items with unknown categories
   const knownKeys = new Set(CATEGORY_ORDER);
   const uncategorized = filtered.filter(i => !knownKeys.has(i.category));
   if (uncategorized.length > 0) {
-    groups.push({ key: "__other__", label: "Pozostałe", items: uncategorized });
+    groups.push({ key: "__other__", label: "Pozostałe", dot: "bg-slate-400", items: uncategorized });
   }
 
-  // Summary stats
   const totalItems   = items.length;
   const doneItems    = items.filter(i => i.status === "Dostarczone").length;
   const orderedItems = items.filter(i => i.status === "Zamówione").length;
   const progressPct  = totalItems > 0 ? Math.round((doneItems / totalItems) * 100) : 0;
+  const totalValue   = items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0), 0);
+  const hasPrices    = items.some(i => (i.priceEst || 0) > 0);
 
   const toggleGroup = (key) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
 
@@ -107,7 +119,7 @@ export default function ClientZakupyView({ investment, zakupy, onBack }) {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 mb-5">
+          <div className={`grid gap-4 mb-5 ${hasPrices ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-900">{totalItems}</div>
               <div className="text-xs text-slate-500">Wszystkich pozycji</div>
@@ -120,6 +132,12 @@ export default function ClientZakupyView({ investment, zakupy, onBack }) {
               <div className="text-2xl font-bold text-green-600">{doneItems}</div>
               <div className="text-xs text-slate-500">Dostarczonych</div>
             </div>
+            {hasPrices && (
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">~{fmt(totalValue)} zł</div>
+                <div className="text-xs text-slate-500">Szacowana wartość</div>
+              </div>
+            )}
           </div>
 
           {/* Progress bar */}
@@ -157,90 +175,152 @@ export default function ClientZakupyView({ investment, zakupy, onBack }) {
           Brak wyników dla „{search}"
         </div>
       ) : (
-        groups.map(group => (
-          <Card key={group.key} className="border border-slate-200 shadow-sm overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between px-5 py-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
-              onClick={() => toggleGroup(group.key)}
-            >
-              <div className="flex items-center gap-2">
-                <Package className="w-4 h-4 text-slate-400" />
-                <span className="font-semibold text-slate-800">{group.label}</span>
-                <span className="text-xs text-slate-400 font-normal">({group.items.length})</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex gap-1.5">
-                  {group.items.some(i => i.status === "Dostarczone") && (
-                    <span className="w-2 h-2 rounded-full bg-green-500" title="Dostarczone" />
-                  )}
-                  {group.items.some(i => i.status === "Zamówione") && (
-                    <span className="w-2 h-2 rounded-full bg-blue-500" title="Zamówione" />
-                  )}
-                  {group.items.some(i => i.status === "Oczekuje") && (
-                    <span className="w-2 h-2 rounded-full bg-slate-300" title="Oczekuje" />
-                  )}
+        groups.map(group => {
+          const catValue = group.items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0), 0);
+          const catHasPrices = group.items.some(i => (i.priceEst || 0) > 0);
+
+          return (
+            <Card key={group.key} className="border border-slate-200 shadow-sm overflow-hidden">
+              {/* Nagłówek kategorii */}
+              <button
+                className="w-full flex items-center justify-between px-5 py-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                onClick={() => toggleGroup(group.key)}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${group.dot}`} />
+                  <span className="font-semibold text-slate-800">{group.label}</span>
+                  <span className="text-xs text-slate-400 font-normal">({group.items.length})</span>
                 </div>
-                {collapsed[group.key]
-                  ? <ChevronDown className="w-4 h-4 text-slate-400" />
-                  : <ChevronUp className="w-4 h-4 text-slate-400" />
-                }
-              </div>
-            </button>
-
-            {!collapsed[group.key] && (
-              <CardContent className="p-0">
-                <div className="divide-y divide-slate-100">
-                  {group.items.map(item => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center gap-3 px-5 py-3.5 transition-colors ${
-                        item.status === "Dostarczone" ? "bg-green-50/40" : ""
-                      }`}
-                    >
-                      {/* Status indicator */}
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                        STATUS_CONFIG[item.status]?.bg || "bg-slate-100"
-                      }`}>
-                        {React.createElement(
-                          STATUS_CONFIG[item.status]?.icon || Clock,
-                          { className: `w-4 h-4 ${STATUS_CONFIG[item.status]?.color || "text-slate-500"}` }
-                        )}
-                      </div>
-
-                      {/* Name + details */}
-                      <div className="flex-1 min-w-0">
-                        <div className={`font-medium text-sm truncate ${
-                          item.status === "Dostarczone" ? "line-through text-slate-400" : "text-slate-900"
-                        }`}>
-                          {item.name || <em className="text-slate-400 not-italic">Bez nazwy</em>}
-                        </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {item.quantity} {item.unit}
-                        </div>
-                      </div>
-
-                      {/* Link + status badge */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        {item.link && (
-                          <a
-                            href={item.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-500 hover:text-blue-700 transition-colors"
-                            title="Otwórz link"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
-                        <StatusBadge status={item.status} />
-                      </div>
-                    </div>
-                  ))}
+                <div className="flex items-center gap-3">
+                  {catHasPrices && !collapsed[group.key] && (
+                    <span className="text-sm font-bold text-slate-600 tabular-nums">
+                      ~{fmt(catValue)} zł
+                    </span>
+                  )}
+                  <div className="flex gap-1.5">
+                    {group.items.some(i => i.status === "Dostarczone") && (
+                      <span className="w-2 h-2 rounded-full bg-green-500" title="Dostarczone" />
+                    )}
+                    {group.items.some(i => i.status === "Zamówione") && (
+                      <span className="w-2 h-2 rounded-full bg-blue-500" title="Zamówione" />
+                    )}
+                    {group.items.some(i => i.status === "Oczekuje") && (
+                      <span className="w-2 h-2 rounded-full bg-slate-300" title="Oczekuje" />
+                    )}
+                  </div>
+                  {collapsed[group.key]
+                    ? <ChevronDown className="w-4 h-4 text-slate-400" />
+                    : <ChevronUp   className="w-4 h-4 text-slate-400" />
+                  }
                 </div>
-              </CardContent>
-            )}
-          </Card>
-        ))
+              </button>
+
+              {!collapsed[group.key] && (
+                <CardContent className="p-0">
+                  {/* Tabela pozycji */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50/60 border-b border-slate-100">
+                          <th className="text-left px-5 py-2 font-medium">Nazwa</th>
+                          <th className="text-center px-3 py-2 w-20 font-medium">Ilość</th>
+                          {catHasPrices && (
+                            <>
+                              <th className="text-right px-3 py-2 w-24 font-medium">Cena / szt.</th>
+                              <th className="text-right px-3 py-2 w-24 font-medium">Wartość</th>
+                            </>
+                          )}
+                          <th className="text-right px-3 py-2 w-8 font-medium" />
+                          <th className="text-right px-5 py-2 w-28 font-medium">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {group.items.map(item => {
+                          const lineTotal = (item.quantity || 0) * (item.priceEst || 0);
+                          return (
+                            <tr
+                              key={item.id}
+                              className={`transition-colors ${item.status === "Dostarczone" ? "bg-green-50/40" : "hover:bg-slate-50/60"}`}
+                            >
+                              {/* Nazwa */}
+                              <td className="px-5 py-3">
+                                <div className={`font-medium truncate max-w-xs ${item.status === "Dostarczone" ? "line-through text-slate-400" : "text-slate-900"}`}>
+                                  {item.name || <em className="text-slate-400 not-italic">Bez nazwy</em>}
+                                </div>
+                              </td>
+
+                              {/* Ilość */}
+                              <td className="px-3 py-3 text-center text-slate-600 tabular-nums text-xs">
+                                {item.quantity} {item.unit}
+                              </td>
+
+                              {/* Ceny */}
+                              {catHasPrices && (
+                                <>
+                                  <td className="px-3 py-3 text-right tabular-nums text-xs text-slate-500">
+                                    {(item.priceEst || 0) > 0 ? `~${fmt(item.priceEst)} zł` : "—"}
+                                  </td>
+                                  <td className="px-3 py-3 text-right tabular-nums text-sm font-semibold text-slate-700">
+                                    {lineTotal > 0 ? `~${fmt(lineTotal)} zł` : "—"}
+                                  </td>
+                                </>
+                              )}
+
+                              {/* Link */}
+                              <td className="px-3 py-3 text-center">
+                                {item.link ? (
+                                  <a
+                                    href={item.link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Otwórz link produktu"
+                                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                  </a>
+                                ) : (
+                                  <span className="inline-block w-7" />
+                                )}
+                              </td>
+
+                              {/* Status */}
+                              <td className="px-5 py-3 text-right">
+                                <StatusBadge status={item.status} />
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+
+                      {/* Suma kategorii */}
+                      {catHasPrices && catValue > 0 && (
+                        <tfoot className="border-t border-slate-200 bg-slate-50/60">
+                          <tr>
+                            <td colSpan={catHasPrices ? 4 : 2} className="px-5 py-2 text-xs text-slate-400 text-right font-medium">
+                              Suma kategorii
+                            </td>
+                            <td /> {/* link column */}
+                            <td className="px-5 py-2 text-right font-bold text-slate-700 tabular-nums">
+                              ~{fmt(catValue)} zł
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+          );
+        })
+      )}
+
+      {/* Łączna wartość */}
+      {hasPrices && totalValue > 0 && !search && (
+        <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white rounded-xl">
+          <div className="text-sm text-slate-300">Szacowana łączna wartość zamówienia</div>
+          <div className="text-xl font-bold text-orange-400 tabular-nums">~{fmt(totalValue)} zł</div>
+        </div>
       )}
     </div>
   );

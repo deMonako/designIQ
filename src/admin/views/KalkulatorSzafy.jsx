@@ -387,8 +387,8 @@ export default function KalkulatorSzafy({
       }
       const matArr = Array.isArray(matData) ? matData : [];
       const all = [
-        ...cennikArr.map(c => ({ name: c.name, price_pln: c.price_pln })),
-        ...matArr.map(m => ({ name: m.name, price_pln: m.price_pln })),
+        ...cennikArr.map(c => ({ name: c.name, price_pln: c.price_pln, sku: c.sku ? String(c.sku) : null })),
+        ...matArr.map(m => ({ name: m.name, price_pln: m.price_pln, sku: m.sku ? String(m.sku) : null })),
       ];
       const seen = new Set();
       setMatOptions(all.filter(m => m.name && !seen.has(m.name) && seen.add(m.name)));
@@ -593,7 +593,7 @@ export default function KalkulatorSzafy({
       if (devId.startsWith("mat:")) {
         const matName = devId.slice(4);
         const matOpt = matOptions.find(m => m.name === matName);
-        result.push({ devId, name: matName, qty: totalIO, totalIO, outputsPerUnit: 1, sku: "", price: matOpt?.price_pln ?? 0 });
+        result.push({ devId, name: matName, qty: totalIO, totalIO, outputsPerUnit: 1, sku: matOpt?.sku ?? "", price: matOpt?.price_pln ?? 0 });
         continue;
       }
       const spec = deviceSpecs[devId];
