@@ -252,6 +252,29 @@ function applyRowsConfig(baseRows, cfg) {
 const TYPE_LABELS = { cable: "Przewód", terminal: "Złączka", other: "Inne" };
 const typeLabel = (t) => TYPE_LABELS[t] ?? t;
 
+// ─── Sortowanie naturalne ──────────────────────────────────────────────────────
+
+const naturalCmp = (a, b) =>
+  (a ?? "").toString().localeCompare((b ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
+
+function sortRowsDefault(rows) {
+  return [...rows].sort((a, b) =>
+    naturalCmp(a.typ, b.typ) || naturalCmp(a.tag, b.tag) || naturalCmp(a.rola, b.rola)
+  );
+}
+
+// ─── I/O per punkt ────────────────────────────────────────────────────────────
+
+function getRowIO(row) {
+  if (!row.controlDevice || row.controlDevice === "uncontrolled") return null;
+  const ioCount  = row.ioCount ?? 1;
+  const rawTyp   = (row.rawTyp ?? "").toLowerCase();
+  const isDimmer = /dim|ściemni|dimm/.test(rawTyp);
+  const cat      = detectCategory(row.rawTyp);
+  const di       = cat === "motor" ? 2 : cat !== "heating" && cat !== "hvac" ? 1 : 0;
+  return { outCount: ioCount, outType: isDimmer ? "DIM" : "RO", di };
+}
+
 // ─── rolaBadge helper ─────────────────────────────────────────────────────────
 
 function rolaBadge(rola) {
@@ -826,10 +849,12 @@ export default function KalkulatorSzafy({
             {/* ══ TAB: Smart Home / Klasyczna — wspólny render ══ */}
             {(tab === "smart_home" || tab === "klasyczna") && (() => {
               const isSmartHome = tab === "smart_home";
-              const tabRows = isSmartHome
-                ? effectiveRows.filter(r => r.controlDevice && r.controlDevice !== "uncontrolled")
-                : effectiveRows.filter(r => !r.controlDevice || r.controlDevice === "uncontrolled");
-              const colSpan = isSmartHome ? 7 : 6;
+              const tabRows = sortRowsDefault(
+                isSmartHome
+                  ? effectiveRows.filter(r => r.controlDevice && r.controlDevice !== "uncontrolled")
+                  : effectiveRows.filter(r => !r.controlDevice || r.controlDevice === "uncontrolled")
+              );
+              const colSpan = isSmartHome ? 8 : 6;
               return (
                 <motion.div key={tab} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
                   <p className="text-xs text-slate-400">
@@ -852,6 +877,7 @@ export default function KalkulatorSzafy({
                             <th className="text-left px-3 py-1.5">Kondygnacja</th>
                             <th className="text-left px-3 py-1.5">Pomieszczenie</th>
                             {isSmartHome && <th className="text-left px-3 py-1.5">El. sterujący</th>}
+                            {isSmartHome && <th className="text-center px-3 py-1.5 w-24">I/O</th>}
                             <th className="text-center px-3 py-1.5 w-32">Materiały</th>
                           </tr>
                         </thead>
@@ -877,6 +903,17 @@ export default function KalkulatorSzafy({
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.kondygnacja}</td>
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.pomieszczenie}</td>
                                   {isSmartHome && <td className="px-3 py-1.5 text-xs text-slate-500">{deviceLabel(row.controlDevice)}</td>}
+                                  {isSmartHome && (() => {
+                                    const io = getRowIO(row);
+                                    return io ? (
+                                      <td className="px-3 py-1.5 text-center">
+                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-slate-600">
+                                          <span className="text-orange-500 font-bold">{io.outCount}{io.outType}</span>
+                                          {io.di > 0 && <><span className="text-slate-300">+</span><span className="text-sky-600 font-bold">{io.di}DI</span></>}
+                                        </span>
+                                      </td>
+                                    ) : <td />;
+                                  })()}
                                   <td className="px-3 py-1.5 text-center">
                                     {mats.length > 0 ? (
                                       <span className="inline-flex items-center justify-center w-5 h-5 bg-orange-500 text-white rounded-full text-[9px] font-bold">
