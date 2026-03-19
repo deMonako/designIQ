@@ -904,17 +904,13 @@ export default function KalkulatorSzafy({
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.kondygnacja}</td>
                                   <td className="px-3 py-1.5 text-xs text-slate-600">{row.pomieszczenie}</td>
                                   {isSmartHome && <td className="px-3 py-1.5 text-xs text-slate-500">{deviceLabel(row.controlDevice)}</td>}
-                                  {isSmartHome && (() => {
-                                    const io = getRowIO(row);
-                                    return io ? (
-                                      <td className="px-3 py-1.5 text-center">
-                                        <span className="inline-flex items-center gap-0.5 text-[10px] font-mono text-slate-600">
-                                          <span className="text-orange-500 font-bold">{io.outCount}{io.outType}</span>
-                                          {io.di > 0 && <><span className="text-slate-300">+</span><span className="text-sky-600 font-bold">{io.di}DI</span></>}
-                                        </span>
-                                      </td>
-                                    ) : <td />;
-                                  })()}
+                                  {isSmartHome && (
+                                    <td className="px-3 py-1.5 text-center">
+                                      {row.ioCount != null
+                                        ? <span className="text-xs font-bold font-mono text-orange-500">{row.ioCount}</span>
+                                        : <span className="text-slate-300 text-xs">—</span>}
+                                    </td>
+                                  )}
                                   <td className="px-3 py-1.5 text-center">
                                     {mats.length > 0 ? (
                                       <span className="inline-flex items-center justify-center w-5 h-5 bg-orange-500 text-white rounded-full text-[9px] font-bold">
