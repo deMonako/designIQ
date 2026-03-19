@@ -36,6 +36,7 @@ function newItem(category = "smart_home") {
     quantity: 1,
     unit:     "szt.",
     priceEst: 0,
+    vat:      8,
     link:     "",
     status:   "Oczekuje",
   };
@@ -135,7 +136,7 @@ function ItemRow({ item, cennik, onUpdate, onRemove, suggState, setSuggState }) 
         />
       </td>
 
-      {/* Cena est */}
+      {/* Cena netto */}
       <td className="px-2 py-1.5 w-24">
         <input
           type="number" min="0" step="0.01" value={item.priceEst}
@@ -144,9 +145,21 @@ function ItemRow({ item, cennik, onUpdate, onRemove, suggState, setSuggState }) 
         />
       </td>
 
-      {/* Wartość */}
+      {/* %VAT */}
+      <td className="px-2 py-1.5 w-16">
+        <div className="relative">
+          <input
+            type="number" min="0" max="100" step="1" value={item.vat ?? 8}
+            onChange={e => onUpdate("vat", parseInt(e.target.value) || 0)}
+            className="w-full text-center border border-slate-200 rounded-lg pl-1 pr-4 py-0.5 text-sm outline-none focus:ring-1 focus:ring-orange-400/40 tabular-nums"
+          />
+          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none">%</span>
+        </div>
+      </td>
+
+      {/* Wartość brutto */}
       <td className="px-3 py-1.5 w-24 text-right text-sm font-semibold text-slate-600 tabular-nums">
-        {((item.quantity || 0) * (item.priceEst || 0)).toLocaleString("pl-PL")} zł
+        {((item.quantity || 0) * (item.priceEst || 0) * (1 + (item.vat ?? 8) / 100)).toLocaleString("pl-PL", { maximumFractionDigits: 2 })} zł
       </td>
 
       {/* Status */}
@@ -196,7 +209,7 @@ function ItemRow({ item, cennik, onUpdate, onRemove, suggState, setSuggState }) 
 function CategorySection({ cat, items, cennik, onUpdateItem, onRemoveItem, onAddItem, collapsed, onToggle }) {
   const [suggMap, setSuggMap] = useState({});
 
-  const catTotal   = items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0), 0);
+  const catTotal   = items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0) * (1 + (i.vat ?? 8) / 100), 0);
   const doneCount  = items.filter(i => i.status === "Dostarczone").length;
   const orderCount = items.filter(i => i.status === "Zamówione").length;
 
@@ -246,7 +259,8 @@ function CategorySection({ cat, items, cennik, onUpdateItem, onRemoveItem, onAdd
                     <th className="text-left px-3 py-1.5 font-medium">Nazwa</th>
                     <th className="text-center px-2 py-1.5 w-16 font-medium">Ilość</th>
                     <th className="text-center px-2 py-1.5 w-14 font-medium">Jm.</th>
-                    <th className="text-right px-2 py-1.5 w-24 font-medium">Cena</th>
+                    <th className="text-right px-2 py-1.5 w-24 font-medium">Cena netto</th>
+                    <th className="text-center px-2 py-1.5 w-16 font-medium">%VAT</th>
                     <th className="text-right px-3 py-1.5 w-24 font-medium">Wartość</th>
                     <th className="text-left px-2 py-1.5 w-32 font-medium">Status</th>
                     <th className="w-8" />
@@ -268,7 +282,7 @@ function CategorySection({ cat, items, cennik, onUpdateItem, onRemoveItem, onAdd
                 ))}
                 {items.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="text-center py-4 text-slate-300 text-xs">
+                    <td colSpan={9} className="text-center py-4 text-slate-300 text-xs">
                       Brak pozycji w tej kategorii
                     </td>
                   </tr>
@@ -336,7 +350,7 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
   const updateItem = useCallback((id, field, value) => {
     setItems(prev => prev.map(it =>
       it.id === id
-        ? { ...it, [field]: (field === "quantity" || field === "priceEst") ? Number(value) : value }
+        ? { ...it, [field]: (field === "quantity" || field === "priceEst" || field === "vat") ? Number(value) : value }
         : it
     ));
   }, []);
@@ -368,7 +382,7 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
     }
   };
 
-  const totalEst   = items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0), 0);
+  const totalEst   = items.reduce((s, i) => s + (i.quantity || 0) * (i.priceEst || 0) * (1 + (i.vat ?? 8) / 100), 0);
   const countDone  = items.filter(i => i.status === "Dostarczone").length;
   const countOrder = items.filter(i => i.status === "Zamówione").length;
 

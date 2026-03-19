@@ -672,15 +672,16 @@ export default function KalkulatorSzafy({
     for (const d of loxoneDevices) {
       items.push({
         id: genId("zak"), name: d.name, category: "smart_home",
-        quantity: d.qty, unit: "szt.", priceEst: d.price ?? 0, link: "", status: "Oczekuje",
+        quantity: d.qty, unit: "szt.", priceEst: d.price ?? 0, vat: 8, link: "", status: "Oczekuje",
       });
     }
     // Materiały z punktów — cena z matOptions (cennik + materiały)
+    const typeToCategory = { cable: "cables", terminal: "cabinet", other: "other" };
     for (const m of allMaterials) {
       const matOpt = matOptions.find(o => o.name === m.name);
       items.push({
-        id: genId("zak"), name: m.name, category: "cabinet",
-        quantity: m.qty, unit: m.unit, priceEst: matOpt?.price_pln ?? 0, link: "", status: "Oczekuje",
+        id: genId("zak"), name: m.name, category: typeToCategory[m.type] ?? "cabinet",
+        quantity: m.qty, unit: m.unit, priceEst: matOpt?.price_pln ?? 0, vat: 8, link: "", status: "Oczekuje",
       });
     }
     if (items.length === 0) return;
@@ -709,7 +710,7 @@ export default function KalkulatorSzafy({
     });
     const items = Object.entries(terminalCount).map(([name, qty]) => ({
       id: genId("zak"), name, category: "cabinet",
-      quantity: qty, unit: "szt.", priceEst: 0, link: "", status: "Oczekuje",
+      quantity: qty, unit: "szt.", priceEst: 0, vat: 8, link: "", status: "Oczekuje",
     }));
     if (items.length === 0) {
       toast.info("Brak przypisanych złączek — uzupełnij kolumnę Złączka");
