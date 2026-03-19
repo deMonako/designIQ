@@ -80,7 +80,7 @@ function defaultSortRows(rows) {
   const keys = ["typ", "tag", "rola"];
   return [...rows].sort((a, b) => {
     for (const k of keys) {
-      const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
+      const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
       if (cmp !== 0) return cmp;
     }
     return 0;
@@ -524,7 +524,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         if (sortKey === "default") {
           const keys = ["typ", "tag", "rola"];
           for (const k of keys) {
-            const cmp = (a[k] ?? "").toString().toLowerCase().localeCompare((b[k] ?? "").toString().toLowerCase(), "pl");
+            const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
             if (cmp !== 0) return cmp;
           }
           return 0;
