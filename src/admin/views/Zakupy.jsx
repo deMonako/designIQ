@@ -306,13 +306,14 @@ function CategorySection({ cat, items, cennik, onUpdateItem, onRemoveItem, onAdd
 
 // ─── główny widok ─────────────────────────────────────────────────────────────
 export default function Zakupy({ projects = [], initialProjectId, initialItems = null }) {
-  const [projectId,  setProjectId]  = useState(initialProjectId ?? "");
-  const [items,      setItems]      = useState(initialItems ?? []);
-  const [zakupyId,   setZakupyId]   = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [saving,     setSaving]     = useState(false);
-  const [cennik,     setCennik]     = useState([]);
-  const [collapsed,  setCollapsed]  = useState({});
+  const [projectId,     setProjectId]     = useState(initialProjectId ?? "");
+  const [items,         setItems]         = useState(initialItems ?? []);
+  const [zakupyId,      setZakupyId]      = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [saving,        setSaving]        = useState(false);
+  const [cennik,        setCennik]        = useState([]);
+  const [collapsed,     setCollapsed]     = useState({});
+  const [filterPending, setFilterPending] = useState(false);
 
   // Załaduj katalog produktów
   useEffect(() => {
@@ -479,17 +480,26 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
+              onClick={() => setFilterPending(f => !f)}
+              className={`text-xs font-semibold px-2 py-0.5 rounded-full transition-colors ${
+                filterPending ? "bg-orange-500 text-white" : "text-slate-400 hover:text-white"
+              }`}
+            >
+              Tylko Oczekuje
+            </button>
+            <span className="text-slate-600">·</span>
+            <button
               onClick={() => setCollapsed(CATEGORIES.reduce((a, c) => ({ ...a, [c.key]: true }), {}))}
               className="text-xs text-slate-400 hover:text-white transition-colors"
             >
-              Zwiń wszystko
+              Zwiń
             </button>
             <span className="text-slate-600">·</span>
             <button
               onClick={() => setCollapsed({})}
               className="text-xs text-slate-400 hover:text-white transition-colors"
             >
-              Rozwiń wszystko
+              Rozwiń
             </button>
           </div>
         </div>
@@ -513,11 +523,16 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
       {/* Kategorie */}
       {projectId && !loading && (
         <div className="space-y-3">
-          {CATEGORIES.map(cat => (
+          {CATEGORIES.map(cat => {
+            const catItems = items
+              .filter(i => i.category === cat.key)
+              .filter(i => !filterPending || i.status === "Oczekuje");
+            if (filterPending && catItems.length === 0) return null;
+            return (
             <CategorySection
               key={cat.key}
               cat={cat}
-              items={items.filter(i => i.category === cat.key)}
+              items={catItems}
               cennik={cennik}
               onUpdateItem={updateItem}
               onRemoveItem={removeItem}
@@ -525,7 +540,8 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
               collapsed={!!collapsed[cat.key]}
               onToggle={() => setCollapsed(prev => ({ ...prev, [cat.key]: !prev[cat.key] }))}
             />
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

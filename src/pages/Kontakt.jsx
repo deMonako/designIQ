@@ -15,7 +15,7 @@ export default function Kontakt() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-orange-600 to-orange-500 rounded-3xl mb-6">
             <Mail className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-4xl lg:text-5xl font-bold mb-6 pb-2.5 bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-6 pb-2.5 bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
             Skontaktuj się z nami
           </h1>
           <p className="text-lg text-slate-600 max-w-3xl mx-auto">

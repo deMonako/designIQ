@@ -629,7 +629,7 @@ export default function Konfigurator() {
                         transition={{ delay: 0.4, type: "spring" }}
                         className="absolute inset-0 flex items-center justify-center text-5xl sm:text-7xl font-bold text-slate-300 blur-lg select-none"
                       >
-                        {estimatedPrice.toLocaleString('pl-PL')} PLN
+                        {estimatedPrice.toLocaleString('pl-PL')} PLN netto
                       </motion.div>
                       <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}

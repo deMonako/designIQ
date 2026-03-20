@@ -17,12 +17,12 @@ function emptyItem() {
     category:   "materials",
     quantity:   1,
     unit_price: 0,
-    vat_rate:   23,
+    vat_rate:   8,
   };
 }
 
 function calcGross(item) {
-  return (item.quantity || 0) * (item.unit_price || 0) * (1 + (item.vat_rate ?? 23) / 100);
+  return (item.quantity || 0) * (item.unit_price || 0) * (1 + (item.vat_rate ?? 8) / 100);
 }
 
 // ── Modal: lista materiałów dla technika ────────────────────────────────────
@@ -262,7 +262,8 @@ export default function WycenaEditor({ project, onClose }) {
             <>
               {/* Tabela pozycji */}
               <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[600px]">
                   <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
                     <tr>
                       <th className="text-left p-3 font-semibold">Pozycja</th>
@@ -345,6 +346,7 @@ export default function WycenaEditor({ project, onClose }) {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               <button

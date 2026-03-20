@@ -99,11 +99,20 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
 
       {/* Karty nawigacyjne */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {NAV_CARDS.map(({ key, icon: Icon, title, desc, scrollTo }) => (
+        {NAV_CARDS.map(({ key, icon: Icon, title, desc, scrollTo }) => {
+          const isDisabled =
+            (key === "wycena" && !investment.quotation) ||
+            (key === "zakupy" && !investment.zakupy);
+          return (
           <Card
             key={key}
-            className="border-2 border-slate-200 bg-white shadow-sm hover:border-orange-300 hover:shadow-md transition-all cursor-pointer group"
+            className={`border-2 bg-white shadow-sm transition-all ${
+              isDisabled
+                ? "border-slate-100 opacity-50 cursor-not-allowed"
+                : "border-slate-200 hover:border-orange-300 hover:shadow-md cursor-pointer group"
+            }`}
             onClick={() => {
+              if (isDisabled) return;
               if (scrollTo) {
                 const el = document.getElementById(scrollTo);
                 if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -113,16 +122,19 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
             }}
           >
             <CardContent className="p-6 flex items-center gap-4">
-              <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center group-hover:bg-orange-100 transition-colors shrink-0">
-                <Icon className="w-6 h-6 text-orange-600" />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+                isDisabled ? "bg-slate-50" : "bg-orange-50 group-hover:bg-orange-100"
+              }`}>
+                <Icon className={`w-6 h-6 ${isDisabled ? "text-slate-300" : "text-orange-600"}`} />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">{title}</h3>
-                <p className="text-sm text-slate-500">{desc}</p>
+                <h3 className={`text-base font-bold ${isDisabled ? "text-slate-400" : "text-slate-900"}`}>{title}</h3>
+                <p className="text-sm text-slate-500">{isDisabled ? "Brak danych" : desc}</p>
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {/* Oś czasu */}

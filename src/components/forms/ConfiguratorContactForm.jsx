@@ -103,7 +103,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
         <Send className="w-16 h-16 text-orange-600 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Zapytanie wysłane!</h2>
         <p className="text-gray-700 max-w-sm mx-auto">
-          Potwierdzenie konfiguracji oraz szacunkowa wycena zostały wysłane na adres:
+          Potwierdzenie konfiguracji oraz szacunkowa wycena netto zostały wysłane na adres:
           <span className="font-semibold text-orange-600 block my-1">{contactData.email}</span>
           Wkrótce skontaktujemy się z Tobą w celu omówienia szczegółów wyceny.
           <span className="text-sm text-gray-500 mt-2 block pt-2 border-t border-green-200">
@@ -128,7 +128,7 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
         Potwierdzenie i wycena
       </h2>
       <p className="text-gray-500 mb-6 border-b pb-4">
-        Podaj swoje dane, aby otrzymać szczegółowe podsumowanie konfiguracji oraz szacunkową wycenę na e-mail.
+        Podaj swoje dane, aby otrzymać szczegółowe podsumowanie konfiguracji oraz szacunkową wycenę netto na e-mail.
       </p>
 
       {errorMessage && (

@@ -230,7 +230,7 @@ export default function StatusInwestycji() {
 
   return (
     <div className="min-h-screen py-20 bg-gradient-to-br from-slate-50 to-orange-50">
-      <div className="w-full max-w-6xl mx-auto px-1 sm:px-6 lg:px-8">
+      <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8">
         
         {!investment && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>

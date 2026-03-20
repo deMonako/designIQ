@@ -126,7 +126,7 @@ export default function Home() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          className="text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 leading-tight mt-6 md:mt-0"
+          className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-white mb-6 leading-tight mt-6 md:mt-0"
         >
           Technologia w służbie<br />
           <span className="bg-gradient-to-r from-orange-300 to-orange-200 bg-clip-text text-transparent">
@@ -199,7 +199,8 @@ export default function Home() {
               O designiQ
             </h2>
             <p className="text-lg text-slate-600 leading-relaxed">
-              Zajmujemy się projektowaniem nowoczesnych instalacji elektrycznych z naciskiem na rozwiązania smart home. 
+              Zajmujemy się projektowaniem nowoczesnych instalacji elektrycznych z naciskiem na rozwiązania Smart Home.
+              Jako certyfikowany partner Loxone działamy w <strong>Bydgoszczy</strong> i całym regionie <strong>kujawsko-pomorskim</strong>.
               Specjalizujemy się w tworzeniu inteligentnych systemów, które łączą wygodę z bezpieczeństwem i efektywnością energetyczną.
             </p>
           </div>
@@ -367,7 +368,7 @@ export default function Home() {
                   <LayoutDashboard className="w-4 h-4" />
                   Panel Klienta
                 </div>
-                <h2 className="text-4xl lg:text-5xl font-bold text-slate-900 mb-6 leading-tight">
+                <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 mb-6 leading-tight">
                   Twój projekt zawsze<br />
                   <span className="bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
                     pod kontrolą
@@ -492,10 +493,10 @@ export default function Home() {
       {/* CTA Section */}
       <section className="py-20 bg-gradient-to-br from-orange-600 via-orange-700 to-slate-800">
         <div className="container mx-auto px-4 lg:px-8 text-center">
-          <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6">
             Gotowy na inteligentny dom?
           </h2>
-          <p className="text-xl text-orange-100 mb-8 max-w-2xl mx-auto">
+          <p className="text-lg sm:text-xl text-orange-100 mb-8 max-w-2xl mx-auto">
             Skontaktuj się z nami już dziś i rozpocznij transformację swojego domu
           </p>
           <Link
