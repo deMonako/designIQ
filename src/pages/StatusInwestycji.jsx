@@ -32,12 +32,14 @@ function mapInvestmentResponse(data) {
     notes: null,
   }));
 
-  // Dokumenty: połącz rekordy z arkusza + pliki z Drive
+  // Dokumenty: połącz rekordy z arkusza + niezarejestrowane pliki z Drive
+  // docs = wpisy z arkusza (widoczne dla klienta) — uploadedBy może być "Klient" lub "designIQ"
+  // files = pliki z Drive BEZ wpisu w arkuszu (niezarejestrowane) — zawsze od strony designIQ
   const documents = [
     ...docs.map(d => ({
       name:          d.name,
       url:           d.url,
-      uploaded_by:   "designIQ",
+      uploaded_by:   d.uploadedBy || "designIQ",
       uploaded_date: d.date,
     })),
     ...files
@@ -45,7 +47,7 @@ function mapInvestmentResponse(data) {
       .map(f => ({
         name:          f.name,
         url:           f.webViewLink || f.webContentLink,
-        uploaded_by:   "Klient",
+        uploaded_by:   "designIQ",
         uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
       })),
   ];

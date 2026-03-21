@@ -62,7 +62,7 @@ var HEADERS = {
     "id", "title", "category", "device", "description", "url", "date", "shopCategory"
   ],
   "Dokumenty": [
-    "id", "projectId", "name", "type", "description", "url", "driveId", "date", "clientVisible"
+    "id", "projectId", "name", "type", "description", "url", "driveId", "date", "clientVisible", "uploadedBy"
   ],
   // ── Konfigurator – zapytania z wyceny ────────────────────────────────────────
   "Leady": [
@@ -520,18 +520,17 @@ function doGet(e) {
         var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
         var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible; });
         // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
-        // Wykluczamy pliki, które mają wpis w Dokumenty z clientVisible=false
-        var hiddenUrls    = {};
-        var hiddenDriveIds = {};
+        // Wykluczamy WSZYSTKIE pliki które mają wpis w arkuszu Dokumenty (widoczne i ukryte),
+        // bo są już obsługiwane przez visibleDocs. Tylko pliki bez wpisu trafiają do driveFiles.
+        var registeredUrls    = {};
+        var registeredDriveIds = {};
         projectDocs.forEach(function(d) {
-          if (!d.clientVisible) {
-            if (d.url)     hiddenUrls[d.url]         = true;
-            if (d.driveId) hiddenDriveIds[d.driveId] = true;
-          }
+          if (d.url)     registeredUrls[d.url]           = true;
+          if (d.driveId) registeredDriveIds[d.driveId]   = true;
         });
         var allDriveFiles = getDriveFiles(project.code || project.id);
         var driveFiles = allDriveFiles.filter(function(f) {
-          return !hiddenUrls[f.webViewLink] && !hiddenDriveIds[f.id];
+          return !registeredUrls[f.webViewLink] && !registeredDriveIds[f.id];
         });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
@@ -939,8 +938,10 @@ function doPost(e) {
           type:          "inne",
           description:   body.description || "Plik od klienta",
           url:           uploaded.url,
+          driveId:       uploaded.driveId,
           date:          nowIso().substring(0, 10),
-          clientVisible: true
+          clientVisible: true,
+          uploadedBy:    "Klient"
         };
         insertRow("Dokumenty", docEntry);
         return ok(Object.assign({}, uploaded, { docId: docEntry.id }));
