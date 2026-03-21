@@ -155,13 +155,13 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   styleEl.textContent = [
     "g > circle:not(.hit), g > text { pointer-events: none; }",
     "circle.hit { pointer-events: auto; cursor: pointer; }",
-    // Efekt hover: transform na KAŻDYM kółku osobno (transform-box:fill-box na circle
-    // liczy fill-box tylko tego kółka → centrum = (cx,cy) punktu, etykieta nigdy nie jest
-    // w bounding-boxie → nie skaluje się i nie przesuwa).
-    ".c-ring { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
-    ".c-dot  { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
-    "g[data-typ]:hover .c-ring { transform: scale(1.8); }",
-    "g[data-typ]:hover .c-dot  { transform: scale(1.8); }",
+    // Hover – każdy element skaluje się wokół własnego fill-box (bounding-boxa).
+    // Dla circle fill-box = środek w (cx,cy) → kółko nie przesuwa się.
+    // Dla text  fill-box = bounding-box tekstu → tekst rośnie od swojego centrum.
+    ".c-ring, .c-dot, .c-label { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
+    "g[data-typ]:hover .c-ring  { transform: scale(1.8); }",
+    "g[data-typ]:hover .c-dot   { transform: scale(1.8); }",
+    "g[data-typ]:hover .c-label { transform: scale(1.35); }",
   ].join(" ");
   svgEl.appendChild(styleEl);
 
@@ -204,7 +204,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const label = document.createElementNS(NS, "text");
         // Odsunięty od kółka tak, żeby nie nakładał się ze skalowanym ring (r*1.8=3.6)
-        label.setAttribute("x", svgX + 3.5); label.setAttribute("y", svgY - 2.5);
+        label.setAttribute("x", svgX + 2.2); label.setAttribute("y", svgY - 2.2);
         label.classList.add("c-label");
         label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
@@ -268,7 +268,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const label = document.createElementNS(NS, "text");
         // Odsunięty od kółka: ring*1.8=5.0 → label zaczyna się za krawędzią
-        label.setAttribute("x", cx + 5.5); label.setAttribute("y", cy - 2.5);
+        label.setAttribute("x", cx + 3.5); label.setAttribute("y", cy - 2.0);
         label.classList.add("c-label");
         label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
