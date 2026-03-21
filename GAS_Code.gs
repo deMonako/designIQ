@@ -358,9 +358,10 @@ function doGet(e) {
         var dwgFolder = getProjectFolder(dwgCode);
         if (!dwgFolder) return ok({ floors: [] });
 
-        var singleSvg  = null;
-        var singleJson = null;
-        var floorMap   = {}; // { "Parter": { svg: null, json: null }, ... }
+        var singleSvg      = null;
+        var singleJson     = null;
+        var singleJsonDate = null;
+        var floorMap       = {}; // { "Parter": { svg: null, json: null, jsonDate: null }, ... }
 
         var dwgFiles = dwgFolder.getFiles();
         while (dwgFiles.hasNext()) {
@@ -371,7 +372,8 @@ function doGet(e) {
           if (nameLow === "projekt.svg") {
             singleSvg  = df.getBlob().getDataAsString("UTF-8");
           } else if (nameLow === "projekt.json") {
-            singleJson = df.getBlob().getDataAsString("UTF-8");
+            singleJson     = df.getBlob().getDataAsString("UTF-8");
+            singleJsonDate = df.getLastUpdated().toISOString();
           } else {
             // projekt_NazwaPiętra.svg / projekt_NazwaPiętra.json
             var floorSvg  = nameLow.match(/^projekt_(.+)\.svg$/);
@@ -380,9 +382,12 @@ function doGet(e) {
               // Pobierz nazwę z oryginalnego pliku (zachowaj wielkość liter)
               var dotIdx   = origName.lastIndexOf(".");
               var floorKey = origName.slice(8, dotIdx); // "projekt_".length === 8
-              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null };
+              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null, jsonDate: null };
               if (floorSvg)  floorMap[floorKey].svg  = df.getBlob().getDataAsString("UTF-8");
-              if (floorJson) floorMap[floorKey].json = df.getBlob().getDataAsString("UTF-8");
+              if (floorJson) {
+                floorMap[floorKey].json     = df.getBlob().getDataAsString("UTF-8");
+                floorMap[floorKey].jsonDate = df.getLastUpdated().toISOString();
+              }
             }
           }
         }
@@ -396,7 +401,7 @@ function doGet(e) {
             if (floorMap[key].json) {
               try { att = JSON.parse(floorMap[key].json); } catch(ex) {}
             }
-            return { name: key, svg: floorMap[key].svg, attribs: att };
+            return { name: key, svg: floorMap[key].svg, attribs: att, date: floorMap[key].jsonDate ?? null };
           });
           return ok({ floors: floors });
         }
@@ -405,7 +410,7 @@ function doGet(e) {
         if (!singleSvg) return ok({ floors: [] });
         var singleAtt = null;
         if (singleJson) { try { singleAtt = JSON.parse(singleJson); } catch(ex) {} }
-        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt }] });
+        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt, date: singleJsonDate ?? null }] });
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────

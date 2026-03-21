@@ -155,9 +155,10 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   styleEl.textContent = [
     "g > circle:not(.hit), g > text { pointer-events: none; }",
     "circle.hit { pointer-events: auto; cursor: pointer; }",
-    // Efekt hover: skalowanie wokół własnego środka (transform-box: fill-box)
-    "g[data-typ] { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
-    "g[data-typ]:hover { transform: scale(1.9); }",
+    // Efekt hover: skaluj tylko wewnętrzną .dot-vis (ring+dot), nie całą grupę z tekstem.
+    // transform-box:fill-box na samych kółkach → centrum = środek kółek = pozycja punktu.
+    ".dot-vis { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
+    "g[data-typ]:hover .dot-vis { transform: scale(1.8); }",
   ].join(" ");
   svgEl.appendChild(styleEl);
 
@@ -183,21 +184,27 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const ring = document.createElementNS(NS, "circle");
         ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
-        ring.setAttribute("r", "2.5"); ring.setAttribute("fill", color);
+        ring.setAttribute("r", "2.0"); ring.setAttribute("fill", color);
         ring.setAttribute("fill-opacity", "0.25");
-        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
+        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.5");
 
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
-        dot.setAttribute("r", "1.5"); dot.setAttribute("fill", color);
-        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.5");
+        dot.setAttribute("r", "1.1"); dot.setAttribute("fill", color);
+        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.4");
+
+        // Skupiamy ring+dot w osobnej grupie — hover skaluje tylko te kółka,
+        // transform-box:fill-box liczone z ich bounding-boxa → środek = pozycja punktu.
+        const dotGroup = document.createElementNS(NS, "g");
+        dotGroup.classList.add("dot-vis");
+        dotGroup.appendChild(ring); dotGroup.appendChild(dot);
 
         const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", svgX + 2.5); label.setAttribute("y", svgY - 2.5);
-        label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
+        label.setAttribute("x", svgX + 2.0); label.setAttribute("y", svgY - 2.0);
+        label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
         label.setAttribute("paint-order", "stroke");
-        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
+        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "0.9");
         label.setAttribute("stroke-linejoin", "round");
         label.textContent = el.tag ?? key;
 
@@ -212,7 +219,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", el.typ || "");
-        g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
+        g.appendChild(dotGroup); g.appendChild(label); g.appendChild(hit);
         svgEl.appendChild(g);
 
       } else {
@@ -224,41 +231,46 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const ring = document.createElementNS(NS, "circle");
         ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
-        ring.setAttribute("r", "3.5"); ring.setAttribute("fill", color);
+        ring.setAttribute("r", "2.8"); ring.setAttribute("fill", color);
         ring.setAttribute("fill-opacity", "0.2");
-        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.8");
+        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
 
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
-        dot.setAttribute("r", "2.2"); dot.setAttribute("fill", color);
-        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.8");
+        dot.setAttribute("r", "1.6"); dot.setAttribute("fill", color);
+        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.6");
+
+        // Skupiamy ring+dot w osobnej grupie (hover scale)
+        const dotGroup = document.createElementNS(NS, "g");
+        dotGroup.classList.add("dot-vis");
+        dotGroup.appendChild(ring); dotGroup.appendChild(dot);
 
         // Odznaka z licznikiem (prawy-górny róg kropki)
         const badgeBg = document.createElementNS(NS, "circle");
-        badgeBg.setAttribute("cx", cx + 2.2); badgeBg.setAttribute("cy", cy - 2.2);
-        badgeBg.setAttribute("r", "2"); badgeBg.setAttribute("fill", "white");
-        badgeBg.setAttribute("stroke", color); badgeBg.setAttribute("stroke-width", "0.5");
+        badgeBg.setAttribute("cx", cx + 1.7); badgeBg.setAttribute("cy", cy - 1.7);
+        badgeBg.setAttribute("r", "1.5"); badgeBg.setAttribute("fill", "white");
+        badgeBg.setAttribute("stroke", color); badgeBg.setAttribute("stroke-width", "0.4");
 
         const badgeTxt = document.createElementNS(NS, "text");
-        badgeTxt.setAttribute("x", cx + 2.2); badgeTxt.setAttribute("y", cy - 2.2);
+        badgeTxt.setAttribute("x", cx + 1.7); badgeTxt.setAttribute("y", cy - 1.7);
         badgeTxt.setAttribute("text-anchor", "middle"); badgeTxt.setAttribute("dominant-baseline", "central");
-        badgeTxt.setAttribute("font-size", "2.2"); badgeTxt.setAttribute("font-weight", "800");
+        badgeTxt.setAttribute("font-size", "1.8"); badgeTxt.setAttribute("font-weight", "800");
         badgeTxt.setAttribute("fill", color); badgeTxt.setAttribute("font-family", "sans-serif");
         badgeTxt.textContent = String(count);
 
         const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", cx + 4.5); label.setAttribute("y", cy - 2.5);
-        label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
+        label.setAttribute("x", cx + 3.8); label.setAttribute("y", cy - 2.0);
+        label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
         label.setAttribute("paint-order", "stroke");
-        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
+        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "0.9");
         label.setAttribute("stroke-linejoin", "round");
         label.textContent = cluster.map(p => p.el.tag ?? p.key).join(", ");
 
         // Większy obszar klikalny dla klastra
         const hit = document.createElementNS(NS, "circle");
         hit.setAttribute("cx", cx); hit.setAttribute("cy", cy);
-        hit.setAttribute("r", "7"); hit.setAttribute("fill", "transparent");
+        hit.setAttribute("r", "6"); hit.setAttribute("fill", "transparent");
         hit.classList.add("hit");
 
         const onClick = (e) => {
@@ -275,7 +287,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", cluster[0].el.typ || "");
         g.setAttribute("data-typs", cluster.map(p => p.el.typ || "").join(","));
-        g.appendChild(ring); g.appendChild(dot); g.appendChild(badgeBg);
+        g.appendChild(dotGroup); g.appendChild(badgeBg);
         g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(hit);
         svgEl.appendChild(g);
       }
@@ -481,6 +493,16 @@ function LoadBar({ progress, label }) {
   );
 }
 
+// ── Formatowanie daty ISO → dd-mm-yyyy ───────────────────────────────────────
+function formatFileDate(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${dd}-${mm}-${d.getFullYear()}`;
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function DwgViewer({ projectCode, height = 520, clientMode = false }) {
@@ -501,6 +523,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const metaRef       = useRef(null);
   const elementsRef   = useRef({});
 
+  const [floorDates,  setFloorDates]  = useState([]);    // daty plików JSON per piętro
+  const [currentDate, setCurrentDate] = useState(null);  // data aktywnego piętra
+
   const tRef         = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef      = useRef(null);
   const hasDragRef   = useRef(false);
@@ -509,6 +534,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const overlayElRef = useRef(null);  // referencja do overlay SVG (filtrowanie typów)
   const floorsDataRef = useRef([]);   // pełne dane wszystkich pięter [{ name, svg, attribs }]
   const loadIdRef    = useRef(0);     // guard przed podwójnym ładowaniem
+  const hasScrolledRef = useRef(false); // scroll do widoku tylko przy pierwszym załadowaniu
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
@@ -543,6 +569,13 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       g.style.display = matches ? "" : "none";
     });
   }, [activeTypes]);
+
+  // Po pierwszym załadowaniu: wyśrodkuj stronę na oknie podglądu
+  useEffect(() => {
+    if (loadState !== "ok_mounted" || hasScrolledRef.current) return;
+    hasScrolledRef.current = true;
+    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [loadState]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
   const mountView = useCallback(async () => {
@@ -667,6 +700,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     tRef.current = { scale: 1, panX: 0, panY: 0 };
     setScalePct(100);
     setActiveFloor(idx);
+    setCurrentDate(floorsDataRef.current[idx]?.date ?? null);
     setLoadState("processing");
   }, []);
 
@@ -703,6 +737,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       setSelected(null);
       setActiveTypes(null);
       setActiveFloor(0);
+      const dates = floors.map(f => f.date ?? null);
+      setFloorDates(dates);
+      setCurrentDate(dates[0] ?? null);
       setLoadState("processing");
     } catch {
       if (myId !== loadIdRef.current) return;  // przestarzałe ładowanie – porzuć
@@ -968,12 +1005,19 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
             {/* Adnotacja: zalecany tryb pełnoekranowy */}
             {!isFullscreen && showFsHint && (
-              <div className="absolute bottom-3 right-3 flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-[11px] px-2.5 py-1.5 rounded-lg shadow-sm z-40 max-w-[220px]">
+              <div className="absolute bottom-10 right-3 flex items-center gap-2 bg-blue-50 border border-blue-200 text-blue-700 text-[11px] px-2.5 py-1.5 rounded-lg shadow-sm z-40 max-w-[220px]">
                 <Maximize2 className="w-3.5 h-3.5 flex-shrink-0" />
                 <span>Zalecany tryb pełnoekranowy dla komfortu pracy</span>
                 <button onClick={() => setShowFsHint(false)} className="text-blue-400 hover:text-blue-600 flex-shrink-0 ml-1">
                   <X className="w-3 h-3" />
                 </button>
+              </div>
+            )}
+
+            {/* Data pliku JSON */}
+            {formatFileDate(currentDate) && (
+              <div className="absolute bottom-3 right-3 text-[10px] text-slate-400 bg-white/80 backdrop-blur border border-slate-200 rounded px-2 py-1 z-40 select-none">
+                Dane z: {formatFileDate(currentDate)}
               </div>
             )}
 
