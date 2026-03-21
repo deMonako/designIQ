@@ -26,7 +26,7 @@ var DRIVE_FOLDER_ID = "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6";
 var SVG_FOLDER_ID = "1a0l_Az9JTxyHWo1Go2EO--RIxHfR7THO";
 
 /** Email administratora – powiadomienia z konfiguratora i kontaktu */
-var ADMIN_EMAIL = "obsługa.designiq@gmail.com";
+var ADMIN_EMAIL = "obsluga.designiq@gmail.com";
 
 /** Dane połączenia z Loxone Miniserver (irytacja instalatora) */
 var LOXONE_HOST        = "dns.loxonecloud.com/504F94D10B9B";

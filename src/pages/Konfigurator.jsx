@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Calculator, Home, CheckCircle, ArrowRight, Layout as LayoutIcon } from "lucide-react";
+import { Calculator, Home, CheckCircle, ArrowRight, Layout as LayoutIcon, AlertTriangle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
@@ -28,6 +28,7 @@ export default function Konfigurator() {
   const [showResult, setShowResult] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [estimatedPrice, setEstimatedPrice] = useState(0);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const configuratorRef = React.useRef(null);
   const [showValidationError, setShowValidationError] = useState({
     step1: false,
@@ -176,9 +177,10 @@ export default function Konfigurator() {
   }
 
   const handleReset = () => {
-    if (!window.confirm("Czy na pewno chcesz rozpocząć od nowa? Twoja aktualna konfiguracja zostanie utracona.")) {
-      return;
-    }
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = () => {
     setFormData({
       metraz: "",
       pakiet: "Smart design",
@@ -189,6 +191,7 @@ export default function Konfigurator() {
     setCurrentStep(1);
     setShowResult(false);
     setShowContactForm(false);
+    setShowResetConfirm(false);
   };
 
   const toggleOption = (type, value) => {
@@ -246,6 +249,53 @@ export default function Konfigurator() {
 
   return (
     <div className="min-h-screen py-12 sm:py-20 overflow-x-hidden">
+      {/* Modal potwierdzenia resetu */}
+      <AnimatePresence>
+        {showResetConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+            onClick={() => setShowResetConfirm(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-shrink-0 w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-orange-500" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">Rozpocząć od nowa?</h3>
+              </div>
+              <p className="text-gray-600 text-sm mb-6">
+                Twoja aktualna konfiguracja zostanie <span className="font-semibold text-gray-800">bezpowrotnie utracona</span>. Czy na pewno chcesz zacząć od początku?
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => setShowResetConfirm(false)}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  Anuluj
+                </Button>
+                <Button
+                  onClick={confirmReset}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  Tak, zacznij od nowa
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="container mx-auto px-3 sm:px-4 lg:px-8 max-w-7xl overflow-x-hidden">
         {/* Header */}
         <motion.div
