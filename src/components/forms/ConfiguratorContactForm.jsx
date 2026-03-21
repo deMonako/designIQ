@@ -6,8 +6,9 @@ import { gtmEvent } from "../analytics";
 import { Mail, Loader2, Send, Undo2, XCircle } from 'lucide-react';
 import { useGasSubmit } from "../../hooks/useGasSubmit";
 import { GAS_CONFIG } from "../../admin/api/gasConfig";
-// useGasSubmit używa GAS_CONFIG.scriptUrl jako domyślnego endpointu
 
+// submitForm jest obsługiwany przez główny GAS (GAS_Code.gs) – nie przez kontaktowy GAS.
+// Kontaktowy GAS (REACT_APP_GAS_CONTACT_URL) obsługuje tylko sendContactForm.
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
 function saveLead(contactData, estimatedPrice) {
@@ -38,7 +39,8 @@ function ConfiguratorContactForm({ formData, estimatedPrice, onCancel }) {
     wiadomosc: ""
   });
 
-  const { isSubmitting, errorMessage, submit } = useGasSubmit(process.env.REACT_APP_GAS_CONTACT_URL);
+  // submitForm → główny unified GAS (GAS_Code.gs) – tam jest obsługa Leady + maile
+  const { isSubmitting, errorMessage, submit } = useGasSubmit(GAS_CONFIG.scriptUrl);
 
   const handleChange = useCallback((field) => (e) => {
     setContactData(prev => ({ ...prev, [field]: e.target.value }));
