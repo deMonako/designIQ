@@ -983,6 +983,8 @@ function doPost(e) {
         };
         insertRow("Leady", lead);
 
+        var sfMailErrors = [];
+
         if (ADMIN_EMAIL) {
           try {
             var quoteFormatted = lead.quoteValue
@@ -1008,7 +1010,7 @@ function doPost(e) {
               configStr + "\n\n" +
               "Data: " + lead.date
             );
-          } catch(ex) {}
+          } catch(ex) { sfMailErrors.push("admin: " + ex.message); }
         }
 
         // Wyślij potwierdzenie do klienta z wycena i konfiguracja
@@ -1043,10 +1045,10 @@ function doPost(e) {
               "\nNasz zespół skontaktuje się z Tobą wkrótce w celu omówienia szczegółów.\n\n" +
               "Pozdrawiamy,\nZespół designIQ"
             );
-          } catch(ex) {}
+          } catch(ex) { sfMailErrors.push("client: " + ex.message); }
         }
 
-        return ok({ id: lead.id, status: "Nowy" });
+        return ok({ id: lead.id, status: "Nowy", mailErrors: sfMailErrors.length ? sfMailErrors : undefined });
       }
 
       // Formularz kontaktowy z konfiguratora
@@ -1063,6 +1065,8 @@ function doPost(e) {
         };
         insertRow("Kontakty", contact);
 
+        var scfMailErrors = [];
+
         // Powiadomienie do admina
         if (ADMIN_EMAIL) {
           try {
@@ -1076,7 +1080,7 @@ function doPost(e) {
               "Wiadomość:\n" + contact.message + "\n\n" +
               "Data: " + contact.date
             );
-          } catch(ex) {}
+          } catch(ex) { scfMailErrors.push("admin: " + ex.message); }
         }
 
         // Potwierdzenie do klienta
@@ -1093,10 +1097,10 @@ function doPost(e) {
               "Pozdrawiamy,\nZespół designIQ\n" +
               "obsługa.designiq@gmail.com"
             );
-          } catch(ex) {}
+          } catch(ex) { scfMailErrors.push("client: " + ex.message); }
         }
 
-        return ok({ id: contact.id });
+        return ok({ id: contact.id, mailErrors: scfMailErrors.length ? scfMailErrors : undefined });
       }
 
       // Irytacja (alternatywnie przez POST)
