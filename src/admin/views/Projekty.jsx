@@ -417,7 +417,7 @@ function ProjectDetail({
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
+    { id: "dokumentacja", label: driveFilesLoading ? `Dokumentacja (${projectDocList.length}+…)` : `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -687,7 +687,7 @@ function ProjectDetail({
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-4 bg-white rounded-xl border border-slate-200 p-1 shadow-sm overflow-x-auto">
         {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === "dokumentacja") loadDriveFiles(); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
               activeTab === tab.id ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
             }`}
@@ -1323,6 +1323,7 @@ function ProjectDetail({
                             setNewDoc({ name: "", type: "pdf", description: "" });
                             setDocFile(null);
                             setShowAddDoc(false);
+                            loadDriveFiles();
                           } catch(err) {
                             setUploadError("Błąd przesyłania: " + err.message);
                           } finally {

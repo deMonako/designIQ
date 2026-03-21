@@ -20,7 +20,7 @@ export default function ContactForm() {
     wiadomosc: ""
   });
 
-  const { isSubmitting, errorMessage, submit } = useGasSubmit(process.env.REACT_APP_GAS_CONTACT_URL);
+  const { isSubmitting, errorMessage, submit } = useGasSubmit(GAS_CONFIG.scriptUrl);
 
   const handleChange = (field) => (e) => {
     setFormData(prev => ({ ...prev, [field]: e.target.value }));
