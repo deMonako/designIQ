@@ -57,6 +57,32 @@ function dotColor(typ) {
   return c;
 }
 
+// ── Clustering: grupowanie punktów w tym samym miejscu ───────────────────────
+
+const CLUSTER_THRESHOLD = 5; // SVG units — próg łączenia punktów
+
+function clusterPoints(items) {
+  // items: [{ key, el, svgX, svgY }]
+  const visited = new Array(items.length).fill(false);
+  const clusters = [];
+  for (let i = 0; i < items.length; i++) {
+    if (visited[i]) continue;
+    const cluster = [items[i]];
+    visited[i] = true;
+    for (let j = i + 1; j < items.length; j++) {
+      if (visited[j]) continue;
+      const dx = items[j].svgX - items[i].svgX;
+      const dy = items[j].svgY - items[i].svgY;
+      if (Math.sqrt(dx * dx + dy * dy) <= CLUSTER_THRESHOLD) {
+        cluster.push(items[j]);
+        visited[j] = true;
+      }
+    }
+    clusters.push(cluster);
+  }
+  return clusters;
+}
+
 // ── Rasteryzacja SVG → Canvas (eliminuje lag pana) ────────────────────────────
 //
 // Canvas to pojedyncza tekstura GPU. Pan = przesunięcie tekstury na GPU.
@@ -139,46 +165,119 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   const listeners = [];
 
   if (transform) {
+    // Zbierz wszystkie punkty z poprawnymi współrzędnymi
+    const points = [];
     Object.entries(elements).forEach(([key, el]) => {
       if (el.X == null || el.Y == null) return;
       const { svgX, svgY } = transform(el.X, el.Y);
       if (!isFinite(svgX) || !isFinite(svgY)) return;
+      points.push({ key, el, svgX, svgY });
+    });
 
-      const color = dotColor(el.typ);
+    // Grupuj nakładające się punkty
+    clusterPoints(points).forEach(cluster => {
+      if (cluster.length === 1) {
+        // ── Pojedynczy punkt (standardowy rendering) ──
+        const { key, el, svgX, svgY } = cluster[0];
+        const color = dotColor(el.typ);
 
-      const ring = document.createElementNS(NS, "circle");
-      ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
-      ring.setAttribute("r", "2.5"); ring.setAttribute("fill", color);
-      ring.setAttribute("fill-opacity", "0.25");
-      ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
+        const ring = document.createElementNS(NS, "circle");
+        ring.setAttribute("cx", svgX); ring.setAttribute("cy", svgY);
+        ring.setAttribute("r", "2.5"); ring.setAttribute("fill", color);
+        ring.setAttribute("fill-opacity", "0.25");
+        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
 
-      const dot = document.createElementNS(NS, "circle");
-      dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
-      dot.setAttribute("r", "1.5"); dot.setAttribute("fill", color);
-      dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.5");
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
+        dot.setAttribute("r", "1.5"); dot.setAttribute("fill", color);
+        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.5");
 
-      const label = document.createElementNS(NS, "text");
-      label.setAttribute("x", svgX + 2.5); label.setAttribute("y", svgY - 2.5);
-      label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
-      label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
-      label.setAttribute("paint-order", "stroke");
-      label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
-      label.setAttribute("stroke-linejoin", "round");
-      label.textContent = el.tag ?? key;
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", svgX + 2.5); label.setAttribute("y", svgY - 2.5);
+        label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
+        label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
+        label.setAttribute("paint-order", "stroke");
+        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
+        label.setAttribute("stroke-linejoin", "round");
+        label.textContent = el.tag ?? key;
 
-      const hit = document.createElementNS(NS, "circle");
-      hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
-      hit.setAttribute("r", "5");   hit.setAttribute("fill", "transparent");
-      hit.classList.add("hit");
+        const hit = document.createElementNS(NS, "circle");
+        hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
+        hit.setAttribute("r", "5"); hit.setAttribute("fill", "transparent");
+        hit.classList.add("hit");
 
-      const onClick  = (e) => { e.stopPropagation(); onSelectFn({ el, tag: el.tag ?? key, clientX: e.clientX, clientY: e.clientY }); };
-      hit.addEventListener("click", onClick);
-      listeners.push({ hit, onClick });
+        const onClick = (e) => { e.stopPropagation(); onSelectFn({ type: "single", el, tag: el.tag ?? key, clientX: e.clientX, clientY: e.clientY }); };
+        hit.addEventListener("click", onClick);
+        listeners.push({ hit, onClick });
 
-      const g = document.createElementNS(NS, "g");
-      g.setAttribute("data-typ", el.typ || "");
-      g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
-      svgEl.appendChild(g);
+        const g = document.createElementNS(NS, "g");
+        g.setAttribute("data-typ", el.typ || "");
+        g.appendChild(ring); g.appendChild(dot); g.appendChild(label); g.appendChild(hit);
+        svgEl.appendChild(g);
+
+      } else {
+        // ── Klaster: wiele punktów w tym samym miejscu ──
+        const cx = cluster.reduce((s, p) => s + p.svgX, 0) / cluster.length;
+        const cy = cluster.reduce((s, p) => s + p.svgY, 0) / cluster.length;
+        const color = dotColor(cluster[0].el.typ);
+        const count = cluster.length;
+
+        const ring = document.createElementNS(NS, "circle");
+        ring.setAttribute("cx", cx); ring.setAttribute("cy", cy);
+        ring.setAttribute("r", "3.5"); ring.setAttribute("fill", color);
+        ring.setAttribute("fill-opacity", "0.2");
+        ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.8");
+
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
+        dot.setAttribute("r", "2.2"); dot.setAttribute("fill", color);
+        dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.8");
+
+        // Odznaka z licznikiem (prawy-górny róg kropki)
+        const badgeBg = document.createElementNS(NS, "circle");
+        badgeBg.setAttribute("cx", cx + 2.2); badgeBg.setAttribute("cy", cy - 2.2);
+        badgeBg.setAttribute("r", "2"); badgeBg.setAttribute("fill", "white");
+        badgeBg.setAttribute("stroke", color); badgeBg.setAttribute("stroke-width", "0.5");
+
+        const badgeTxt = document.createElementNS(NS, "text");
+        badgeTxt.setAttribute("x", cx + 2.2); badgeTxt.setAttribute("y", cy - 2.2);
+        badgeTxt.setAttribute("text-anchor", "middle"); badgeTxt.setAttribute("dominant-baseline", "central");
+        badgeTxt.setAttribute("font-size", "2.2"); badgeTxt.setAttribute("font-weight", "800");
+        badgeTxt.setAttribute("fill", color); badgeTxt.setAttribute("font-family", "sans-serif");
+        badgeTxt.textContent = String(count);
+
+        const label = document.createElementNS(NS, "text");
+        label.setAttribute("x", cx + 4.5); label.setAttribute("y", cy - 2.5);
+        label.setAttribute("font-size", "3.5"); label.setAttribute("fill", color);
+        label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
+        label.setAttribute("paint-order", "stroke");
+        label.setAttribute("stroke", "white"); label.setAttribute("stroke-width", "1");
+        label.setAttribute("stroke-linejoin", "round");
+        label.textContent = cluster.map(p => p.el.tag ?? p.key).join(", ");
+
+        // Większy obszar klikalny dla klastra
+        const hit = document.createElementNS(NS, "circle");
+        hit.setAttribute("cx", cx); hit.setAttribute("cy", cy);
+        hit.setAttribute("r", "7"); hit.setAttribute("fill", "transparent");
+        hit.classList.add("hit");
+
+        const onClick = (e) => {
+          e.stopPropagation();
+          onSelectFn({
+            type: "cluster",
+            items: cluster.map(p => ({ tag: p.el.tag ?? p.key, el: p.el })),
+            clientX: e.clientX, clientY: e.clientY,
+          });
+        };
+        hit.addEventListener("click", onClick);
+        listeners.push({ hit, onClick });
+
+        const g = document.createElementNS(NS, "g");
+        g.setAttribute("data-typ", cluster[0].el.typ || "");
+        g.appendChild(ring); g.appendChild(dot); g.appendChild(badgeBg);
+        g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(hit);
+        svgEl.appendChild(g);
+      }
     });
   }
 
@@ -246,6 +345,58 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
             </div>
           ))}
           {!entries.length && <p className="text-xs text-slate-400 py-2">Brak atrybutów</p>}
+        </div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// ── Panel klastra (wiele punktów w jednym miejscu) ────────────────────────────
+
+function ClusterPanel({ items, pos, onSelectItem, onClose, containerRef }) {
+  const panelW = 240;
+  const panelH = Math.min(items.length * 38 + 52, 320);
+  let left = pos.x + 16, top = pos.y - 28;
+
+  if (containerRef?.current) {
+    const r = containerRef.current.getBoundingClientRect();
+    if (left + panelW > r.width  - 8) left = pos.x - panelW - 16;
+    if (top  + panelH > r.height - 8) top  = r.height - panelH - 8;
+    if (top  < 8) top = 8;
+    if (left < 8) left = 8;
+  }
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="cluster-panel"
+        initial={{ opacity: 0, scale: 0.93, y: -4 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.93 }}
+        transition={{ duration: 0.12 }}
+        style={{ position: "absolute", left, top, width: panelW, zIndex: 50 }}
+        className="bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden pointer-events-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+          <div className="w-2.5 h-2.5 rounded-full bg-slate-400 flex-shrink-0" />
+          <span className="text-xs font-bold text-slate-700 flex-1">{items.length} punkty w tym miejscu</span>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 flex-shrink-0 p-0.5">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <div className="py-1 max-h-64 overflow-y-auto">
+          {items.map(({ tag, el }) => (
+            <button
+              key={tag}
+              onClick={() => onSelectItem({ tag, attrib: el })}
+              className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-orange-50 text-left transition-colors"
+            >
+              <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: dotColor(el.typ) }} />
+              <span className="text-xs font-semibold text-slate-800 w-10 flex-shrink-0">{tag}</span>
+              <span className="text-xs text-slate-400 truncate">{el.typ || "—"}</span>
+            </button>
+          ))}
         </div>
       </motion.div>
     </AnimatePresence>
@@ -471,14 +622,15 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
     const hasCoords = m && Object.values(elems).some(e => e.X != null);
     if (hasCoords) {
-      const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, vbX, vbY, elems, m, ({ tag, attrib, clientX, clientY, el: attEl }) => {
+      const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, vbX, vbY, elems, m, (selection) => {
         if (hasDragRef.current) return;
         const rect = containerRef.current?.getBoundingClientRect();
-        setSelected({
-          tag,
-          attrib: attEl,
-          pos: rect ? { x: clientX - rect.left, y: clientY - rect.top } : { x: 120, y: 80 },
-        });
+        const pos = rect ? { x: selection.clientX - rect.left, y: selection.clientY - rect.top } : { x: 120, y: 80 };
+        if (selection.type === "cluster") {
+          setSelected({ type: "cluster", items: selection.items, pos });
+        } else {
+          setSelected({ type: "single", tag: selection.tag, attrib: selection.el, pos });
+        }
       });
 
       overlayEl.addEventListener("click", (e) => {
@@ -820,13 +972,23 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
               </div>
             )}
 
-            <AttribPanel
-              tag={selected?.tag}
-              attrib={selected?.attrib}
-              pos={selected?.pos}
-              onClose={() => setSelected(null)}
-              containerRef={containerRef}
-            />
+            {selected?.type === "cluster" ? (
+              <ClusterPanel
+                items={selected.items}
+                pos={selected.pos}
+                onSelectItem={({ tag, attrib }) => setSelected({ type: "single", tag, attrib, pos: selected.pos })}
+                onClose={() => setSelected(null)}
+                containerRef={containerRef}
+              />
+            ) : (
+              <AttribPanel
+                tag={selected?.tag}
+                attrib={selected?.attrib}
+                pos={selected?.pos}
+                onClose={() => setSelected(null)}
+                containerRef={containerRef}
+              />
+            )}
           </>
         )}
 
