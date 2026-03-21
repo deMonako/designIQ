@@ -155,10 +155,13 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   styleEl.textContent = [
     "g > circle:not(.hit), g > text { pointer-events: none; }",
     "circle.hit { pointer-events: auto; cursor: pointer; }",
-    // Efekt hover: skaluj tylko wewnętrzną .dot-vis (ring+dot), nie całą grupę z tekstem.
-    // transform-box:fill-box na samych kółkach → centrum = środek kółek = pozycja punktu.
-    ".dot-vis { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
-    "g[data-typ]:hover .dot-vis { transform: scale(1.8); }",
+    // Efekt hover: transform na KAŻDYM kółku osobno (transform-box:fill-box na circle
+    // liczy fill-box tylko tego kółka → centrum = (cx,cy) punktu, etykieta nigdy nie jest
+    // w bounding-boxie → nie skaluje się i nie przesuwa).
+    ".c-ring { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
+    ".c-dot  { transform-box: fill-box; transform-origin: center; transition: transform 0.18s cubic-bezier(0.34,1.56,0.64,1); }",
+    "g[data-typ]:hover .c-ring { transform: scale(1.8); }",
+    "g[data-typ]:hover .c-dot  { transform: scale(1.8); }",
   ].join(" ");
   svgEl.appendChild(styleEl);
 
@@ -187,20 +190,22 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         ring.setAttribute("r", "2.0"); ring.setAttribute("fill", color);
         ring.setAttribute("fill-opacity", "0.25");
         ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.5");
+        ring.classList.add("c-ring"); // transform na tym kółku, fill-box = środek w (cx,cy)
 
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", svgX); dot.setAttribute("cy", svgY);
         dot.setAttribute("r", "1.1"); dot.setAttribute("fill", color);
         dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.4");
+        dot.classList.add("c-dot"); // jw.
 
-        // Skupiamy ring+dot w osobnej grupie — hover skaluje tylko te kółka,
-        // transform-box:fill-box liczone z ich bounding-boxa → środek = pozycja punktu.
         const dotGroup = document.createElementNS(NS, "g");
         dotGroup.classList.add("dot-vis");
         dotGroup.appendChild(ring); dotGroup.appendChild(dot);
 
         const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", svgX + 2.0); label.setAttribute("y", svgY - 2.0);
+        // Odsunięty od kółka tak, żeby nie nakładał się ze skalowanym ring (r*1.8=3.6)
+        label.setAttribute("x", svgX + 3.5); label.setAttribute("y", svgY - 2.5);
+        label.classList.add("c-label");
         label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
         label.setAttribute("paint-order", "stroke");
@@ -234,13 +239,14 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         ring.setAttribute("r", "2.8"); ring.setAttribute("fill", color);
         ring.setAttribute("fill-opacity", "0.2");
         ring.setAttribute("stroke", color); ring.setAttribute("stroke-width", "0.6");
+        ring.classList.add("c-ring"); // transform na kółku, fill-box = środek w (cx,cy)
 
         const dot = document.createElementNS(NS, "circle");
         dot.setAttribute("cx", cx); dot.setAttribute("cy", cy);
         dot.setAttribute("r", "1.6"); dot.setAttribute("fill", color);
         dot.setAttribute("stroke", "white"); dot.setAttribute("stroke-width", "0.6");
+        dot.classList.add("c-dot"); // jw.
 
-        // Skupiamy ring+dot w osobnej grupie (hover scale)
         const dotGroup = document.createElementNS(NS, "g");
         dotGroup.classList.add("dot-vis");
         dotGroup.appendChild(ring); dotGroup.appendChild(dot);
@@ -250,6 +256,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         badgeBg.setAttribute("cx", cx + 1.7); badgeBg.setAttribute("cy", cy - 1.7);
         badgeBg.setAttribute("r", "1.5"); badgeBg.setAttribute("fill", "white");
         badgeBg.setAttribute("stroke", color); badgeBg.setAttribute("stroke-width", "0.4");
+        badgeBg.classList.add("c-badge-bg");
 
         const badgeTxt = document.createElementNS(NS, "text");
         badgeTxt.setAttribute("x", cx + 1.7); badgeTxt.setAttribute("y", cy - 1.7);
@@ -257,9 +264,12 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         badgeTxt.setAttribute("font-size", "1.8"); badgeTxt.setAttribute("font-weight", "800");
         badgeTxt.setAttribute("fill", color); badgeTxt.setAttribute("font-family", "sans-serif");
         badgeTxt.textContent = String(count);
+        badgeTxt.classList.add("c-badge-txt");
 
         const label = document.createElementNS(NS, "text");
-        label.setAttribute("x", cx + 3.8); label.setAttribute("y", cy - 2.0);
+        // Odsunięty od kółka: ring*1.8=5.0 → label zaczyna się za krawędzią
+        label.setAttribute("x", cx + 5.5); label.setAttribute("y", cy - 2.5);
+        label.classList.add("c-label");
         label.setAttribute("font-size", "3.0"); label.setAttribute("fill", color);
         label.setAttribute("font-family", "sans-serif"); label.setAttribute("font-weight", "600");
         label.setAttribute("paint-order", "stroke");
@@ -287,6 +297,10 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", cluster[0].el.typ || "");
         g.setAttribute("data-typs", cluster.map(p => p.el.typ || "").join(","));
+        // Pełne dane klastra — używane przez filtr do dynamicznej aktualizacji koloru/odznaki
+        g.setAttribute("data-cluster-json", JSON.stringify(
+          cluster.map(p => ({ typ: p.el.typ || "", tag: p.el.tag ?? p.key }))
+        ));
         g.appendChild(dotGroup); g.appendChild(badgeBg);
         g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(hit);
         svgEl.appendChild(g);
@@ -561,20 +575,58 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (!overlay) return;
     const groups = overlay.querySelectorAll("g[data-typ]");
     groups.forEach(g => {
-      if (!activeTypes || activeTypes.size === 0) { g.style.display = ""; return; }
-      const typs = g.getAttribute("data-typs");
-      const matches = typs
-        ? typs.split(",").some(t => activeTypes.has(t))
-        : activeTypes.has(g.getAttribute("data-typ"));
-      g.style.display = matches ? "" : "none";
+      const clusterRaw = g.getAttribute("data-cluster-json");
+
+      if (clusterRaw) {
+        // ── Klaster: dynamiczna aktualizacja koloru / odznaki / etykiety ──
+        let items;
+        try { items = JSON.parse(clusterRaw); } catch { g.style.display = "none"; return; }
+        const visible = (!activeTypes || activeTypes.size === 0)
+          ? items
+          : items.filter(it => activeTypes.has(it.typ));
+
+        if (visible.length === 0) { g.style.display = "none"; return; }
+        g.style.display = "";
+
+        const newColor = dotColor(visible[0].typ);
+
+        // Zaktualizuj kolor kółek
+        const ring = g.querySelector(".c-ring");
+        const dot  = g.querySelector(".c-dot");
+        if (ring) { ring.setAttribute("fill", newColor); ring.setAttribute("stroke", newColor); }
+        if (dot)  dot.setAttribute("fill", newColor);
+
+        // Zaktualizuj odznakę (badge)
+        const badgeBg  = g.querySelector(".c-badge-bg");
+        const badgeTxt = g.querySelector(".c-badge-txt");
+        if (visible.length <= 1) {
+          if (badgeBg)  badgeBg.style.display  = "none";
+          if (badgeTxt) badgeTxt.style.display = "none";
+        } else {
+          if (badgeBg)  { badgeBg.style.display  = ""; badgeBg.setAttribute("stroke", newColor); }
+          if (badgeTxt) { badgeTxt.style.display = ""; badgeTxt.setAttribute("fill", newColor); badgeTxt.textContent = String(visible.length); }
+        }
+
+        // Zaktualizuj etykietę tekstową
+        const label = g.querySelector(".c-label");
+        if (label) { label.setAttribute("fill", newColor); label.textContent = visible.map(it => it.tag).join(", "); }
+
+      } else {
+        // ── Pojedynczy punkt: pokaż/ukryj ──
+        if (!activeTypes || activeTypes.size === 0) { g.style.display = ""; return; }
+        g.style.display = activeTypes.has(g.getAttribute("data-typ")) ? "" : "none";
+      }
     });
   }, [activeTypes]);
 
-  // Po pierwszym załadowaniu: wyśrodkuj stronę na oknie podglądu
+  // Po pierwszym załadowaniu: wyśrodkuj stronę na oknie podglądu.
+  // setTimeout 150ms daje przeglądarce czas na ustabilizowanie layoutu przed scrollem.
   useEffect(() => {
     if (loadState !== "ok_mounted" || hasScrolledRef.current) return;
     hasScrolledRef.current = true;
-    containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(() => {
+      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
   }, [loadState]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
