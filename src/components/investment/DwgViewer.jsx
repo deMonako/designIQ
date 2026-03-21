@@ -274,6 +274,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", cluster[0].el.typ || "");
+        g.setAttribute("data-typs", cluster.map(p => p.el.typ || "").join(","));
         g.appendChild(ring); g.appendChild(dot); g.appendChild(badgeBg);
         g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(hit);
         svgEl.appendChild(g);
@@ -534,8 +535,12 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (!overlay) return;
     const groups = overlay.querySelectorAll("g[data-typ]");
     groups.forEach(g => {
-      const typ = g.getAttribute("data-typ");
-      g.style.display = (!activeTypes || activeTypes.size === 0 || activeTypes.has(typ)) ? "" : "none";
+      if (!activeTypes || activeTypes.size === 0) { g.style.display = ""; return; }
+      const typs = g.getAttribute("data-typs");
+      const matches = typs
+        ? typs.split(",").some(t => activeTypes.has(t))
+        : activeTypes.has(g.getAttribute("data-typ"));
+      g.style.display = matches ? "" : "none";
     });
   }, [activeTypes]);
 
