@@ -137,6 +137,10 @@ function parseCell(key, val) {
     return Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
   }
   if (typeof val === "number") return val;
+  // Obsługa tekstowych wartości logicznych ("TRUE"/"FALSE") – mogą pojawić się
+  // przy ręcznej edycji arkusza lub imporcie CSV
+  if (val === "TRUE" || val === "true") return true;
+  if (val === "FALSE" || val === "false") return false;
   if (JSON_FIELDS.indexOf(key) >= 0 && typeof val === "string" && val.trim().length > 0) {
     try { return JSON.parse(val); } catch(e) { return val; }
   }
@@ -559,7 +563,7 @@ function doGet(e) {
 
         var allDocs   = sheetToObjects("Dokumenty");
         var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
-        var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible; });
+        var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible === true; });
         // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
         // Wykluczamy WSZYSTKIE pliki które mają wpis w arkuszu Dokumenty (widoczne i ukryte),
         // bo są już obsługiwane przez visibleDocs. Tylko pliki bez wpisu trafiają do driveFiles.
@@ -813,9 +817,9 @@ function doPost(e) {
         all = sheetToObjects("Dokumenty");
         obj = findById(all, body.id);
         if (!obj) return err("Dokument nie znaleziony: " + body.id);
-        // Używamy przekazanej wartości clientVisible (jeśli podana), inaczej przełączamy
-        var newVisible = (body.clientVisible !== undefined && body.clientVisible !== null)
-          ? Boolean(body.clientVisible) : !obj.clientVisible;
+        // Używamy przekazanej wartości clientVisible (jeśli podana jako bool), inaczej przełączamy
+        var newVisible = typeof body.clientVisible === "boolean"
+          ? body.clientVisible : !obj.clientVisible;
         return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: newVisible })));
 
       case "deleteProjectFile":
