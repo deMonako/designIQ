@@ -385,8 +385,6 @@ const TABS = [
   { id: "smart_home", label: "Smart Home",           icon: Cpu },
   { id: "klasyczna",  label: "Klasyczna instalacja", icon: Zap },
   { id: "zestawienie",label: "Zestawienie",          icon: Package },
-  { id: "layout",     label: "Layout",               icon: FolderKanban },
-  { id: "obwody",     label: "Obwody",               icon: AlertTriangle },
 ];
 
 export default function KalkulatorSzafy({

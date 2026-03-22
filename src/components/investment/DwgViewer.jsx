@@ -625,7 +625,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (loadState !== "ok_mounted" || hasScrolledRef.current) return;
     hasScrolledRef.current = true;
     setTimeout(() => {
-      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 150);
   }, [loadState]);
 

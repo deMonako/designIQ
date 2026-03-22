@@ -6,9 +6,7 @@ import { Card, CardContent } from "../ui/card";
 import { Upload, FileText, Image, Download, Loader2, X, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
-import { GAS_CONFIG } from "../../admin/api/gasConfig";
-
-const GAS_URL = GAS_CONFIG.scriptUrl;
+import { gasPost } from "../../admin/api/gasClient";
 
 // Bezpieczne formatowanie daty — obsługuje ISO strings i YYYY-MM-DD
 function formatDate(dateStr) {
@@ -53,42 +51,49 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
     }
 
     setIsUploading(true);
-    const reader = new FileReader();
-    
-    reader.onload = async () => {
-      try {
-        // Usuń prefix "data:mime/type;base64," — GAS oczekuje czystego base64
-        const dataUrl = reader.result;
-        const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl;
+    try {
+      // Odczyt pliku jako base64
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = (e) => resolve(e.target.result.split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(selectedFile);
+      });
 
-        const response = await fetch(GAS_URL, {
-          method: "POST",
-          body: JSON.stringify({
-            action: "uploadInvestmentFile",
-            code: investment.code || investment.investment_code,
-            name: selectedFile.name,
-            mimeType: selectedFile.type,
-            base64,
-          })
-        });
+      const projectCode = investment.code || investment.investment_code;
 
-        const result = await response.json();
+      // Krok 1: upload pliku na Drive
+      const uploaded = await gasPost("uploadFile", {
+        base64,
+        name:        selectedFile.name,
+        mimeType:    selectedFile.type || "application/octet-stream",
+        projectCode,
+      });
 
-        if (result.ok) {
-          toast.success("Plik przesłany!");
-          setSelectedFile(null);
-          if (onFileUploaded) onFileUploaded();
-        } else {
-          throw new Error(result.error || "Błąd przesyłania");
-        }
-      } catch (error) {
-        toast.error("Błąd: " + error.message);
-      } finally {
-        setIsUploading(false);
-      }
-    };
+      // Krok 2: utwórz wpis w arkuszu Dokumenty (widoczny dla klienta)
+      await gasPost("createProjectDoc", {
+        doc: {
+          id:            "doc-" + Date.now(),
+          projectId:     investment.id || "",
+          name:          selectedFile.name,
+          type:          "inne",
+          description:   "Plik od klienta",
+          url:           uploaded.url,
+          driveId:       uploaded.driveId,
+          date:          new Date().toISOString().substring(0, 10),
+          clientVisible: true,
+          uploadedBy:    "Klient",
+        },
+      });
 
-    reader.readAsDataURL(selectedFile);
+      toast.success("Plik przesłany pomyślnie!");
+      setSelectedFile(null);
+      if (onFileUploaded) onFileUploaded();
+    } catch (error) {
+      toast.error("Błąd przesyłania: " + (error.message || "Sprawdź połączenie"));
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const getFileIcon = (fileName) => {

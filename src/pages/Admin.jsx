@@ -512,7 +512,7 @@ export default function Admin() {
           />
         );
       case "zakupy":
-        return <ZakupyView projects={projects} initialProjectId={zakupyInitProjectId} initialItems={zakupyInitItems} />;
+        return null; // renderowane poza switchem (keep-alive)
       case "baza_wiedzy":
         return <Materialy materials={materials} onAddMaterial={handleAddMaterial} onDeleteMaterial={handleDeleteMaterial} />;
       case "analityka":
@@ -525,7 +525,7 @@ export default function Admin() {
       case "kalkulator":
         return <Kalkulator projects={projects} kalkulatorSettings={kalkulatorSettings} />;
       case "kalkulator_szafy":
-        return <KalkulatorSzafy projects={projects} kalkulatorSettings={kalkulatorSettings} onExportToZakupy={handleExportBomToZakupy} />;
+        return null; // renderowane poza switchem (keep-alive)
       case "ustawienia":
         return (
           <Ustawienia
@@ -555,6 +555,24 @@ export default function Admin() {
         onRefresh={GAS_ON ? handleRefresh : undefined}
       >
         {renderView()}
+
+        {/* Keep-alive: komponenty z własnym ładowaniem danych pozostają zamontowane ────── */}
+        {/* ZakupyView i KalkulatorSzafy ładują katalog z GAS przy każdym montowaniu      */}
+        {/* Używamy display:none zamiast warunkowego renderowania, żeby nie resetować stanu */}
+        <div style={{ display: currentView === "zakupy" ? "" : "none" }}>
+          <ZakupyView
+            projects={projects}
+            initialProjectId={zakupyInitProjectId}
+            initialItems={zakupyInitItems}
+          />
+        </div>
+        <div style={{ display: currentView === "kalkulator_szafy" ? "" : "none" }}>
+          <KalkulatorSzafy
+            projects={projects}
+            kalkulatorSettings={kalkulatorSettings}
+            onExportToZakupy={handleExportBomToZakupy}
+          />
+        </div>
       </AdminLayout>
 
       <AnimatePresence>

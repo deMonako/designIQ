@@ -595,12 +595,26 @@ function LeadDetail({ lead, onBack, onUpdateLead, onDeleteLead, onConvertToClien
             <ExternalLink className="w-4 h-4 text-orange-500" /> Dane z konfiguratora
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {Object.entries(configData).map(([key, value]) => (
-              <div key={key} className="flex gap-2 text-sm">
-                <span className="text-slate-400 min-w-0 truncate">{key}:</span>
-                <span className="font-medium text-slate-800 truncate">{String(value)}</span>
-              </div>
-            ))}
+            {Object.entries(configData).map(([key, value]) => {
+              let display;
+              if (key === "roomLayout" && Array.isArray(value)) {
+                // Pokaż nazwy pomieszczeń
+                const names = value.map(r => r?.name || r?.type || "?").join(", ");
+                display = `${value.length} pom.: ${names}`;
+              } else if (Array.isArray(value)) {
+                display = value.join(", ") || "—";
+              } else if (value === null || value === undefined) {
+                display = "—";
+              } else {
+                display = String(value);
+              }
+              return (
+                <div key={key} className="flex gap-2 text-sm">
+                  <span className="text-slate-400 min-w-0 shrink-0">{key}:</span>
+                  <span className="font-medium text-slate-800 break-all">{display}</span>
+                </div>
+              );
+            })}
           </div>
           {lead.quoteValue > 0 && (
             <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">

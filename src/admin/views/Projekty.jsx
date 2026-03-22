@@ -417,7 +417,7 @@ function ProjectDetail({
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: driveFilesLoading ? `Dokumentacja (${projectDocList.length}+…)` : `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
+    { id: "dokumentacja", label: driveFilesLoading ? "Dokumentacja (…)" : `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
