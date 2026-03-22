@@ -28,6 +28,10 @@ var SVG_FOLDER_ID = "1a0l_Az9JTxyHWo1Go2EO--RIxHfR7THO";
 /** Email administratora – powiadomienia z konfiguratora i kontaktu */
 var ADMIN_EMAIL = "obsluga.designiq@gmail.com";
 
+/** Dane firmy używane w mailach */
+var COMPANY_NAME  = "DesignIQ Smart Home";
+var COMPANY_EMAIL = "kontakt@designiq.pl";
+
 /** Dane połączenia z Loxone Miniserver (irytacja instalatora) */
 var LOXONE_HOST        = "dns.loxonecloud.com/504F94D10B9B";
 var LOXONE_USER        = "web";
@@ -305,6 +309,43 @@ function uploadBlob(base64, name, mimeType, folder) {
     url:         newFile.getUrl(),
     downloadUrl: "https://drive.google.com/uc?id=" + newFile.getId() + "&export=download"
   };
+}
+
+// ─── Helpery mailowe ─────────────────────────────────────────────────────────────
+
+/**
+ * Formatuje obiekt configData do HTML dla maili.
+ * Obsługuje tablice (podstawowe, dodatkowe) i roomLayout jako listę.
+ */
+function cleanConfigurationHtml(configData) {
+  if (!configData || typeof configData !== "object") return "<em>Brak danych konfiguracji.</em>";
+  var result = [];
+  var cd = configData;
+
+  if (cd.metraz)   result.push("<strong>Metraż:</strong> " + cd.metraz + " m²");
+  if (cd.pakiet)   result.push("<strong>Pakiet:</strong> " + cd.pakiet);
+
+  var podst = cd.podstawowe;
+  result.push("<strong>Funkcje podstawowe:</strong> " +
+    (podst && podst.length > 0 ? (Array.isArray(podst) ? podst.join(", ") : podst) : "Brak"));
+
+  var dod = cd.dodatkowe;
+  result.push("<strong>Funkcje dodatkowe:</strong> " +
+    (dod && dod.length > 0 ? (Array.isArray(dod) ? dod.join(", ") : dod) : "Brak"));
+
+  if (cd.roomLayout && cd.roomLayout.length > 0) {
+    var rooms = cd.roomLayout.map(function(r) {
+      var feats = (r.features || []).join(", ");
+      return "<li><strong>" + r.name + "</strong> (" + r.type + ")" +
+             (feats ? " – Funkcje: " + feats : "") + "</li>";
+    }).join("");
+    result.push("<strong>Szczegóły Pomieszczeń:</strong><ul style=\"margin-top:5px;padding-left:20px;\">" + rooms + "</ul>");
+  }
+
+  if (cd.miasto) result.push("<strong>Miasto:</strong> " + cd.miasto);
+  if (cd.uwagi)  result.push("<strong>Uwagi:</strong> " + cd.uwagi);
+
+  return result.join("<br/>");
 }
 
 // ─── doGet – odczyt danych ───────────────────────────────────────────────────────
@@ -820,16 +861,20 @@ function doPost(e) {
 
         if (ADMIN_EMAIL && newLeadObj.source) {
           try {
-            MailApp.sendEmail(
-              ADMIN_EMAIL,
-              "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""),
-              "Nowy lead z formularza: " + newLeadObj.source + "\n\n" +
-              "Imię: "    + (newLeadObj.name  || "") + "\n" +
-              "Email: "   + (newLeadObj.email || "") + "\n" +
-              "Telefon: " + (newLeadObj.phone || "") + "\n" +
-              (newLeadObj.notes ? "\nNotatki:\n" + newLeadObj.notes + "\n" : "") +
-              "\nData: " + newLeadObj.date
-            );
+            GmailApp.sendEmail(ADMIN_EMAIL, "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""), "", {
+              name: COMPANY_NAME,
+              htmlBody:
+                "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
+                "<div style=\"max-width:600px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:8px;\">" +
+                "<h2 style=\"color:#FF7F50;\">Nowy lead – " + newLeadObj.source + "</h2>" +
+                "<table style=\"width:100%;border-collapse:collapse;\">" +
+                "<tr><td style=\"padding:6px 0;font-weight:bold;width:30%;\">Imię:</td><td>" + (newLeadObj.name  || "") + "</td></tr>" +
+                "<tr><td style=\"padding:6px 0;font-weight:bold;\">Email:</td><td>" + (newLeadObj.email || "") + "</td></tr>" +
+                "<tr><td style=\"padding:6px 0;font-weight:bold;\">Telefon:</td><td>" + (newLeadObj.phone || "") + "</td></tr>" +
+                (newLeadObj.notes ? "<tr><td style=\"padding:6px 0;font-weight:bold;\">Notatki:</td><td>" + newLeadObj.notes + "</td></tr>" : "") +
+                "<tr><td style=\"padding:6px 0;font-weight:bold;\">Data:</td><td>" + newLeadObj.date + "</td></tr>" +
+                "</table></div></body></html>"
+            });
           } catch(ex) {}
         }
 
@@ -984,67 +1029,88 @@ function doPost(e) {
         insertRow("Leady", lead);
 
         var sfMailErrors = [];
+        var formattedConfig = cleanConfigurationHtml(lead.configData);
+        var quoteStr = lead.quoteValue
+          ? Number(lead.quoteValue).toLocaleString("pl-PL") + " zł netto"
+          : "—";
 
+        // Mail do admina
         if (ADMIN_EMAIL) {
           try {
-            var quoteFormatted = lead.quoteValue
-              ? "Wycena: " + Number(lead.quoteValue).toLocaleString("pl-PL") + " zł\n"
-              : "";
-            var configStr = "";
-            if (lead.configData && typeof lead.configData === "object") {
-              var configLines = [];
-              var configKeys = Object.keys(lead.configData);
-              for (var ci = 0; ci < configKeys.length; ci++) {
-                configLines.push("  " + configKeys[ci] + ": " + lead.configData[configKeys[ci]]);
-              }
-              if (configLines.length > 0) configStr = "\nKonfiguracja:\n" + configLines.join("\n");
-            }
-            MailApp.sendEmail(
-              ADMIN_EMAIL,
-              "🏠 Nowe zapytanie z konfiguratora – " + lead.name,
-              "Nowe zapytanie z konfiguratora designIQ\n\n" +
-              "Imię: " + lead.name + "\n" +
-              "Email: " + lead.email + "\n" +
-              "Telefon: " + lead.phone + "\n" +
-              quoteFormatted +
-              configStr + "\n\n" +
-              "Data: " + lead.date
-            );
+            GmailApp.sendEmail(ADMIN_EMAIL, "🏠 Nowe zapytanie z konfiguratora – " + lead.name, "", {
+              name: COMPANY_NAME + " – Formularz",
+              htmlBody:
+                "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
+                "<div style=\"max-width:600px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:8px;\">" +
+                "<h2 style=\"color:#FF7F50;border-bottom:2px solid #FF7F50;padding-bottom:10px;\">NOWE ZAPYTANIE Z KONFIGURATORA SMART HOME</h2>" +
+                "<p>Otrzymano nowe zapytanie od potencjalnego klienta. Szczegóły:</p>" +
+                "<table style=\"width:100%;margin-top:15px;border-collapse:collapse;\">" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;width:30%;\">Data/Czas:</td><td style=\"padding:8px 0;\">" + lead.date + "</td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Imię i Nazwisko:</td><td style=\"padding:8px 0;\">" + lead.name + "</td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Email:</td><td style=\"padding:8px 0;\"><a href=\"mailto:" + lead.email + "\">" + lead.email + "</a></td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Telefon:</td><td style=\"padding:8px 0;\">" + lead.phone + "</td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;color:#FF7F50;\">Szacunkowa Wycena:</td><td style=\"padding:8px 0;font-weight:bold;color:#FF7F50;\">" + quoteStr + "</td></tr>" +
+                "</table>" +
+                "<h3 style=\"color:#444;margin-top:20px;\">Pełna Konfiguracja:</h3>" +
+                "<div style=\"background-color:#eee;padding:10px;border-radius:4px;font-size:0.9em;\">" + formattedConfig + "</div>" +
+                "</div></body></html>"
+            });
           } catch(ex) { sfMailErrors.push("admin: " + ex.message); }
         }
 
-        // Wyślij potwierdzenie do klienta z wycena i konfiguracja
+        // Potwierdzenie do klienta
         if (body.email) {
           try {
-            var clientQuote = lead.quoteValue
-              ? "Szacunkowa wycena: " + Number(lead.quoteValue).toLocaleString("pl-PL") + " zł netto\n"
-              : "";
-            var clientConfig = "";
-            if (lead.configData && typeof lead.configData === "object") {
-              var clientConfigLines = [];
-              var clientConfigKeys = Object.keys(lead.configData);
-              for (var cc = 0; cc < clientConfigKeys.length; cc++) {
-                var ck = clientConfigKeys[cc];
-                var cv = lead.configData[ck];
-                if (cv !== null && cv !== undefined && cv !== "") {
-                  clientConfigLines.push("  • " + ck + ": " + cv);
-                }
-              }
-              if (clientConfigLines.length > 0) {
-                clientConfig = "\nTwoja konfiguracja:\n" + clientConfigLines.join("\n") + "\n";
-              }
+            // Budujemy listę elementów konfiguracji (bez roomLayout)
+            var cd = lead.configData || {};
+            var simpleItems = [];
+            if (cd.metraz)     simpleItems.push("<strong>Metraż:</strong> " + cd.metraz + " m²");
+            if (cd.pakiet)     simpleItems.push("<strong>Pakiet:</strong> " + cd.pakiet);
+            var podst = cd.podstawowe;
+            simpleItems.push("<strong>Funkcje podstawowe:</strong> " +
+              (podst && podst.length > 0 ? (Array.isArray(podst) ? podst.join(", ") : podst) : "Brak"));
+            var dod = cd.dodatkowe;
+            simpleItems.push("<strong>Funkcje dodatkowe:</strong> " +
+              (dod && dod.length > 0 ? (Array.isArray(dod) ? dod.join(", ") : dod) : "Brak"));
+
+            var simpleItemsHtml = simpleItems.map(function(item) {
+              return "<li style=\"margin-bottom:8px;padding-left:20px;position:relative;\">" +
+                     "<span style=\"position:absolute;left:0;color:#FF7F50;font-size:1.2em;\">&#x25cf;</span> " + item + "</li>";
+            }).join("");
+
+            var roomLayoutHtml = "";
+            if (cd.roomLayout && cd.roomLayout.length > 0) {
+              var rooms = cd.roomLayout.map(function(r) {
+                var feats = (r.features || []).join(", ");
+                return "<li><strong>" + r.name + "</strong> (" + r.type + ")" +
+                       (feats ? " – Funkcje: " + feats : "") + "</li>";
+              }).join("");
+              roomLayoutHtml = "<h3 style=\"color:#444;margin-top:20px;\">Szczegóły Pomieszczeń:</h3>" +
+                               "<ul style=\"padding-left:20px;\">" + rooms + "</ul>";
             }
-            MailApp.sendEmail(
-              body.email,
-              "Potwierdzenie zapytania i szacunkowa wycena – designIQ",
-              "Dzień dobry " + (body.name || "") + ",\n\n" +
-              "Dziękujemy za skorzystanie z konfiguratora designIQ.\n" +
-              "Poniżej znajdziesz podsumowanie Twojego zapytania.\n\n" +
-              clientQuote +
-              clientConfig +
-              "\nNasz zespół skontaktuje się z Tobą wkrótce w celu omówienia szczegółów.\n\n" +
-              "Pozdrawiamy,\nZespół designIQ"
-            );
+
+            GmailApp.sendEmail(body.email, "Potwierdzenie zapytania do " + COMPANY_NAME, "", {
+              name: COMPANY_NAME,
+              replyTo: ADMIN_EMAIL,
+              htmlBody:
+                "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
+                "<div style=\"max-width:600px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:8px;\">" +
+                "<h2 style=\"color:#FF7F50;border-bottom:2px solid #FF7F50;padding-bottom:10px;\">Dziękujemy za zapytanie!</h2>" +
+                "<p>Potwierdzamy otrzymanie Twojego zapytania z konfiguratora Smart Home. Poniżej szacunkowy koszt twojej inwestycji uwzględniający już koszt materiałów i naszej pracy:</p>" +
+                "<h3 style=\"color:#444;margin-top:20px;\">Podsumowanie Wyceny</h3>" +
+                "<div style=\"background-color:#fffaf0;border:1px solid #ffeedd;padding:15px;border-radius:8px;text-align:center;\">" +
+                "<p style=\"font-size:1.1em;margin:0;color:#555;\">Szacunkowa Wycena Systemu:</p>" +
+                "<p style=\"font-size:2.2em;font-weight:bold;color:#FF7F50;margin:5px 0 0;\">" + quoteStr + "</p>" +
+                "</div>" +
+                "<h3 style=\"color:#444;margin-top:20px;\">Wybrana Konfiguracja:</h3>" +
+                "<ul style=\"list-style:none;padding:0;\">" + simpleItemsHtml + "</ul>" +
+                roomLayoutHtml +
+                "<p style=\"margin-top:25px;\">Pamiętaj, że podana kwota ma charakter orientacyjny. Wkrótce skontaktujemy się z Tobą, aby omówić szczegóły i przedstawić bardziej precyzyjną ofertę.</p>" +
+                "<p style=\"margin-top:25px;font-size:0.9em;color:#777;\">Pozdrawiamy,<br/>" +
+                "Zespół " + COMPANY_NAME + "<br/>" +
+                "<a href=\"mailto:" + COMPANY_EMAIL + "\">" + COMPANY_EMAIL + "</a></p>" +
+                "</div></body></html>"
+            });
           } catch(ex) { sfMailErrors.push("client: " + ex.message); }
         }
 
@@ -1070,33 +1136,44 @@ function doPost(e) {
         // Powiadomienie do admina
         if (ADMIN_EMAIL) {
           try {
-            MailApp.sendEmail(
-              ADMIN_EMAIL,
-              "📩 Formularz kontaktowy – " + contact.name,
-              "Nowa wiadomość z formularza kontaktowego designIQ:\n\n" +
-              "Imię i nazwisko: " + contact.name + "\n" +
-              "Email: " + contact.email + "\n" +
-              "Telefon: " + contact.phone + "\n\n" +
-              "Wiadomość:\n" + contact.message + "\n\n" +
-              "Data: " + contact.date
-            );
+            GmailApp.sendEmail(ADMIN_EMAIL, "📩 Formularz kontaktowy – " + contact.name, "", {
+              name: COMPANY_NAME + " – Kontakt",
+              htmlBody:
+                "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
+                "<div style=\"max-width:600px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:8px;\">" +
+                "<h2 style=\"color:#FF7F50;border-bottom:2px solid #FF7F50;padding-bottom:10px;\">NOWA WIADOMOŚĆ KONTAKTOWA</h2>" +
+                "<p>Otrzymano nową wiadomość kontaktową. Szczegóły:</p>" +
+                "<table style=\"width:100%;margin-top:15px;border-collapse:collapse;\">" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;width:30%;\">Data/Czas:</td><td style=\"padding:8px 0;\">" + contact.date + "</td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Imię i Nazwisko:</td><td style=\"padding:8px 0;\">" + contact.name + "</td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Email:</td><td style=\"padding:8px 0;\"><a href=\"mailto:" + contact.email + "\">" + contact.email + "</a></td></tr>" +
+                "<tr><td style=\"padding:8px 0;font-weight:bold;\">Telefon:</td><td style=\"padding:8px 0;\">" + contact.phone + "</td></tr>" +
+                "</table>" +
+                "<h3 style=\"color:#444;margin-top:20px;\">Treść Wiadomości:</h3>" +
+                "<p style=\"padding:10px;border-left:3px solid #FF7F50;background-color:#f9f9f9;white-space:pre-wrap;\">" + contact.message + "</p>" +
+                "</div></body></html>"
+            });
           } catch(ex) { scfMailErrors.push("admin: " + ex.message); }
         }
 
         // Potwierdzenie do klienta
         if (contact.email) {
           try {
-            MailApp.sendEmail(
-              contact.email,
-              "Potwierdzenie wiadomości – designIQ",
-              "Dzień dobry " + (contact.name || "") + ",\n\n" +
-              "Dziękujemy za kontakt z designIQ.\n" +
-              "Otrzymaliśmy Twoją wiadomość i skontaktujemy się z Tobą wkrótce.\n\n" +
-              "Treść Twojej wiadomości:\n" +
-              "\"" + contact.message + "\"\n\n" +
-              "Pozdrawiamy,\nZespół designIQ\n" +
-              "obsługa.designiq@gmail.com"
-            );
+            GmailApp.sendEmail(contact.email, "Potwierdzenie wiadomości do " + COMPANY_NAME, "", {
+              name: COMPANY_NAME,
+              replyTo: ADMIN_EMAIL,
+              htmlBody:
+                "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
+                "<div style=\"max-width:600px;margin:20px auto;padding:20px;border:1px solid #ddd;border-radius:8px;\">" +
+                "<h2 style=\"color:#FF7F50;border-bottom:2px solid #FF7F50;padding-bottom:10px;\">Dziękujemy za kontakt!</h2>" +
+                "<p>Potwierdzamy otrzymanie Twojej wiadomości. Zespół " + COMPANY_NAME + " skontaktuje się z Tobą wkrótce.</p>" +
+                "<h3 style=\"color:#444;margin-top:20px;\">Twoja wiadomość:</h3>" +
+                "<p style=\"padding:10px;border-left:3px solid #eee;background-color:#f7f7f7;white-space:pre-wrap;\">" + contact.message + "</p>" +
+                "<p style=\"margin-top:25px;font-size:0.9em;color:#777;\">Pozdrawiamy,<br/>" +
+                "Zespół " + COMPANY_NAME + "<br/>" +
+                "<a href=\"mailto:" + COMPANY_EMAIL + "\">" + COMPANY_EMAIL + "</a></p>" +
+                "</div></body></html>"
+            });
           } catch(ex) { scfMailErrors.push("client: " + ex.message); }
         }
 
