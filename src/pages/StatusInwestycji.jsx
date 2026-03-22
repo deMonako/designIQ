@@ -137,10 +137,10 @@ export default function StatusInwestycji() {
 
         if (!isUpdate) {
           setActiveView("status");
+          scrollToResults();
         }
 
         toast.success("Dane załadowane pomyślnie");
-        scrollToResults();
       } else {
         setNotFound(true);
         setInvestment(null);
