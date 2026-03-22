@@ -807,8 +807,31 @@ function doPost(e) {
         return ok(deleteRow("Materiały", body.id));
 
       // ── Dokumenty projektów ───────────────────────────────────────────────────
-      case "createProjectDoc":
-        return ok(insertRow("Dokumenty", body.doc));
+      case "createProjectDoc": {
+        var newDoc = body.doc;
+        if (!newDoc) return err("Brak danych dokumentu");
+        // Zabezpieczenie przed duplikatami: jeśli dokument z tym driveId już istnieje
+        // w tym projekcie, zaktualizuj go zamiast tworzyć nowy wpis.
+        if (newDoc.driveId && newDoc.projectId) {
+          var existingDocs = sheetToObjects("Dokumenty");
+          var existingDoc  = null;
+          for (var ei = 0; ei < existingDocs.length; ei++) {
+            if (existingDocs[ei].driveId === newDoc.driveId &&
+                String(existingDocs[ei].projectId) === String(newDoc.projectId)) {
+              existingDoc = existingDocs[ei];
+              break;
+            }
+          }
+          if (existingDoc) {
+            // Zachowaj oryginalne id i clientVisible — tylko uzupełnij brakujące pola
+            return ok(upsertRow("Dokumenty", Object.assign({}, newDoc, {
+              id:            existingDoc.id,
+              clientVisible: existingDoc.clientVisible,
+            })));
+          }
+        }
+        return ok(insertRow("Dokumenty", newDoc));
+      }
 
       case "deleteProjectDoc":
         return ok(deleteRow("Dokumenty", body.id));

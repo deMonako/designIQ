@@ -406,11 +406,13 @@ function ProjectDetail({
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
   const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
   const sheetDocUrls      = new Set(projectDocList.map(d => d.url).filter(Boolean));
+  const sheetDocDriveIds  = new Set(projectDocList.map(d => d.driveId).filter(Boolean));
   const isDwgSystemFile   = (name) => /^projekt(_.*)?\.(?:svg|json)$/i.test(name);
   const driveOnlyFiles    = driveFiles.filter(f =>
     !isDwgSystemFile(f.name) &&
     !sheetDocUrls.has(f.webViewLink) &&
-    !sheetDocUrls.has(f.webContentLink)
+    !sheetDocUrls.has(f.webContentLink) &&
+    !sheetDocDriveIds.has(f.id)
   );
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
