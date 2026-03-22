@@ -196,7 +196,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
 function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
   onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask,
-  onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible,
+  onAddProjectDoc, onDeleteProjectDoc, onDeleteProjectFile, onToggleDocClientVisible,
   onAddChecklist, onToggleChecklistItem, onNavigateToZakupy,
 }) {
   const [activeTab,     setActiveTab]     = useState("tasks");
@@ -1358,6 +1358,9 @@ function ProjectDetail({
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className="text-xs text-slate-400">{doc.date}</span>
                           <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
+                          {doc.uploadedBy === "Klient" && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Od klienta</span>
+                          )}
                           {doc.clientVisible
                             ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
                             : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
@@ -1374,7 +1377,16 @@ function ProjectDetail({
                           className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
                           {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                         </button>
-                        <button onClick={() => onDeleteProjectDoc(doc.id)} className="p-1.5 text-slate-300 hover:text-red-400 transition-colors">
+                        <button
+                          onClick={async () => {
+                            onDeleteProjectDoc(doc.id);
+                            if (doc.driveId && onDeleteProjectFile) {
+                              await onDeleteProjectFile(doc.driveId);
+                              loadDriveFiles();
+                            }
+                          }}
+                          className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
+                          title={doc.driveId ? "Usuń z arkusza i z Drive" : "Usuń z arkusza"}>
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
@@ -1425,8 +1437,8 @@ function ProjectDetail({
                             <div className="flex items-center gap-1 flex-shrink-0">
                               <button
                                 onClick={() => promoteDoc(false)}
-                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                title="Ukryj przed klientem">
+                                className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
+                                title="Zarejestruj jako ukryty przed klientem">
                                 <EyeOff className="w-4 h-4" />
                               </button>
                               <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
@@ -1436,6 +1448,17 @@ function ProjectDetail({
                                 <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
                                   <Download className="w-4 h-4" />
                                 </a>
+                              )}
+                              {onDeleteProjectFile && (
+                                <button
+                                  onClick={async () => {
+                                    await onDeleteProjectFile(f.id);
+                                    loadDriveFiles();
+                                  }}
+                                  className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
+                                  title="Usuń z Drive">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
                               )}
                             </div>
                           </div>
@@ -1784,7 +1807,7 @@ function ProjectDetail({
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onToggleDocClientVisible, onOpenAddProject, onNavigateToZakupy }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onDeleteProjectFile, onToggleDocClientVisible, onOpenAddProject, onNavigateToZakupy }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1820,6 +1843,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         onToggleChecklistItem={onToggleChecklistItem}
         onAddProjectDoc={onAddProjectDoc}
         onDeleteProjectDoc={onDeleteProjectDoc}
+        onDeleteProjectFile={onDeleteProjectFile}
         onToggleDocClientVisible={onToggleDocClientVisible}
         onNavigateToZakupy={onNavigateToZakupy}
       />

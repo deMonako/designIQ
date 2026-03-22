@@ -407,6 +407,12 @@ export default function Admin() {
     );
   };
 
+  const handleDeleteProjectFile = async (driveId) => {
+    await gasSync(() => GAS.deleteProjectFile(driveId), () =>
+      syncErr("Błąd usuwania pliku z Drive")
+    );
+  };
+
   // ── Eksport BOM z KalkulatorSzafy do Zakupów ─────────────────────────────
   const handleExportBomToZakupy = async (projectId, bomItems) => {
     // Przekaż itemsy bezpośrednio do ZakupyView — widok załaduje istniejące id z GAS
@@ -484,6 +490,7 @@ export default function Admin() {
             projectDocs={projectDocs}
             onAddProjectDoc={handleAddProjectDoc}
             onDeleteProjectDoc={handleDeleteProjectDoc}
+            onDeleteProjectFile={handleDeleteProjectFile}
             onToggleDocClientVisible={handleToggleDocClientVisible}
             onOpenAddProject={openAddProject}
             onNavigateToZakupy={navigateToZakupy}

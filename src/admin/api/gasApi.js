@@ -162,6 +162,11 @@ export async function toggleDocClientVisible(id, clientVisible) {
   return gasPost("toggleDocClientVisible", { id, clientVisible });
 }
 
+/** Usuwa fizyczny plik z Google Drive */
+export async function deleteProjectFile(driveId) {
+  return gasPost("deleteProjectFile", { driveId });
+}
+
 // ────────────────────────────────────────────────────────────────────────────────
 // PLIKI Z GOOGLE DRIVE
 // ────────────────────────────────────────────────────────────────────────────────

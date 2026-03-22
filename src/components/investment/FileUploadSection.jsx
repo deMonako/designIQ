@@ -52,7 +52,6 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
 
     setIsUploading(true);
     try {
-      // Odczyt pliku jako base64
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload  = (e) => resolve(e.target.result.split(",")[1]);
@@ -60,30 +59,13 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
         reader.readAsDataURL(selectedFile);
       });
 
-      const projectCode = investment.code || investment.investment_code;
+      const code = investment.code || investment.investment_code;
 
-      // Krok 1: upload pliku na Drive
-      const uploaded = await gasPost("uploadFile", {
+      await gasPost("uploadInvestmentFile", {
+        code,
         base64,
-        name:        selectedFile.name,
-        mimeType:    selectedFile.type || "application/octet-stream",
-        projectCode,
-      });
-
-      // Krok 2: utwórz wpis w arkuszu Dokumenty (widoczny dla klienta)
-      await gasPost("createProjectDoc", {
-        doc: {
-          id:            "doc-" + Date.now(),
-          projectId:     investment.id || "",
-          name:          selectedFile.name,
-          type:          "inne",
-          description:   "Plik od klienta",
-          url:           uploaded.url,
-          driveId:       uploaded.driveId,
-          date:          new Date().toISOString().substring(0, 10),
-          clientVisible: true,
-          uploadedBy:    "Klient",
-        },
+        name:     selectedFile.name,
+        mimeType: selectedFile.type || "application/octet-stream",
       });
 
       toast.success("Plik przesłany pomyślnie!");

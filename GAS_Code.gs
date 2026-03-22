@@ -813,7 +813,21 @@ function doPost(e) {
         all = sheetToObjects("Dokumenty");
         obj = findById(all, body.id);
         if (!obj) return err("Dokument nie znaleziony: " + body.id);
-        return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: !obj.clientVisible })));
+        // Używamy przekazanej wartości clientVisible (jeśli podana), inaczej przełączamy
+        var newVisible = (body.clientVisible !== undefined && body.clientVisible !== null)
+          ? Boolean(body.clientVisible) : !obj.clientVisible;
+        return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: newVisible })));
+
+      case "deleteProjectFile":
+        // Usuwa fizyczny plik z Google Drive po driveId
+        if (!body.driveId) return err("Brak driveId");
+        try {
+          var delFile = DriveApp.getFileById(body.driveId);
+          delFile.setTrashed(true);
+          return ok({ deleted: true, driveId: body.driveId });
+        } catch(delErr) {
+          return err("Nie można usunąć pliku z Drive: " + delErr.message);
+        }
 
       // ── Materiały JSON (edytor materialy.json na Drive) ───────────────────────
       // Zapisuje (nadpisuje) plik materialy.json w folderze Materiały na Drive
