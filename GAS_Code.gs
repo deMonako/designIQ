@@ -820,7 +820,7 @@ function doPost(e) {
 
         if (ADMIN_EMAIL && newLeadObj.source) {
           try {
-            GmailApp.sendEmail(
+            MailApp.sendEmail(
               ADMIN_EMAIL,
               "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""),
               "Nowy lead z formularza: " + newLeadObj.source + "\n\n" +
@@ -999,7 +999,7 @@ function doPost(e) {
               }
               if (configLines.length > 0) configStr = "\nKonfiguracja:\n" + configLines.join("\n");
             }
-            GmailApp.sendEmail(
+            MailApp.sendEmail(
               ADMIN_EMAIL,
               "🏠 Nowe zapytanie z konfiguratora – " + lead.name,
               "Nowe zapytanie z konfiguratora designIQ\n\n" +
@@ -1034,7 +1034,7 @@ function doPost(e) {
                 clientConfig = "\nTwoja konfiguracja:\n" + clientConfigLines.join("\n") + "\n";
               }
             }
-            GmailApp.sendEmail(
+            MailApp.sendEmail(
               body.email,
               "Potwierdzenie zapytania i szacunkowa wycena – designIQ",
               "Dzień dobry " + (body.name || "") + ",\n\n" +
@@ -1070,7 +1070,7 @@ function doPost(e) {
         // Powiadomienie do admina
         if (ADMIN_EMAIL) {
           try {
-            GmailApp.sendEmail(
+            MailApp.sendEmail(
               ADMIN_EMAIL,
               "📩 Formularz kontaktowy – " + contact.name,
               "Nowa wiadomość z formularza kontaktowego designIQ:\n\n" +
@@ -1086,7 +1086,7 @@ function doPost(e) {
         // Potwierdzenie do klienta
         if (contact.email) {
           try {
-            GmailApp.sendEmail(
+            MailApp.sendEmail(
               contact.email,
               "Potwierdzenie wiadomości – designIQ",
               "Dzień dobry " + (contact.name || "") + ",\n\n" +
