@@ -563,7 +563,11 @@ function doGet(e) {
 
         var allDocs   = sheetToObjects("Dokumenty");
         var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
-        var visibleDocs = projectDocs.filter(function(d) { return d.clientVisible === true; });
+        // Sprawdzamy zarówno boolean true jak i stringi "TRUE"/"true" (legacy data z arkusza)
+        var visibleDocs = projectDocs.filter(function(d) {
+          var cv = d.clientVisible;
+          return cv === true || cv === "TRUE" || cv === "true" || cv === 1;
+        });
         // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
         // Wykluczamy WSZYSTKIE pliki które mają wpis w arkuszu Dokumenty (widoczne i ukryte),
         // bo są już obsługiwane przez visibleDocs. Tylko pliki bez wpisu trafiają do driveFiles.
