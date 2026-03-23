@@ -87,7 +87,7 @@ var HEADERS = {
   ],
   // ── Wyceny projektów ─────────────────────────────────────────────────────────
   "Wyceny": [
-    "id", "projectId", "items", "status", "acceptedAt", "updatedDate"
+    "id", "projectId", "items", "rooms", "status", "acceptedAt", "updatedDate"
   ],
   // ── Listy zakupów projektów ───────────────────────────────────────────────────
   "Zakupy": [
@@ -96,7 +96,7 @@ var HEADERS = {
 };
 
 // Pola przechowywane jako JSON string w komórce
-var JSON_FIELDS = ["stages", "stageSchedule", "invoices", "tags", "items", "configData"];
+var JSON_FIELDS = ["stages", "stageSchedule", "invoices", "tags", "items", "rooms", "configData"];
 
 // ─── SETUP ──────────────────────────────────────────────────────────────────────
 function setupSheets() {

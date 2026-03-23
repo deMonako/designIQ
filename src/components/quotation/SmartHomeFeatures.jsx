@@ -95,28 +95,11 @@ export default function SmartHomeFeatures({ investment }) {
     }
   };
 
-  const getActiveFeatures = () => {
-    try {
-      const rawElements = investment.elements;
-      if (!rawElements) return [];
-      const elementsArray = typeof rawElements === 'string' ? JSON.parse(rawElements) : rawElements;
-      
-      return elementsArray
-        .map(name => name.toLowerCase().trim())
-        .filter(name => featureDatabase[name])
-        .map(name => ({ key: name, ...featureDatabase[name] }));
-    } catch (e) { return []; }
-  };
-
-  const activeFeatures = getActiveFeatures();
+  const activeFeatures = Object.entries(featureDatabase).map(([key, val]) => ({ key, ...val }));
 
   useEffect(() => {
-    if (activeFeatures.length > 0 && !activeKey) {
-      setActiveKey(activeFeatures[0].key);
-    }
-  }, [activeFeatures]);
-
-  if (activeFeatures.length === 0) return null;
+    if (!activeKey) setActiveKey(activeFeatures[0].key);
+  }, []);
 
   return (
     <Card className="border-2 border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -189,7 +172,7 @@ export default function SmartHomeFeatures({ investment }) {
                         <div className="mt-10 pt-6 border-t border-slate-200/60 flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
                             <span className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
-                                Funkcja aktywna w Twoim domu
+                                Dostępne w systemie Loxone
                             </span>
                         </div>
                     </div>

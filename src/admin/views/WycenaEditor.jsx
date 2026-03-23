@@ -146,13 +146,19 @@ function TechListModal({ items, project, onClose }) {
   );
 }
 
+function emptyRoom() {
+  return { name: "", area: 0, presence: 0, switch: 0, lightRelay: 0, lightDim: 0, shading: 0, heating: 0, audio: 0 };
+}
+
 export default function WycenaEditor({ project, onClose }) {
   const [items, setItems]     = useState([]);
+  const [rooms, setRooms]     = useState([]);
   const [status, setStatus]   = useState("Czeka na akceptację");
   const [wycenaId, setId]     = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [collapsed, setCollapsed] = useState({});
+  const [roomsCollapsed, setRoomsCollapsed] = useState(false);
   const [showTechList, setShowTechList] = useState(false);
 
   // Załaduj istniejącą wycenę
@@ -163,6 +169,7 @@ export default function WycenaEditor({ project, onClose }) {
         if (w && w.id) {
           setId(w.id);
           setItems(Array.isArray(w.items) ? w.items : []);
+          setRooms(Array.isArray(w.rooms) ? w.rooms : []);
           setStatus(w.status || "Czeka na akceptację");
         }
       })
@@ -171,6 +178,13 @@ export default function WycenaEditor({ project, onClose }) {
   }, [project.id]);
 
   const addItem = () => setItems(prev => [...prev, emptyItem()]);
+
+  const addRoom    = () => setRooms(prev => [...prev, emptyRoom()]);
+  const removeRoom = (idx) => setRooms(prev => prev.filter((_, i) => i !== idx));
+  const updateRoom = (idx, field, value) =>
+    setRooms(prev => prev.map((r, i) =>
+      i === idx ? { ...r, [field]: field === "name" ? value : (parseFloat(value) || 0) } : r
+    ));
 
   const updateItem = (id, field, value) => {
     setItems(prev => prev.map(it =>
@@ -187,6 +201,7 @@ export default function WycenaEditor({ project, onClose }) {
         id:        wycenaId || undefined,
         projectId: project.id,
         items,
+        rooms,
         status,
       };
       const saved = await upsertWycena(wycena);
@@ -394,6 +409,74 @@ export default function WycenaEditor({ project, onClose }) {
                   })}
                 </div>
               )}
+              {/* Analiza techniczna pomieszczeń */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <button
+                  className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200 hover:bg-slate-100 transition-colors text-left"
+                  onClick={() => setRoomsCollapsed(p => !p)}
+                >
+                  <h3 className="text-sm font-semibold text-slate-700">Analiza techniczna pomieszczeń</h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">{rooms.length} pom.</span>
+                    {roomsCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronUp className="w-3.5 h-3.5 text-slate-400" />}
+                  </div>
+                </button>
+                {!roomsCollapsed && (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs min-w-[760px]">
+                        <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                          <tr>
+                            <th className="text-left p-2 font-semibold">Pomieszczenie</th>
+                            <th className="text-center p-2 w-14">m²</th>
+                            <th className="text-center p-2 w-16">Obecność</th>
+                            <th className="text-center p-2 w-16">Przełącznik</th>
+                            <th className="text-center p-2 w-16">Oświetl.</th>
+                            <th className="text-center p-2 w-16">Ściemn.</th>
+                            <th className="text-center p-2 w-16">Zacienianie</th>
+                            <th className="text-center p-2 w-16">Ogrzewanie</th>
+                            <th className="text-center p-2 w-14">Audio</th>
+                            <th className="p-2 w-8"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {rooms.length === 0 && (
+                            <tr>
+                              <td colSpan={10} className="p-4 text-center text-slate-400">Brak pomieszczeń — dodaj pierwsze</td>
+                            </tr>
+                          )}
+                          {rooms.map((room, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50/50">
+                              <td className="p-1.5">
+                                <input type="text" value={room.name || ""} onChange={e => updateRoom(idx, "name", e.target.value)}
+                                  placeholder="Nazwa..." className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-orange-400" />
+                              </td>
+                              {["area","presence","switch","lightRelay","lightDim","shading","heating","audio"].map(field => (
+                                <td key={field} className="p-1.5">
+                                  <input type="number" min="0" step={field === "area" ? "0.01" : "1"}
+                                    value={room[field] ?? 0} onChange={e => updateRoom(idx, field, e.target.value)}
+                                    className="w-full border border-slate-200 rounded px-1 py-1 text-xs text-center outline-none focus:border-orange-400" />
+                                </td>
+                              ))}
+                              <td className="p-1.5">
+                                <button onClick={() => removeRoom(idx)} className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="p-3 border-t border-slate-100">
+                      <button onClick={addRoom}
+                        className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-orange-400 hover:text-orange-600 text-xs font-medium w-full justify-center transition-colors">
+                        <Plus className="w-3.5 h-3.5" /> Dodaj pomieszczenie
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>

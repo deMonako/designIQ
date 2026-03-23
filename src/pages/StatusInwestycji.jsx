@@ -5,7 +5,7 @@ import { Card, CardContent } from "../components/ui/card";
 import { Label } from "../components/ui/label";
 import {
   Search, AlertCircle, Package,
-  ArrowLeft, Loader2
+  ArrowLeft, Loader2, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -63,7 +63,7 @@ function mapInvestmentResponse(data) {
     code:              project.code,   // nowe pole
     id:                project.id,
     documents,
-    rooms:             [],
+    rooms:             Array.isArray(wycena?.rooms) ? wycena.rooms : [],
     quotation_status:  wycena?.status || project.status || "Czeka na akceptację",
     accepted_at:       wycena?.acceptedAt || null,
     quotation:         wycena && Array.isArray(wycena.items) && wycena.items.length > 0 ? wycena : null,
@@ -160,7 +160,12 @@ export default function StatusInwestycji() {
     // Wspólna funkcja dla zmiany widoku ze scrollem
     const navigateTo = (view) => {
       setActiveView(view);
-      scrollToResults();
+      // Przy rzucie DWG scrollujemy do góry – przycisk "Powrót" musi być widoczny
+      if (view === "projekt") {
+        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+      } else {
+        scrollToResults();
+      }
     };
 
     switch (activeView) {
@@ -279,11 +284,26 @@ export default function StatusInwestycji() {
           </motion.div>
         )}
 
+        {investment && (
+          <div ref={resultsRef} className="flex justify-end mb-1">
+            <button
+              onClick={handleSearch}
+              disabled={isSearching}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
+              title="Odśwież dane inwestycji"
+            >
+              {isSearching
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : <RefreshCw className="w-3 h-3" />}
+              Odśwież
+            </button>
+          </div>
+        )}
+
         <AnimatePresence mode="wait">
           {investment && (
             <motion.div
-            ref={resultsRef}  
-            key={activeView}
+              key={activeView}
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -20 }}
