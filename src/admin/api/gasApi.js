@@ -162,6 +162,11 @@ export async function toggleDocClientVisible(id, clientVisible) {
   return gasPost("toggleDocClientVisible", { id, clientVisible });
 }
 
+/** Resetuje dokumenty projektu: czyści arkusz, skanuje Drive, rejestruje wszystko (visible=true poza plikami systemowymi) */
+export async function resetProjectDocs(projectId, projectCode) {
+  return gasPost("resetProjectDocs", { projectId, projectCode });
+}
+
 /** Usuwa fizyczny plik z Google Drive */
 export async function deleteProjectFile(driveId) {
   return gasPost("deleteProjectFile", { driveId });

@@ -413,6 +413,21 @@ export default function Admin() {
     );
   };
 
+  const handleResetProjectDocs = async (projectId, projectCode) => {
+    setSyncStatus("syncing");
+    try {
+      const result = await GAS.resetProjectDocs(projectId, projectCode);
+      // Zastąp dokumenty projektu nowo zarejestrowanymi
+      setProjectDocs(prev => [
+        ...prev.filter(d => String(d.projectId) !== String(projectId)),
+        ...(result?.docs ?? []),
+      ]);
+      setSyncStatus("synced");
+    } catch (e) {
+      syncErr("Błąd resetu dokumentów: " + e.message);
+    }
+  };
+
   // ── Eksport BOM z KalkulatorSzafy do Zakupów ─────────────────────────────
   const handleExportBomToZakupy = async (projectId, bomItems) => {
     // Przekaż itemsy bezpośrednio do ZakupyView — widok załaduje istniejące id z GAS
@@ -492,6 +507,7 @@ export default function Admin() {
             onDeleteProjectDoc={handleDeleteProjectDoc}
             onDeleteProjectFile={handleDeleteProjectFile}
             onToggleDocClientVisible={handleToggleDocClientVisible}
+            onResetProjectDocs={handleResetProjectDocs}
             onOpenAddProject={openAddProject}
             onNavigateToZakupy={navigateToZakupy}
           />

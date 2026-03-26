@@ -197,6 +197,7 @@ function ProjectDetail({
   project, client, tasks, checklists, projectDocs,
   onBack, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask,
   onAddProjectDoc, onDeleteProjectDoc, onDeleteProjectFile, onToggleDocClientVisible,
+  onResetProjectDocs,
   onAddChecklist, onToggleChecklistItem, onNavigateToZakupy,
 }) {
   const [activeTab,     setActiveTab]     = useState("tasks");
@@ -212,6 +213,7 @@ function ProjectDetail({
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
   const [driveFiles,        setDriveFiles]        = useState([]);
+  const [resettingDocs,     setResettingDocs]     = useState(false);
   const [driveFilesLoading, setDriveFilesLoading] = useState(GAS_ON);
 
   const loadDriveFiles = useCallback(() => {
@@ -1231,9 +1233,28 @@ function ProjectDetail({
               <div className="flex justify-end gap-2">
                 <button onClick={loadDriveFiles} disabled={driveFilesLoading}
                   className="p-2 text-slate-400 hover:text-blue-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
-                  title="Odśwież pliki z Drive">
+                  title="Odśwież listę plików z Drive">
                   <RefreshCw className={`w-4 h-4 ${driveFilesLoading ? "animate-spin" : ""}`} />
                 </button>
+                {onResetProjectDocs && (
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm("Zresetować dokumenty projektu?\n\nUsunie wszystkie wpisy z arkusza i ponownie zeskanuje folder Drive. Pliki systemowe (config.json, projekt*.json/svg) będą ukryte, pozostałe widoczne dla klienta.")) return;
+                      setResettingDocs(true);
+                      try {
+                        await onResetProjectDocs(project.id, project.code);
+                        await loadDriveFiles();
+                      } finally {
+                        setResettingDocs(false);
+                      }
+                    }}
+                    disabled={resettingDocs}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg hover:shadow-md disabled:opacity-40 transition-all"
+                    title="Wyczyść arkusz i zeskanuj Drive od nowa (pliki systemowe ukryte, reszta widoczna)">
+                    <RefreshCw className={`w-4 h-4 ${resettingDocs ? "animate-spin" : ""}`} />
+                    Odśwież dokumenty
+                  </button>
+                )}
                 <button onClick={() => setShowAddDoc(!showAddDoc)}
                   className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-lg text-sm font-semibold hover:shadow-lg transition-all">
                   <Plus className="w-4 h-4" /> Dodaj dokument
@@ -1809,7 +1830,7 @@ function ProjectDetail({
   );
 }
 
-export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onDeleteProjectFile, onToggleDocClientVisible, onOpenAddProject, onNavigateToZakupy }) {
+export default function Projekty({ projects, tasks, checklists, clients, onUpdateProject, onDeleteProject, onAddTask, onUpdateTask, onDeleteTask, onAddChecklist, onToggleChecklistItem, selectedProject, setSelectedProject, projectDocs, onAddProjectDoc, onDeleteProjectDoc, onDeleteProjectFile, onToggleDocClientVisible, onResetProjectDocs, onOpenAddProject, onNavigateToZakupy }) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [packageFilter, setPackageFilter] = useState("all");
@@ -1847,6 +1868,7 @@ export default function Projekty({ projects, tasks, checklists, clients, onUpdat
         onDeleteProjectDoc={onDeleteProjectDoc}
         onDeleteProjectFile={onDeleteProjectFile}
         onToggleDocClientVisible={onToggleDocClientVisible}
+        onResetProjectDocs={onResetProjectDocs}
         onNavigateToZakupy={onNavigateToZakupy}
       />
     );

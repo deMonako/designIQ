@@ -849,6 +849,55 @@ function doPost(e) {
           ? body.clientVisible : !obj.clientVisible;
         return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: newVisible })));
 
+      case "resetProjectDocs": {
+        // Usuń wszystkie wpisy dokumentów projektu z arkusza,
+        // przeskanuj folder Drive i zarejestruj wszystko (visible=true),
+        // poza plikami systemowymi (config.json, projekt*.json, projekt*.svg)
+        var rpdProjectId = body.projectId;
+        var rpdCode      = body.projectCode;
+        if (!rpdProjectId || !rpdCode) return err("Brak projectId lub projectCode");
+
+        // 1. Usuń wszystkie istniejące wpisy dla tego projektu
+        var allDocsBefore = sheetToObjects("Dokumenty");
+        var toDelete = allDocsBefore.filter(function(d) {
+          return String(d.projectId) === String(rpdProjectId);
+        });
+        for (var di = toDelete.length - 1; di >= 0; di--) {
+          deleteRow("Dokumenty", toDelete[di].id);
+        }
+
+        // 2. Pobierz pliki z Drive
+        var driveFiles = getDriveFiles(rpdCode);
+        var registered = [];
+
+        // Wzorzec plików systemowych (ukryte)
+        var sysPattern = /^(config\.json|projekt(_[^.]+)?\.json|projekt(_[^.]+)?\.svg)$/i;
+
+        for (var fi = 0; fi < driveFiles.length; fi++) {
+          var f = driveFiles[fi];
+          var isSystem = sysPattern.test(f.name);
+          var ext = f.name.split(".").pop().toLowerCase();
+          var docType = ext === "pdf" ? "pdf"
+            : (ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "gif" || ext === "webp") ? "zdjęcie"
+            : (ext === "dwg" || ext === "dxf") ? "dwg"
+            : "inne";
+          var newEntry = insertRow("Dokumenty", {
+            projectId:     rpdProjectId,
+            name:          f.name,
+            type:          docType,
+            description:   "",
+            url:           f.webViewLink,
+            driveId:       f.id,
+            date:          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"),
+            clientVisible: !isSystem,
+            uploadedBy:    "designIQ",
+          });
+          registered.push(newEntry);
+        }
+
+        return ok({ deleted: toDelete.length, registered: registered.length, docs: registered });
+      }
+
       case "deleteProjectFile":
         // Usuwa fizyczny plik z Google Drive po driveId
         if (!body.driveId) return err("Brak driveId");
