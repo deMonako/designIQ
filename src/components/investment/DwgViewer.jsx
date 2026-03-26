@@ -620,14 +620,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   }, [activeTypes]);
 
   // Po pierwszym załadowaniu: wyśrodkuj stronę na oknie podglądu.
-  // setTimeout 150ms daje przeglądarce czas na ustabilizowanie layoutu przed scrollem.
+  // W trybie klienta (clientMode) pomijamy scroll – przyciski nawigacji muszą być widoczne.
   useEffect(() => {
-    if (loadState !== "ok_mounted" || hasScrolledRef.current) return;
+    if (loadState !== "ok_mounted" || hasScrolledRef.current || clientMode) return;
     hasScrolledRef.current = true;
     setTimeout(() => {
       containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 150);
-  }, [loadState]);
+  }, [loadState, clientMode]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
   const mountView = useCallback(async () => {
@@ -765,7 +765,17 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     colorCache.clear();
     try {
       setLoadProg({ pct: 20, label: "Pobieranie…" });
-      const res = await getDwgViewerContent(projectCode);
+      let fakePct = 20;
+      const ticker = setInterval(() => {
+        fakePct = Math.min(fakePct + 0.8, 38);
+        setLoadProg({ pct: Math.round(fakePct), label: "Pobieranie…" });
+      }, 350);
+      let res;
+      try {
+        res = await getDwgViewerContent(projectCode);
+      } finally {
+        clearInterval(ticker);
+      }
       if (myId !== loadIdRef.current) return;  // przestarzałe ładowanie – porzuć
       setLoadProg({ pct: 40, label: "Pobieranie…" });
 
