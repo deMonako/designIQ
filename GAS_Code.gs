@@ -913,7 +913,7 @@ function doPost(e) {
           registered.push(newEntry);
         }
 
-        return ok({ deleted: toDelete.length, registered: registered.length, docs: registered });
+        return ok({ registered: registered.length, docs: registered });
       }
 
       case "deleteProjectFile":
