@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
@@ -8,7 +8,7 @@ import {
   ChevronUp, ChevronDown, RefreshCw,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
-import { uploadFile } from "../api/gasApi";
+import { uploadFile, getProjectFiles } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
 import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -212,7 +212,20 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
-  const [resettingDocs, setResettingDocs] = useState(false);
+  const [resettingDocs,     setResettingDocs]     = useState(false);
+  const [driveFiles,        setDriveFiles]        = useState([]);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(false);
+
+  const loadDriveFiles = useCallback(() => {
+    if (!GAS_ON) return;
+    setDriveFilesLoading(true);
+    getProjectFiles(project.id, project.code)
+      .then(files => setDriveFiles(Array.isArray(files) ? files : []))
+      .catch(() => {})
+      .finally(() => setDriveFilesLoading(false));
+  }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadDriveFiles(); }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -393,14 +406,22 @@ function ProjectDetail({
 
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
-  const projectDocList  = (projectDocs ?? []).filter(d => d.projectId === project.id);
-  const isDwgSystemFile = (name) => /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(name);
+  const projectDocList   = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  const isDwgSystemFile  = (name) => /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(name);
+  const sheetDocDriveIds = new Set(projectDocList.map(d => d.driveId).filter(Boolean));
+  const sheetDocUrls     = new Set(projectDocList.map(d => d.url).filter(Boolean));
+  // Pliki z Drive które nie są jeszcze w arkuszu i nie są plikami systemowymi
+  const driveOnlyFiles   = driveFiles.filter(f =>
+    !isDwgSystemFile(f.name) &&
+    !sheetDocDriveIds.has(f.id) &&
+    !sheetDocUrls.has(f.webViewLink)
+  );
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
+    { id: "dokumentacja", label: driveFilesLoading ? "Dokumentacja (…)" : `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -670,7 +691,7 @@ function ProjectDetail({
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-4 bg-white rounded-xl border border-slate-200 p-1 shadow-sm overflow-x-auto">
         {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === "dokumentacja") loadDriveFiles(); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
               activeTab === tab.id ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
             }`}
@@ -1336,12 +1357,14 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {projectDocList.length === 0 && !showAddDoc ? (
+              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
-                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" /> Brak dokumentów dla tego projektu
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
+                  {driveFilesLoading ? "Ładowanie plików…" : "Brak dokumentów dla tego projektu"}
                 </div>
               ) : (
                 <>
+                  {/* ── Zarejestrowane w arkuszu ── */}
                   {projectDocList.map(doc => (
                     <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
                       <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
@@ -1375,9 +1398,7 @@ function ProjectDetail({
                         <button
                           onClick={async () => {
                             onDeleteProjectDoc(doc.id);
-                            if (doc.driveId && onDeleteProjectFile) {
-                              await onDeleteProjectFile(doc.driveId);
-                            }
+                            if (doc.driveId && onDeleteProjectFile) await onDeleteProjectFile(doc.driveId);
                           }}
                           className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
                           title={doc.driveId ? "Usuń z arkusza i z Drive" : "Usuń z arkusza"}>
@@ -1386,6 +1407,46 @@ function ProjectDetail({
                       </div>
                     </div>
                   ))}
+
+                  {/* ── Pliki na Drive (niezarejestrowane w arkuszu) ── */}
+                  {driveOnlyFiles.length > 0 && (
+                    <>
+                      {projectDocList.length > 0 && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <div className="flex-1 border-t border-slate-200" />
+                          <span className="text-xs text-slate-400 font-medium">Niezarejestrowane (kliknij "Synchronizuj z Drive")</span>
+                          <div className="flex-1 border-t border-slate-200" />
+                        </div>
+                      )}
+                      {driveOnlyFiles.map(f => (
+                        <div key={f.id} className="bg-amber-50/40 rounded-xl border border-amber-200/60 p-4 flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-4 h-4 text-amber-600" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {f.modifiedTime && <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>}
+                              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">Tylko Drive</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                              <ExternalLink className="w-4 h-4" />
+                            </a>
+                            {onDeleteProjectFile && (
+                              <button
+                                onClick={async () => { await onDeleteProjectFile(f.id); loadDriveFiles(); }}
+                                className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
+                                title="Usuń z Drive">
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
             </div>
