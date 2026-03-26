@@ -403,7 +403,7 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
   const selectedProject = projects.find(p => p.id === projectId);
 
   return (
-    <div className="p-4 lg:p-6 space-y-4">
+    <div className="p-4 lg:p-6 space-y-6">
 
       {/* Nagłówek */}
       <div className="flex items-center gap-3">
@@ -424,7 +424,7 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
             <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
             <select
               value={projectId}
-              onChange={e => { setProjectId(e.target.value); setItems([]); setZakupyId(null); }}
+              onChange={e => setProjectId(e.target.value)}
               className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
             >
               <option value="">— wybierz projekt —</option>
@@ -449,16 +449,6 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           Wczytaj
         </button>
-        {projectId && (
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-900 disabled:opacity-50 transition-all"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Zapisz
-          </button>
-        )}
       </div>
 
       {/* Podsumowanie */}
@@ -481,6 +471,15 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
             <div className="font-bold text-green-400">{countDone}</div>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition-all"
+            >
+              {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+              Zapisz
+            </button>
+            <span className="text-slate-600">·</span>
             <button
               onClick={() => setFilterPending(f => !f)}
               className={`text-xs font-semibold px-2 py-0.5 rounded-full transition-colors ${

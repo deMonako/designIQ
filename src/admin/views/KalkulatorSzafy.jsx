@@ -979,7 +979,7 @@ export default function KalkulatorSzafy({
             <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
             <select
               value={selectedProjectId}
-              onChange={e => { setSelectedProjectId(e.target.value); setRows([]); setLoadError(null); setSaveResult(null); }}
+              onChange={e => { setSelectedProjectId(e.target.value); setLoadError(null); setSaveResult(null); }}
               className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
             >
               <option value="">— wybierz projekt —</option>
