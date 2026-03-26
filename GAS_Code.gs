@@ -578,9 +578,10 @@ function doGet(e) {
           if (d.url)     registeredUrls[d.url]           = true;
           if (d.driveId) registeredDriveIds[d.driveId]   = true;
         });
+        var SYS_PAT = /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i;
         var allDriveFiles = getDriveFiles(project.code || project.id);
         var driveFiles = allDriveFiles.filter(function(f) {
-          return !registeredUrls[f.webViewLink] && !registeredDriveIds[f.id];
+          return !SYS_PAT.test(f.name) && !registeredUrls[f.webViewLink] && !registeredDriveIds[f.id];
         });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
@@ -844,6 +845,17 @@ function doPost(e) {
       case "toggleDocClientVisible":
         all = sheetToObjects("Dokumenty");
         obj = findById(all, body.id);
+        // Fallback: szukaj po driveId lub url gdy id nie pasuje (stare wpisy bez id)
+        if (!obj && body.driveId) {
+          for (var ti = 0; ti < all.length; ti++) {
+            if (all[ti].driveId && String(all[ti].driveId) === String(body.driveId)) { obj = all[ti]; break; }
+          }
+        }
+        if (!obj && body.url) {
+          for (var ui = 0; ui < all.length; ui++) {
+            if (all[ui].url && String(all[ui].url) === String(body.url)) { obj = all[ui]; break; }
+          }
+        }
         if (!obj) return err("Dokument nie znaleziony: " + body.id);
         // Używamy przekazanej wartości clientVisible (jeśli podana jako bool), inaczej przełączamy
         var newVisible = typeof body.clientVisible === "boolean"
@@ -859,12 +871,17 @@ function doPost(e) {
         if (!rpdProjectId || !rpdCode) return err("Brak projectId lub projectCode");
 
         // 1. Usuń wszystkie istniejące wpisy dla tego projektu
-        var allDocsBefore = sheetToObjects("Dokumenty");
-        var toDelete = allDocsBefore.filter(function(d) {
-          return String(d.projectId) === String(rpdProjectId);
-        });
-        for (var di = toDelete.length - 1; di >= 0; di--) {
-          deleteRow("Dokumenty", toDelete[di].id);
+        // Skanujemy arkusz bezpośrednio (nie przez id) żeby usunąć też stare wiersze bez id
+        var docSh = ss_().getSheetByName("Dokumenty");
+        var docHeaders = docSh.getRange(1, 1, 1, docSh.getLastColumn()).getValues()[0];
+        var projIdColIdx = docHeaders.indexOf("projectId");
+        var lastRow = docSh.getLastRow();
+        // Usuwamy od końca żeby nie przesuwać indeksów
+        for (var ri = lastRow; ri >= 2; ri--) {
+          var cellVal = docSh.getRange(ri, projIdColIdx + 1).getValue();
+          if (String(cellVal) === String(rpdProjectId)) {
+            docSh.deleteRow(ri);
+          }
         }
 
         // 2. Pobierz pliki z Drive

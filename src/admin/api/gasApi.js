@@ -157,9 +157,9 @@ export async function deleteProjectDoc(id) {
   return gasPost("deleteProjectDoc", { id });
 }
 
-/** Ustawia widoczność dokumentu dla klienta */
-export async function toggleDocClientVisible(id, clientVisible) {
-  return gasPost("toggleDocClientVisible", { id, clientVisible });
+/** Ustawia widoczność dokumentu dla klienta (driveId i url jako fallback dla starych wpisów bez id) */
+export async function toggleDocClientVisible(id, clientVisible, driveId, url) {
+  return gasPost("toggleDocClientVisible", { id, clientVisible, driveId, url });
 }
 
 /** Resetuje dokumenty projektu: czyści arkusz, skanuje Drive, rejestruje wszystko (visible=true poza plikami systemowymi) */

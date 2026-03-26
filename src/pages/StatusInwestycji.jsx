@@ -43,7 +43,7 @@ function mapInvestmentResponse(data) {
       uploaded_date: d.date,
     })),
     ...files
-      .filter(f => !/^projekt(_.*)?\.(?:svg|json)$/i.test(f.name))
+      .filter(f => !/^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(f.name))
       .map(f => ({
         name:          f.name,
         url:           f.webViewLink || f.webContentLink,
