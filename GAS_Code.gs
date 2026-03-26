@@ -973,7 +973,7 @@ function doPost(e) {
 
         if (ADMIN_EMAIL && newLeadObj.source) {
           try {
-            GmailApp.sendEmail(ADMIN_EMAIL, "📩 Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""), "", {
+            GmailApp.sendEmail(ADMIN_EMAIL, "Nowy lead (" + newLeadObj.source + ") – " + (newLeadObj.name || ""), "", {
               name: COMPANY_NAME,
               htmlBody:
                 "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
@@ -1149,7 +1149,7 @@ function doPost(e) {
         // Mail do admina
         if (ADMIN_EMAIL) {
           try {
-            GmailApp.sendEmail(ADMIN_EMAIL, "🏠 Nowe zapytanie z konfiguratora – " + lead.name, "", {
+            GmailApp.sendEmail(ADMIN_EMAIL, "Nowe zapytanie z konfiguratora – " + lead.name, "", {
               name: COMPANY_NAME + " – Formularz",
               htmlBody:
                 "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
@@ -1248,7 +1248,7 @@ function doPost(e) {
         // Powiadomienie do admina
         if (ADMIN_EMAIL) {
           try {
-            GmailApp.sendEmail(ADMIN_EMAIL, "📩 Formularz kontaktowy – " + contact.name, "", {
+            GmailApp.sendEmail(ADMIN_EMAIL, "Formularz kontaktowy – " + contact.name, "", {
               name: COMPANY_NAME + " – Kontakt",
               htmlBody:
                 "<html><body style=\"font-family:Arial,sans-serif;line-height:1.6;color:#333;\">" +
