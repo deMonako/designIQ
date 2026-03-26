@@ -204,10 +204,7 @@ export default function StatusInwestycji() {
 
       case "projekt":
         return (
-          <div className="my-6">
-            <Button onClick={() => navigateTo("status")} variant="ghost" className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
-            </Button>
+          <div className="my-2">
             <div className="bg-white border-2 border-indigo-100 rounded-2xl p-4 shadow-lg">
               <p className="text-sm text-slate-500 mb-3">
                 Interaktywny rzut instalacji — kliknij element aby zobaczyć szczegóły
@@ -285,7 +282,12 @@ export default function StatusInwestycji() {
         )}
 
         {investment && (
-          <div ref={resultsRef} className="flex justify-end mb-1">
+          <div ref={resultsRef} className="flex items-center justify-between mb-1">
+            {activeView === "projekt" ? (
+              <Button onClick={() => navigateTo("status")} variant="ghost" className="text-sm">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
+              </Button>
+            ) : <div />}
             <button
               onClick={handleSearch}
               disabled={isSearching}
