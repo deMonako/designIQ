@@ -214,7 +214,7 @@ function ProjectDetail({
   const [showWycena,        setShowWycena]        = useState(false);
   const [resettingDocs,     setResettingDocs]     = useState(false);
   const [driveFiles,        setDriveFiles]        = useState([]);
-  const [driveFilesLoading, setDriveFilesLoading] = useState(false);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(GAS_ON);
 
   const loadDriveFiles = useCallback(() => {
     if (!GAS_ON) return;
@@ -406,7 +406,10 @@ function ProjectDetail({
 
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
-  const projectDocList   = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  // Widoczne dla klienta najpierw, ukryte na dole
+  const projectDocList   = (projectDocs ?? [])
+    .filter(d => d.projectId === project.id)
+    .sort((a, b) => (b.clientVisible ? 1 : 0) - (a.clientVisible ? 1 : 0));
   const isDwgSystemFile  = (name) => /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(name);
   const sheetDocDriveIds = new Set(projectDocList.map(d => d.driveId).filter(Boolean));
   const sheetDocUrls     = new Set(projectDocList.map(d => d.url).filter(Boolean));
@@ -1357,15 +1360,21 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc ? (
+              {/* Spinner ładowania plików z Drive */}
+              {driveFilesLoading && (
+                <div className="flex items-center gap-2 text-xs text-slate-400 px-1">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> Ładowanie plików z Drive…
+                </div>
+              )}
+
+              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc && !driveFilesLoading ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
-                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                  {driveFilesLoading ? "Ładowanie plików…" : "Brak dokumentów dla tego projektu"}
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" /> Brak dokumentów dla tego projektu
                 </div>
               ) : (
                 <>
-                  {/* ── Zarejestrowane w arkuszu ── */}
-                  {projectDocList.map(doc => (
+                  {/* ── Widoczne dla klienta (z arkusza) ── */}
+                  {projectDocList.filter(d => d.clientVisible).map(doc => (
                     <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
                       <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
                         <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
@@ -1408,7 +1417,7 @@ function ProjectDetail({
                     </div>
                   ))}
 
-                  {/* ── Pliki na Drive (niezarejestrowane w arkuszu) ── */}
+                  {/* ── Pliki na Drive (niezarejestrowane, domyślnie widoczne) ── */}
                   {driveOnlyFiles.map(f => {
                     const ext = f.name.split('.').pop()?.toLowerCase() ?? "";
                     const registerDoc = (clientVisible) => onAddProjectDoc({
@@ -1458,6 +1467,55 @@ function ProjectDetail({
                       </div>
                     );
                   })}
+
+                  {/* ── Ukryte dla klienta — zawsze na dole ── */}
+                  {projectDocList.filter(d => !d.clientVisible).length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="flex-1 border-t border-slate-200" />
+                        <span className="text-xs text-slate-400 font-medium flex items-center gap-1">
+                          <EyeOff className="w-3 h-3" /> Ukryte przed klientem
+                        </span>
+                        <div className="flex-1 border-t border-slate-200" />
+                      </div>
+                      {projectDocList.filter(d => !d.clientVisible).map(doc => (
+                        <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-3 opacity-70">
+                          <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                            <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-slate-900 text-sm truncate">{doc.name}</div>
+                            {doc.description && <div className="text-xs text-slate-500 mt-0.5">{doc.description}</div>}
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              <span className="text-xs text-slate-400">{doc.date}</span>
+                              <span className="text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{doc.type}</span>
+                              <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {doc.url && doc.url !== "#" && (
+                              <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                            )}
+                            <button onClick={() => onToggleDocClientVisible(doc.id)}
+                              className="p-1.5 rounded-lg transition-colors text-slate-400 hover:text-orange-500 hover:bg-orange-50">
+                              <EyeOff className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                onDeleteProjectDoc(doc.id);
+                                if (doc.driveId && onDeleteProjectFile) await onDeleteProjectFile(doc.driveId);
+                              }}
+                              className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
+                              title={doc.driveId ? "Usuń z arkusza i z Drive" : "Usuń z arkusza"}>
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </>
               )}
             </div>

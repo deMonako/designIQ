@@ -402,9 +402,11 @@ export default function Admin() {
     const doc = projectDocs.find(d => d.id === id);
     const newVisible = !(doc?.clientVisible ?? false);
     setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: newVisible } : d));
-    await gasSync(() => GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url), () =>
-      syncErr("Błąd zmiany widoczności dokumentu")
-    );
+    await gasSync(() => GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url), () => {
+      // Cofnij zmianę przy błędzie GAS
+      setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !newVisible } : d));
+      syncErr("Błąd zmiany widoczności dokumentu");
+    });
   };
 
   const handleDeleteProjectFile = async (driveId) => {
