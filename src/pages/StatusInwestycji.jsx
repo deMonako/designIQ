@@ -210,7 +210,7 @@ export default function StatusInwestycji() {
               <DwgViewer
                 projectCode={investment.investment_code}
                 clientMode
-                height="calc(100svh - 210px)"
+                height="calc(100svh - 270px)"
               />
             </div>
           </div>
