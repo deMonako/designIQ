@@ -192,6 +192,7 @@ function objToRow(sheetName, obj) {
 }
 
 function insertRow(sheetName, obj) {
+  if (!obj.id) obj.id = sheetName.slice(0, 3).toLowerCase() + "-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6);
   ss_().getSheetByName(sheetName).appendRow(objToRow(sheetName, obj));
   return obj;
 }

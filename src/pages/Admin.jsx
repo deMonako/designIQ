@@ -416,12 +416,10 @@ export default function Admin() {
   const handleResetProjectDocs = async (projectId, projectCode) => {
     setSyncStatus("syncing");
     try {
-      const result = await GAS.resetProjectDocs(projectId, projectCode);
-      // Zastąp dokumenty projektu nowo zarejestrowanymi
-      setProjectDocs(prev => [
-        ...prev.filter(d => String(d.projectId) !== String(projectId)),
-        ...(result?.docs ?? []),
-      ]);
+      await GAS.resetProjectDocs(projectId, projectCode);
+      // Po resecie pobierz świeże dane ze Sheets — gwarantuje spójność z arkuszem
+      const freshDocs = await GAS.getProjectDocs();
+      setProjectDocs(freshDocs);
       setSyncStatus("synced");
     } catch (e) {
       syncErr("Błąd resetu dokumentów: " + e.message);
