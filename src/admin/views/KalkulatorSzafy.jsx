@@ -417,14 +417,16 @@ function LayoutTab({ rows }) {
     dragIdx.current = idx;
     e.dataTransfer.effectAllowed = "move";
   };
-  const handleDragOver = (e, idx) => {
+  // onDragEnter fires once per element (not continuously like onDragOver)
+  const handleDragEnter = (e, idx) => {
     e.preventDefault();
     if (dragIdx.current === null || dragIdx.current === idx) return;
+    const from = dragIdx.current;
+    dragIdx.current = idx;
     setOrderedIds(prev => {
       const next = [...prev];
-      const [moved] = next.splice(dragIdx.current, 1);
+      const [moved] = next.splice(from, 1);
       next.splice(idx, 0, moved);
-      dragIdx.current = idx;
       return next;
     });
   };
@@ -528,7 +530,9 @@ function LayoutTab({ rows }) {
                       key={id}
                       draggable
                       onDragStart={e => handleDragStart(e, idx)}
-                      onDragOver={e => handleDragOver(e, idx)}
+                      onDragOver={e => e.preventDefault()}
+                      onDragEnter={e => handleDragEnter(e, idx)}
+                      onDrop={e => e.preventDefault()}
                       onDragEnd={handleDragEnd}
                       className="border-b border-slate-100 hover:bg-orange-50/40 cursor-grab active:cursor-grabbing transition-colors select-none"
                     >

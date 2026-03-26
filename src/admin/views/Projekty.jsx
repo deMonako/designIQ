@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
@@ -8,7 +8,7 @@ import {
   ChevronUp, ChevronDown, RefreshCw,
 } from "lucide-react";
 import { isOverdue, TODAY } from "../mockData";
-import { uploadFile, getProjectFiles } from "../api/gasApi";
+import { uploadFile } from "../api/gasApi";
 import WycenaEditor from "./WycenaEditor";
 import DwgViewer from "../../components/investment/DwgViewer";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -212,20 +212,7 @@ function ProjectDetail({
   const [newTask,       setNewTask]       = useState({ title: "", dueDate: TODAY, priority: "Normalny" });
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
-  const [driveFiles,        setDriveFiles]        = useState([]);
-  const [resettingDocs,     setResettingDocs]     = useState(false);
-  const [driveFilesLoading, setDriveFilesLoading] = useState(GAS_ON);
-
-  const loadDriveFiles = useCallback(() => {
-    if (!GAS_ON) return;
-    setDriveFilesLoading(true);
-    getProjectFiles(project.id, project.code)
-      .then(files => setDriveFiles(Array.isArray(files) ? files : []))
-      .catch(() => {})
-      .finally(() => setDriveFilesLoading(false));
-  }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { loadDriveFiles(); }, [project.id, project.code]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [resettingDocs, setResettingDocs] = useState(false);
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
@@ -406,22 +393,14 @@ function ProjectDetail({
 
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
-  const projectDocList    = (projectDocs ?? []).filter(d => d.projectId === project.id);
-  const sheetDocUrls      = new Set(projectDocList.map(d => d.url).filter(Boolean));
-  const sheetDocDriveIds  = new Set(projectDocList.map(d => d.driveId).filter(Boolean));
-  const isDwgSystemFile   = (name) => /^projekt(_.*)?\.(?:svg|json)$/i.test(name);
-  const driveOnlyFiles    = driveFiles.filter(f =>
-    !isDwgSystemFile(f.name) &&
-    !sheetDocUrls.has(f.webViewLink) &&
-    !sheetDocUrls.has(f.webContentLink) &&
-    !sheetDocDriveIds.has(f.id)
-  );
+  const projectDocList  = (projectDocs ?? []).filter(d => d.projectId === project.id);
+  const isDwgSystemFile = (name) => /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(name);
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
   const tabs = [
     { id: "tasks",        label: `Zadania (${projectTasks.length})` },
     { id: "checklists",   label: `Checklisty (${projectChecklists.length})` },
-    { id: "dokumentacja", label: driveFilesLoading ? "Dokumentacja (…)" : `Dokumentacja (${projectDocList.length + driveOnlyFiles.length})` },
+    { id: "dokumentacja", label: `Dokumentacja (${projectDocList.length})` },
     { id: "finanse",      label: "Finanse" },
     { id: "harmonogram",  label: "Harmonogram" },
     { id: "notes",        label: "Notatki" },
@@ -691,7 +670,7 @@ function ProjectDetail({
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-4 bg-white rounded-xl border border-slate-200 p-1 shadow-sm overflow-x-auto">
         {tabs.map(tab => (
-          <button key={tab.id} onClick={() => { setActiveTab(tab.id); if (tab.id === "dokumentacja") loadDriveFiles(); }}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
               activeTab === tab.id ? "bg-orange-500 text-white shadow-sm" : "text-slate-600 hover:bg-slate-100"
             }`}
@@ -1231,28 +1210,22 @@ function ProjectDetail({
           {activeTab === "dokumentacja" && (
             <div className="space-y-3">
               <div className="flex justify-end gap-2">
-                <button onClick={loadDriveFiles} disabled={driveFilesLoading}
-                  className="p-2 text-slate-400 hover:text-blue-500 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-40"
-                  title="Odśwież listę plików z Drive">
-                  <RefreshCw className={`w-4 h-4 ${driveFilesLoading ? "animate-spin" : ""}`} />
-                </button>
                 {onResetProjectDocs && (
                   <button
                     onClick={async () => {
-                      if (!window.confirm("Zresetować dokumenty projektu?\n\nUsunie wszystkie wpisy z arkusza i ponownie zeskanuje folder Drive. Pliki systemowe (config.json, projekt*.json/svg) będą ukryte, pozostałe widoczne dla klienta.")) return;
+                      if (!window.confirm("Zsynchronizować dokumenty z Drive?\n\nUsunie wszystkie wpisy z arkusza i ponownie zeskanuje folder projektu na Drive.\nPliki systemowe (config.json, projekt*.json/svg) będą ukryte, pozostałe widoczne dla klienta.")) return;
                       setResettingDocs(true);
                       try {
                         await onResetProjectDocs(project.id, project.code);
-                        await loadDriveFiles();
                       } finally {
                         setResettingDocs(false);
                       }
                     }}
                     disabled={resettingDocs}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-blue-500 rounded-lg hover:shadow-md disabled:opacity-40 transition-all"
-                    title="Wyczyść arkusz i zeskanuj Drive od nowa (pliki systemowe ukryte, reszta widoczna)">
+                    title="Wyczyść arkusz i zeskanuj Drive od nowa">
                     <RefreshCw className={`w-4 h-4 ${resettingDocs ? "animate-spin" : ""}`} />
-                    Odśwież dokumenty
+                    Synchronizuj z Drive
                   </button>
                 )}
                 <button onClick={() => setShowAddDoc(!showAddDoc)}
@@ -1341,12 +1314,11 @@ function ProjectDetail({
                               name: newDoc.name || docFile.name,
                               type: newDoc.type, description: newDoc.description,
                               url: uploaded.url, driveId: uploaded.driveId,
-                              date: TODAY, clientVisible: false,
+                              date: TODAY, clientVisible: !isDwgSystemFile(docFile.name),
                             });
                             setNewDoc({ name: "", type: "pdf", description: "" });
                             setDocFile(null);
                             setShowAddDoc(false);
-                            loadDriveFiles();
                           } catch(err) {
                             setUploadError("Błąd przesyłania: " + err.message);
                           } finally {
@@ -1364,7 +1336,7 @@ function ProjectDetail({
                   </motion.div>
                 )}
               </AnimatePresence>
-              {projectDocList.length === 0 && driveOnlyFiles.length === 0 && !showAddDoc ? (
+              {projectDocList.length === 0 && !showAddDoc ? (
                 <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-400 text-sm">
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" /> Brak dokumentów dla tego projektu
                 </div>
@@ -1405,7 +1377,6 @@ function ProjectDetail({
                             onDeleteProjectDoc(doc.id);
                             if (doc.driveId && onDeleteProjectFile) {
                               await onDeleteProjectFile(doc.driveId);
-                              loadDriveFiles();
                             }
                           }}
                           className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
@@ -1415,80 +1386,6 @@ function ProjectDetail({
                       </div>
                     </div>
                   ))}
-
-                  {driveOnlyFiles.length > 0 && (
-                    <>
-                      {projectDocList.length > 0 && (
-                        <div className="flex items-center gap-2 pt-1">
-                          <div className="flex-1 border-t border-slate-200" />
-                          <span className="text-xs text-slate-400 font-medium">Pliki na dysku (niezarejestrowane)</span>
-                          <div className="flex-1 border-t border-slate-200" />
-                        </div>
-                      )}
-                      {driveOnlyFiles.map(f => {
-                        const ext = f.name.split('.').pop()?.toLowerCase() ?? "";
-                        const promoteDoc = (clientVisible) => {
-                          onAddProjectDoc({
-                            id: `doc-${Date.now()}-${f.id}`,
-                            projectId: project.id,
-                            name: f.name,
-                            type: EXT_TYPE[ext] ?? "inne",
-                            description: "",
-                            url: f.webViewLink,
-                            driveId: f.id,
-                            date: TODAY,
-                            clientVisible,
-                          });
-                        };
-                        return (
-                          <div key={f.id} className="bg-blue-50/40 rounded-xl border border-blue-200/60 p-4 flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                              <FileText className="w-4 h-4 text-blue-500" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-slate-900 text-sm truncate">{f.name}</div>
-                              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                {f.modifiedTime && (
-                                  <span className="text-xs text-slate-400">{f.modifiedTime.substring(0, 10)}</span>
-                                )}
-                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
-                                  <Eye className="w-3 h-3" /> Widoczny dla klienta
-                                </span>
-                                <span className="text-xs text-slate-400">Dysk Google</span>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              <button
-                                onClick={() => promoteDoc(false)}
-                                className="p-1.5 text-slate-400 hover:text-orange-500 hover:bg-orange-50 rounded-lg transition-colors"
-                                title="Zarejestruj jako ukryty przed klientem">
-                                <EyeOff className="w-4 h-4" />
-                              </button>
-                              <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors">
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                              {f.webContentLink && (
-                                <a href={f.webContentLink} target="_blank" rel="noopener noreferrer" className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors" title="Pobierz">
-                                  <Download className="w-4 h-4" />
-                                </a>
-                              )}
-                              {onDeleteProjectFile && (
-                                <button
-                                  onClick={async () => {
-                                    await onDeleteProjectFile(f.id);
-                                    loadDriveFiles();
-                                  }}
-                                  className="p-1.5 text-slate-300 hover:text-red-400 transition-colors"
-                                  title="Usuń z Drive">
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </>
-                  )}
                 </>
               )}
             </div>
