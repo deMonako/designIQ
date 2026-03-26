@@ -399,14 +399,25 @@ export default function Admin() {
   };
 
   const handleToggleDocClientVisible = async (id) => {
+    const isCV = (v) => v === true || v === "TRUE" || v === "true" || v === 1 || v === "1";
     const doc = projectDocs.find(d => d.id === id);
-    const newVisible = !(doc?.clientVisible ?? false);
+    const newVisible = !isCV(doc?.clientVisible);
+    // Optimistic update
     setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: newVisible } : d));
-    await gasSync(() => GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url), () => {
-      // Cofnij zmianę przy błędzie GAS
+    if (!GAS_ON) return;
+    setSyncStatus("syncing");
+    try {
+      const updated = await GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url);
+      // Sync state with what GAS actually wrote to the sheet
+      if (updated) {
+        setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, ...updated, clientVisible: updated.clientVisible } : d));
+      }
+      setSyncStatus("synced");
+    } catch (e) {
+      // Revert on error
       setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !newVisible } : d));
       syncErr("Błąd zmiany widoczności dokumentu");
-    });
+    }
   };
 
   const handleDeleteProjectFile = async (driveId) => {

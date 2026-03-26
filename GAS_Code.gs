@@ -856,25 +856,47 @@ function doPost(e) {
       case "deleteProjectDoc":
         return ok(deleteRow("Dokumenty", body.id));
 
-      case "toggleDocClientVisible":
-        all = sheetToObjects("Dokumenty");
-        obj = findById(all, body.id);
-        // Fallback: szukaj po driveId lub url gdy id nie pasuje (stare wpisy bez id)
-        if (!obj && body.driveId) {
-          for (var ti = 0; ti < all.length; ti++) {
-            if (all[ti].driveId && String(all[ti].driveId) === String(body.driveId)) { obj = all[ti]; break; }
-          }
+      case "toggleDocClientVisible": {
+        // Szukamy wiersza BEZPOŚREDNIO w arkuszu po indeksie — nie przez upsertRow/findById
+        // żeby poprawnie trafiać w wiersze bez id (stare wpisy) i z pewnością edytować właściwą komórkę
+        var tvSh = ss_().getSheetByName("Dokumenty");
+        var tvHeaders = tvSh.getRange(1, 1, 1, tvSh.getLastColumn()).getValues()[0];
+        var tvLastRow = tvSh.getLastRow();
+        if (tvLastRow < 2) return err("Brak dokumentów w arkuszu");
+        var tvData = tvSh.getRange(2, 1, tvLastRow - 1, tvHeaders.length).getValues();
+
+        var tvIdIdx      = tvHeaders.indexOf("id");
+        var tvDriveIdIdx = tvHeaders.indexOf("driveId");
+        var tvUrlIdx     = tvHeaders.indexOf("url");
+        var tvCvIdx      = tvHeaders.indexOf("clientVisible");
+        if (tvCvIdx < 0) return err("Brak kolumny clientVisible w arkuszu Dokumenty");
+
+        // Szukaj wiersza: najpierw po id, potem po driveId, na końcu po url (bez query params)
+        var tvTargetRow = -1;
+        for (var tvi = 0; tvi < tvData.length; tvi++) {
+          var tvRowId      = tvIdIdx >= 0      ? String(tvData[tvi][tvIdIdx]).trim()                      : "";
+          var tvRowDriveId = tvDriveIdIdx >= 0 ? String(tvData[tvi][tvDriveIdIdx]).trim()                 : "";
+          var tvRowUrl     = tvUrlIdx >= 0     ? String(tvData[tvi][tvUrlIdx]).split("?")[0].trim()       : "";
+          if (body.id      && tvRowId      && tvRowId      !== "null" && tvRowId      === String(body.id).trim())                        { tvTargetRow = tvi + 2; break; }
+          if (body.driveId && tvRowDriveId && tvRowDriveId !== "null" && tvRowDriveId === String(body.driveId).trim())                   { tvTargetRow = tvi + 2; break; }
+          if (body.url     && tvRowUrl     && tvRowUrl                && tvRowUrl     === String(body.url).split("?")[0].trim())         { tvTargetRow = tvi + 2; break; }
         }
-        if (!obj && body.url) {
-          for (var ui = 0; ui < all.length; ui++) {
-            if (all[ui].url && String(all[ui].url) === String(body.url)) { obj = all[ui]; break; }
-          }
-        }
-        if (!obj) return err("Dokument nie znaleziony: " + body.id);
-        // Używamy przekazanej wartości clientVisible (jeśli podana jako bool), inaczej przełączamy
-        var newVisible = typeof body.clientVisible === "boolean"
-          ? body.clientVisible : !obj.clientVisible;
-        return ok(upsertRow("Dokumenty", Object.assign({}, obj, { clientVisible: newVisible })));
+        if (tvTargetRow < 0) return err("Dokument nie znaleziony: id=" + body.id + " driveId=" + body.driveId);
+
+        // Oblicz nową wartość
+        var tvCurrentCV   = tvData[tvTargetRow - 2][tvCvIdx];
+        var tvCurrentBool = (tvCurrentCV === true || tvCurrentCV === "TRUE" || tvCurrentCV === "true" || tvCurrentCV === 1 || tvCurrentCV === "1");
+        var tvNewVisible  = typeof body.clientVisible === "boolean" ? body.clientVisible : !tvCurrentBool;
+
+        // Aktualizuj TYLKO komórkę clientVisible w znalezionym wierszu
+        tvSh.getRange(tvTargetRow, tvCvIdx + 1).setValue(tvNewVisible);
+
+        // Zwróć zaktualizowany obiekt
+        var tvResult = {};
+        tvHeaders.forEach(function(h, ci) { tvResult[h] = parseCell(h, tvData[tvTargetRow - 2][ci]); });
+        tvResult.clientVisible = tvNewVisible;
+        return ok(tvResult);
+      }
 
       case "resetProjectDocs": {
         // Usuń wszystkie wpisy dokumentów projektu z arkusza,
