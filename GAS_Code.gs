@@ -383,7 +383,13 @@ function doGet(e) {
         return ok(sheetToObjects("Materiały"));
 
       case "getProjectDocs":
-        all = sheetToObjects("Dokumenty");
+        all = sheetToObjects("Dokumenty").map(function(d) {
+          // Normalizuj clientVisible do boolean — zabezpieczenie przed string "TRUE"/"FALSE"
+          var cv = d.clientVisible;
+          return Object.assign({}, d, {
+            clientVisible: (cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1")
+          });
+        });
         if (e.parameter.projectId) {
           filtered = all.filter(function(d) { return String(d.projectId) === e.parameter.projectId; });
           return ok(filtered);
@@ -569,19 +575,27 @@ function doGet(e) {
           var cv = d.clientVisible;
           return cv === true || cv === "TRUE" || cv === "true" || cv === 1;
         });
-        // Pliki z Drive – foldery nazwane kodem projektu (czytelna nazwa)
-        // Wykluczamy WSZYSTKIE pliki które mają wpis w arkuszu Dokumenty (widoczne i ukryte),
-        // bo są już obsługiwane przez visibleDocs. Tylko pliki bez wpisu trafiają do driveFiles.
-        var registeredUrls    = {};
+        // Pliki z Drive — wykluczamy WSZYSTKIE pliki które mają wpis w Dokumenty (widoczne i ukryte).
+        // Deduplication: driveId (najbardziej niezawodne), url bez query params jako fallback.
         var registeredDriveIds = {};
+        var registeredUrls     = {};
         projectDocs.forEach(function(d) {
-          if (d.url)     registeredUrls[d.url]           = true;
-          if (d.driveId) registeredDriveIds[d.driveId]   = true;
+          if (d.driveId) registeredDriveIds[String(d.driveId).trim()] = true;
+          if (d.url)     registeredUrls[String(d.url).split('?')[0]]  = true;
+          // też dodaj nazwę jako fallback
+        });
+        var registeredNames = {};
+        projectDocs.forEach(function(d) {
+          if (d.name) registeredNames[d.name.toLowerCase()] = true;
         });
         var SYS_PAT = /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i;
         var allDriveFiles = getDriveFiles(project.code || project.id);
         var driveFiles = allDriveFiles.filter(function(f) {
-          return !SYS_PAT.test(f.name) && !registeredUrls[f.webViewLink] && !registeredDriveIds[f.id];
+          if (SYS_PAT.test(f.name)) return false;
+          if (registeredDriveIds[String(f.id).trim()]) return false;
+          if (registeredUrls[String(f.webViewLink || '').split('?')[0]]) return false;
+          if (registeredNames[f.name.toLowerCase()]) return false;
+          return true;
         });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
