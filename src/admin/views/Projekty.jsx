@@ -406,18 +406,20 @@ function ProjectDetail({
 
   const projectTasks      = tasks.filter(t => t.projectId === project.id);
   const projectChecklists = checklists.filter(c => c.projectId === project.id);
+  // Normalizuj clientVisible — zabezpieczenie przed string "TRUE"/"FALSE" z arkusza
+  const isCV = (v) => v === true || v === "TRUE" || v === "true" || v === 1 || v === "1";
   // Widoczne dla klienta najpierw, ukryte na dole
   const projectDocList   = (projectDocs ?? [])
     .filter(d => d.projectId === project.id)
-    .sort((a, b) => (b.clientVisible ? 1 : 0) - (a.clientVisible ? 1 : 0));
+    .sort((a, b) => (isCV(b.clientVisible) ? 1 : 0) - (isCV(a.clientVisible) ? 1 : 0));
   const isDwgSystemFile  = (name) => /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(name);
   const sheetDocDriveIds = new Set(projectDocList.map(d => d.driveId).filter(Boolean));
-  const sheetDocUrls     = new Set(projectDocList.map(d => d.url).filter(Boolean));
-  // Pliki z Drive które nie są jeszcze w arkuszu i nie są plikami systemowymi
+  const sheetDocNames    = new Set(projectDocList.map(d => d.name?.toLowerCase()).filter(Boolean));
+  // Pliki z Drive — wyklucz: systemowe, już zarejestrowane (po driveId lub nazwie)
   const driveOnlyFiles   = driveFiles.filter(f =>
     !isDwgSystemFile(f.name) &&
     !sheetDocDriveIds.has(f.id) &&
-    !sheetDocUrls.has(f.webViewLink)
+    !sheetDocNames.has(f.name?.toLowerCase())
   );
   const tasksDone         = projectTasks.filter(t => t.status === "Zrobione").length;
 
@@ -1374,8 +1376,8 @@ function ProjectDetail({
               ) : (
                 <>
                   {/* ── Widoczne dla klienta (z arkusza) ── */}
-                  {projectDocList.filter(d => d.clientVisible).map(doc => (
-                    <div key={doc.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all ${doc.clientVisible ? "border-green-200 bg-green-50/20" : "border-slate-200"}`}>
+                  {projectDocList.filter(d => isCV(d.clientVisible)).map(doc => (
+                    <div key={doc.id} className="bg-white rounded-xl border border-green-200 bg-green-50/20 p-4 flex items-start gap-3 transition-all">
                       <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
                         <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
                       </div>
@@ -1388,10 +1390,7 @@ function ProjectDetail({
                           {doc.uploadedBy === "Klient" && (
                             <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Od klienta</span>
                           )}
-                          {doc.clientVisible
-                            ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
-                            : <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1"><EyeOff className="w-3 h-3" /> Tylko dla mnie</span>
-                          }
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1"><Eye className="w-3 h-3" /> Widoczny dla klienta</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -1401,8 +1400,8 @@ function ProjectDetail({
                           </a>
                         )}
                         <button onClick={() => onToggleDocClientVisible(doc.id)}
-                          className={`p-1.5 rounded-lg transition-colors ${doc.clientVisible ? "text-green-600 hover:text-green-700 hover:bg-green-50" : "text-slate-400 hover:text-orange-500 hover:bg-orange-50"}`}>
-                          {doc.clientVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          className="p-1.5 rounded-lg transition-colors text-green-600 hover:text-green-700 hover:bg-green-50">
+                          <Eye className="w-4 h-4" />
                         </button>
                         <button
                           onClick={async () => {
@@ -1469,7 +1468,7 @@ function ProjectDetail({
                   })}
 
                   {/* ── Ukryte dla klienta — zawsze na dole ── */}
-                  {projectDocList.filter(d => !d.clientVisible).length > 0 && (
+                  {projectDocList.filter(d => !isCV(d.clientVisible)).length > 0 && (
                     <>
                       <div className="flex items-center gap-2 pt-1">
                         <div className="flex-1 border-t border-slate-200" />
@@ -1478,7 +1477,7 @@ function ProjectDetail({
                         </span>
                         <div className="flex-1 border-t border-slate-200" />
                       </div>
-                      {projectDocList.filter(d => !d.clientVisible).map(doc => (
+                      {projectDocList.filter(d => !isCV(d.clientVisible)).map(doc => (
                         <div key={doc.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-start gap-3 opacity-70">
                           <div className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
                             <FileText className={`w-4 h-4 ${doc.type === "pdf" ? "text-red-500" : doc.type === "xlsx" ? "text-green-600" : "text-slate-500"}`} />
