@@ -154,19 +154,17 @@ export default function StatusInwestycji() {
     }
   };
 
+  const navigateTo = (view) => {
+    setActiveView(view);
+    if (view === "projekt") {
+      setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
+    } else {
+      scrollToResults();
+    }
+  };
+
   const renderActiveView = () => {
     const isDemo = investment?.investment_code === "DEMO" || investment?.investment_code === "MATERIAŁY";
-
-    // Wspólna funkcja dla zmiany widoku ze scrollem
-    const navigateTo = (view) => {
-      setActiveView(view);
-      // Przy rzucie DWG scrollujemy do góry – przycisk "Powrót" musi być widoczny
-      if (view === "projekt") {
-        setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
-      } else {
-        scrollToResults();
-      }
-    };
 
     switch (activeView) {
       case "wycena":
