@@ -329,12 +329,13 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
     });
   }, []);
 
-  // Załaduj zakupy projektu
-  // Gdy przekazano initialItems — używamy ich jako treść, ale i tak pobieramy id z GAS
-  // żeby zapis (handleSave) aktualizował istniejący rekord zamiast tworzyć duplikat.
+  // Załaduj zakupy projektu — tylko przy pierwszym wyborze (brak danych)
+  // lub gdy przekazano initialItems z zewnątrz (BOM export z KalkulatorSzafy)
+  // Gdy projekt już załadowany, wymagaj kliknięcia przycisku odświeżania
   useEffect(() => {
     if (!projectId) { setItems([]); setZakupyId(null); return; }
     if (!GAS_ON)    { setItems([]); setZakupyId(null); return; }
+    if (items.length > 0 && initialItems === null) return; // już załadowane, nie przeładowuj
     setLoading(true);
     getZakupy(projectId)
       .then(z => {
@@ -415,47 +416,48 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
         </div>
       </div>
 
-      {/* Pasek górny */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 transition-all flex-1 min-w-64">
-          <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
-          <select
-            value={projectId}
-            onChange={e => setProjectId(e.target.value)}
-            className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
-          >
-            <option value="">— wybierz projekt —</option>
-            {projects.map(p => (
-              <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
-            ))}
-          </select>
+      {/* Selektor projektu */}
+      <div className="flex items-end gap-3">
+        <div className="flex-1">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Projekt</label>
+          <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400 bg-white">
+            <FolderKanban className="w-4 h-4 text-slate-300 shrink-0" />
+            <select
+              value={projectId}
+              onChange={e => { setProjectId(e.target.value); setItems([]); setZakupyId(null); }}
+              className="flex-1 outline-none text-sm text-slate-800 bg-transparent"
+            >
+              <option value="">— wybierz projekt —</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+              ))}
+            </select>
+          </div>
         </div>
-
+        <button
+          onClick={() => {
+            if (!projectId) return;
+            setLoading(true);
+            getZakupy(projectId)
+              .then(z => { setZakupyId(z?.id ?? null); setItems(Array.isArray(z?.items) ? z.items : []); })
+              .catch(() => {})
+              .finally(() => setLoading(false));
+          }}
+          disabled={!projectId || loading}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Wczytaj
+        </button>
         {projectId && (
-          <>
-            <button
-              onClick={() => {
-                setLoading(true);
-                getZakupy(projectId)
-                  .then(z => { setZakupyId(z?.id ?? null); setItems(Array.isArray(z?.items) ? z.items : []); })
-                  .catch(() => {})
-                  .finally(() => setLoading(false));
-              }}
-              disabled={loading}
-              className="p-2.5 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 disabled:opacity-50 transition-colors"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            </button>
-
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-semibold hover:shadow-md disabled:opacity-50 transition-all"
-            >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Zapisz
-            </button>
-          </>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-900 disabled:opacity-50 transition-all"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            Zapisz
+          </button>
         )}
       </div>
 

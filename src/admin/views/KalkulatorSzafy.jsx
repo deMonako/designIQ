@@ -4,7 +4,7 @@ import {
   Zap, Cpu, Package, Download, AlertTriangle,
   CheckCircle2, AlertCircle, Plus, X, Trash2, RefreshCw,
   FolderKanban, FolderOpen, Save, ChevronDown, ChevronRight,
-  Search, Info, RotateCcw,
+  Search, Info, RotateCcw, LayoutList, GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { genId } from "../utils/id";
@@ -379,12 +379,196 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
   );
 }
 
+// ─── LayoutTab — przypisanie złączek do grup urządzeń ─────────────────────────
+
+function LayoutTab({ rows }) {
+  const [selectedTyp,  setSelectedTyp]  = useState("");
+  const [zugNr,        setZugNr]        = useState(1);
+  const [zugsPkt,      setZugsPkt]      = useState(1);
+  const [orderedIds,   setOrderedIds]   = useState([]);
+  const dragIdx = useRef(null);
+
+  const masterRows = useMemo(
+    () => rows.filter(r => (r.rola ?? "").toLowerCase().includes("master")),
+    [rows]
+  );
+
+  const uniqueTyps = useMemo(
+    () => [...new Set(masterRows.map(r => r.typ).filter(Boolean))].sort(),
+    [masterRows]
+  );
+
+  const rowMap = useMemo(
+    () => Object.fromEntries(rows.map(r => [r._id, r])),
+    [rows]
+  );
+
+  // Gdy zmienia się wybrany typ → inicjuj kolejność domyślną (typ→tag)
+  useEffect(() => {
+    if (!selectedTyp) { setOrderedIds([]); return; }
+    const filtered = masterRows
+      .filter(r => r.typ === selectedTyp)
+      .sort((a, b) => naturalCmp(a.tag, b.tag));
+    setOrderedIds(filtered.map(r => r._id));
+  }, [selectedTyp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Drag & drop ───────────────────────────────────────────────────────────
+  const handleDragStart = (e, idx) => {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = "move";
+  };
+  const handleDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragIdx.current === null || dragIdx.current === idx) return;
+    setOrderedIds(prev => {
+      const next = [...prev];
+      const [moved] = next.splice(dragIdx.current, 1);
+      next.splice(idx, 0, moved);
+      dragIdx.current = idx;
+      return next;
+    });
+  };
+  const handleDragEnd = () => { dragIdx.current = null; };
+
+  // ── Generuj plik .txt ─────────────────────────────────────────────────────
+  const handleGenerate = () => {
+    const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lines = [];
+    let terminal = 1;
+    for (const id of orderedIds) {
+      const r = rowMap[id];
+      if (!r) continue;
+      for (let i = 0; i < zugsPkt; i++) {
+        const suffix = zugsPkt > 1 ? ` ${LETTERS[i] ?? i + 1}` : "";
+        lines.push(`X${zugNr}:${terminal} ${r.tag} - ${r.pomieszczenie}${suffix}`);
+        terminal++;
+      }
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `layout_X${zugNr}_${selectedTyp || "punkty"}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="space-y-4">
+
+      {/* Kontrolki */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex-1 min-w-48">
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Grupa urządzeń (typ)</label>
+          <select
+            value={selectedTyp}
+            onChange={e => setSelectedTyp(e.target.value)}
+            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 bg-white outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+          >
+            <option value="">— wybierz typ —</option>
+            {uniqueTyps.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Nr. zuga</label>
+          <div className="flex items-center gap-1 border border-slate-200 rounded-xl px-3 py-2.5 bg-white focus-within:ring-2 focus-within:ring-orange-500/20 focus-within:border-orange-400">
+            <span className="text-slate-400 font-mono text-sm">X</span>
+            <input
+              type="number" min="1" value={zugNr}
+              onChange={e => setZugNr(Math.max(1, parseInt(e.target.value) || 1))}
+              className="w-14 text-sm text-slate-800 bg-transparent outline-none font-mono"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Zugów / pkt</label>
+          <input
+            type="number" min="1" max="8" value={zugsPkt}
+            onChange={e => setZugsPkt(Math.max(1, Math.min(8, parseInt(e.target.value) || 1)))}
+            className="w-20 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 bg-white outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+          />
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={!selectedTyp || orderedIds.length === 0}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
+        >
+          <Download className="w-4 h-4" />
+          Generuj .txt
+        </button>
+      </div>
+
+      {/* Preview kolejności */}
+      {selectedTyp && orderedIds.length === 0 && (
+        <p className="text-sm text-slate-400 text-center py-8">Brak punktów Master dla wybranego typu</p>
+      )}
+
+      {orderedIds.length > 0 && (
+        <div className="border border-slate-200 rounded-xl overflow-hidden">
+          <div className="overflow-x-auto" style={{ maxHeight: "calc(100vh - 400px)" }}>
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
+                  <th className="w-8 px-3 py-1.5" />
+                  <th className="text-left px-3 py-1.5 w-10">#</th>
+                  <th className="text-left px-3 py-1.5 w-32">ID</th>
+                  <th className="text-left px-3 py-1.5">Pomieszczenie</th>
+                  <th className="text-left px-3 py-1.5">Kondygnacja</th>
+                  <th className="text-left px-3 py-1.5 text-orange-600">Złączki</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orderedIds.map((id, idx) => {
+                  const r = rowMap[id];
+                  if (!r) return null;
+                  const first = 1 + idx * zugsPkt;
+                  const last  = first + zugsPkt - 1;
+                  return (
+                    <tr
+                      key={id}
+                      draggable
+                      onDragStart={e => handleDragStart(e, idx)}
+                      onDragOver={e => handleDragOver(e, idx)}
+                      onDragEnd={handleDragEnd}
+                      className="border-b border-slate-100 hover:bg-orange-50/40 cursor-grab active:cursor-grabbing transition-colors select-none"
+                    >
+                      <td className="px-3 py-1.5 text-slate-300">
+                        <GripVertical className="w-4 h-4" />
+                      </td>
+                      <td className="px-3 py-1.5 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
+                      <td className="px-3 py-1.5 font-mono text-xs font-semibold text-slate-700">{r.tag}</td>
+                      <td className="px-3 py-1.5 text-xs text-slate-600">{r.pomieszczenie}</td>
+                      <td className="px-3 py-1.5 text-xs text-slate-500">{r.kondygnacja}</td>
+                      <td className="px-3 py-1.5 text-xs font-mono text-orange-600 font-semibold">
+                        X{zugNr}:{first}{zugsPkt > 1 ? `–${last}` : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {orderedIds.length > 0 && (
+        <p className="text-xs text-slate-400 flex items-center gap-1.5">
+          <Info className="w-3 h-3 shrink-0" />
+          Przeciągnij wiersze aby zmienić kolejność. Generuj tworzy plik .txt z listą przypisań złączek.
+        </p>
+      )}
+
+    </div>
+  );
+}
+
 // ─── Główny komponent ─────────────────────────────────────────────────────────
 
 const TABS = [
   { id: "smart_home", label: "Smart Home",           icon: Cpu },
   { id: "klasyczna",  label: "Klasyczna instalacja", icon: Zap },
   { id: "zestawienie",label: "Zestawienie",          icon: Package },
+  { id: "layout",     label: "Layout",               icon: LayoutList },
 ];
 
 export default function KalkulatorSzafy({
@@ -427,10 +611,10 @@ export default function KalkulatorSzafy({
   const effectiveMappingsRef = useRef(effectiveMappings);
   useEffect(() => { effectiveMappingsRef.current = effectiveMappings; }, [effectiveMappings]);
 
-  // Auto-wczytaj po wyborze projektu — czekaj aż katalog będzie gotowy,
-  // żeby deviceLabel() od razu pokazywał nazwy zamiast ID
+  // Auto-wczytaj tylko przy pierwszym wyborze projektu (brak danych)
+  // Jeśli projekt już załadowany, wymagaj kliknięcia "Wczytaj"
   useEffect(() => {
-    if (!selectedProjectId || !catalogLoaded) return;
+    if (!selectedProjectId || !catalogLoaded || rows.length > 0) return;
     handleLoadPoints();
   }, [selectedProjectId, catalogLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1159,60 +1343,8 @@ export default function KalkulatorSzafy({
 
             {/* ══ TAB: Layout ══ */}
             {tab === "layout" && (
-              <motion.div key="layout" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-slate-400">Przypisz numery złączek w szafie do punktów instalacyjnych.</p>
-                  <button
-                    onClick={handleGenerateZakupy}
-                    disabled={exporting || !onExportToZakupy}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-700 text-white rounded-xl text-sm font-bold hover:from-slate-900 hover:to-slate-800 disabled:opacity-40 transition-all"
-                  >
-                    {exporting
-                      ? <RefreshCw className="w-4 h-4 animate-spin" />
-                      : <Download className="w-4 h-4" />}
-                    Generuj zakupy złączek
-                  </button>
-                </div>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="overflow-x-auto" style={{ maxHeight: "calc(100vh - 380px)" }}>
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-10">
-                        <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
-                          <th className="text-left px-3 py-1.5">Tag</th>
-                          <th className="text-left px-3 py-1.5">Kondygnacja</th>
-                          <th className="text-left px-3 py-1.5">Pomieszczenie</th>
-                          <th className="text-left px-3 py-1.5">El. sterujący</th>
-                          <th className="text-left px-3 py-1.5 w-36">Złączka (nr/typ)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {effectiveRows.map(row => {
-                          const pt = getPoint(row._id);
-                          return (
-                            <tr key={row._id} className="border-b border-slate-100 hover:bg-slate-50/60">
-                              <td className="px-3 py-1 font-mono text-xs text-slate-600">{row.tag}</td>
-                              <td className="px-3 py-1 text-xs text-slate-600">{row.kondygnacja}</td>
-                              <td className="px-3 py-1 text-xs text-slate-600">{row.pomieszczenie}</td>
-                              <td className="px-3 py-1 text-xs text-slate-500">{deviceLabel(row.controlDevice)}</td>
-                              <td className="px-3 py-1">
-                                <input
-                                  value={pt.terminal ?? ""}
-                                  onChange={e => updatePoint(row._id, { terminal: e.target.value })}
-                                  placeholder="np. 5"
-                                  className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-400 flex items-center gap-1">
-                  <Info className="w-3 h-3 shrink-0" />
-                  &ldquo;Generuj zakupy złączek&rdquo; liczy ile złączek każdego typu jest potrzebnych i dodaje je do Zakupów.
-                </p>
+              <motion.div key="layout" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                <LayoutTab rows={effectiveRows} />
               </motion.div>
             )}
 

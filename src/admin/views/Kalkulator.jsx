@@ -20,8 +20,8 @@ const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true,  narrow: true  },
-  { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true  },
+  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true,  width: "w-32" },
+  { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true,  width: "w-36" },
   { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
   { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
   { key: "rola",          label: "Rola",           sortable: true,  defaultVisible: true  },
@@ -461,9 +461,10 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     finally { setConfigSaving(false); }
   }, [project, rows, szafaData]);
 
-  // Auto-wczytaj po wyborze projektu
+  // Auto-wczytaj tylko przy pierwszym wyborze projektu (brak danych)
+  // Jeśli projekt już załadowany, wymagaj kliknięcia "Wczytaj"
   useEffect(() => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || rows.length > 0) return;
     handleLoadPoints();
   }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -698,7 +699,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                     {activeCols.map(col => (
                       <th
                         key={col.key}
-                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""} ${col.narrow ? "w-20" : ""}`}
+                        className={`text-left px-3 py-1.5 ${col.sortable ? "cursor-pointer select-none hover:text-slate-700" : ""} ${col.width ?? ""}`}
                         onClick={() => col.sortable && handleSort(col.key)}
                       >
                         <div className="flex items-center gap-1">
@@ -864,7 +865,7 @@ export default function Kalkulator({ projects = [], kalkulatorSettings = EMPTY_K
           <Calculator className="w-4 h-4 text-orange-600" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Pkt instalacyjne</h2>
+          <h2 className="text-lg font-bold text-slate-900">Instalacja</h2>
           <p className="text-xs text-slate-400">Przypisuj urządzenia sterujące i eksportuj dane punktów</p>
         </div>
       </div>

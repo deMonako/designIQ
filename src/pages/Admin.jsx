@@ -530,7 +530,7 @@ export default function Admin() {
           />
         );
       case "kalkulator":
-        return <Kalkulator projects={projects} kalkulatorSettings={kalkulatorSettings} />;
+        return null; // renderowane poza switchem (keep-alive)
       case "kalkulator_szafy":
         return null; // renderowane poza switchem (keep-alive)
       case "ustawienia":
@@ -572,6 +572,9 @@ export default function Admin() {
             initialProjectId={zakupyInitProjectId}
             initialItems={zakupyInitItems}
           />
+        </div>
+        <div style={{ display: currentView === "kalkulator" ? "" : "none" }}>
+          <Kalkulator projects={projects} kalkulatorSettings={kalkulatorSettings} />
         </div>
         <div style={{ display: currentView === "kalkulator_szafy" ? "" : "none" }}>
           <KalkulatorSzafy
