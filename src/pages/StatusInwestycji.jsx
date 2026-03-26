@@ -233,7 +233,7 @@ export default function StatusInwestycji() {
   };
 
   return (
-    <div className="min-h-screen py-20 bg-gradient-to-br from-slate-50 to-orange-50">
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-orange-50 ${activeView === "projekt" ? "pt-4 pb-20" : "py-20"}`}>
       <div className="w-full max-w-6xl mx-auto px-3 sm:px-6 lg:px-8">
         
         {!investment && (
