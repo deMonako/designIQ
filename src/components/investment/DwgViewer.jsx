@@ -502,6 +502,7 @@ function LoadBar({ progress, label }) {
             style={{ width: `${progress}%` }}
           />
         </div>
+        <p className="text-center text-xs text-slate-400 mt-1">Pierwsze ładowanie może zająć do minuty</p>
       </div>
     </div>
   );
