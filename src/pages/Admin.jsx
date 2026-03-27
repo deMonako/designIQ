@@ -102,6 +102,7 @@ export default function Admin() {
   const [materials,   setMaterials]   = useState(() => GAS_ON ? [] : ls("diq_materials",   mockMaterials));
   const [projectDocs, setProjectDocs] = useState(() => GAS_ON ? [] : ls("diq_projectDocs", mockProjectDocs));
   const [leads,       setLeads]       = useState(() => GAS_ON ? [] : ls("diq_leads", []));
+  const [activityLogs, setActivityLogs] = useState([]);
   const [kalkulatorSettings, setKalkulatorSettings] = useState(() =>
     ls("diq_kalkulator_settings", EMPTY_KALKULATOR_SETTINGS)
   );
@@ -117,7 +118,8 @@ export default function Admin() {
       GAS.getMaterials(),
       GAS.getProjectDocs(),
       GAS.getLeads(),
-    ]).then(([c, p, t, cl, m, d, l]) => {
+      GAS.getActivity(50).catch(() => []),
+    ]).then(([c, p, t, cl, m, d, l, act]) => {
       setClients(c);
       setProjects(p);
       setTasks(t);
@@ -125,6 +127,7 @@ export default function Admin() {
       setMaterials(m);
       setProjectDocs(d);
       setLeads(l);
+      setActivityLogs(act ?? []);
     }).catch(e => {
       setSyncError("Błąd ładowania danych z GAS: " + e.message);
     }).finally(() => setLoading(false));
@@ -452,7 +455,7 @@ export default function Admin() {
     if (!GAS_ON) return;
     setSyncStatus("syncing");
     try {
-      const [c, p, t, cl, m, d, l] = await Promise.all([
+      const [c, p, t, cl, m, d, l, act] = await Promise.all([
         GAS.getClients(),
         GAS.getProjects(),
         GAS.getTasks(),
@@ -460,6 +463,7 @@ export default function Admin() {
         GAS.getMaterials(),
         GAS.getProjectDocs(),
         GAS.getLeads(),
+        GAS.getActivity(50).catch(() => []),
       ]);
       setClients(c);
       setProjects(p);
@@ -468,6 +472,7 @@ export default function Admin() {
       setMaterials(m);
       setProjectDocs(d);
       setLeads(l);
+      setActivityLogs(act ?? []);
       setSyncStatus("synced");
     } catch (e) {
       setSyncError("Błąd odświeżania danych: " + e.message);
@@ -494,6 +499,7 @@ export default function Admin() {
         return (
           <Dashboard
             projects={projects} tasks={tasks} clients={clients}
+            activityLogs={activityLogs}
             onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask}
             onSelectProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />

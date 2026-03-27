@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
   FolderKanban, Phone, Mail, Pencil, Plus,
-  Zap,
+  Zap, UserPlus, Upload, FileText, Activity,
+  ChevronRight, RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -291,6 +292,19 @@ function ProjectCard({ project, client, onClick }) {
         </span>
       </div>
 
+      {/* Aktualny etap */}
+      {Array.isArray(project.stages) && project.stages.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mb-2">
+          <ChevronRight className="w-3 h-3 text-orange-400 flex-shrink-0" />
+          <span className="truncate">
+            {project.stages[project.stageIndex] ?? project.stages[0]}
+          </span>
+          <span className="text-slate-300 flex-shrink-0">
+            {(project.stageIndex ?? 0) + 1}/{project.stages.length}
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mb-1.5">
         <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
@@ -357,9 +371,86 @@ function SectionHeader({ color = "orange", children, badge, action }) {
   );
 }
 
+// ─── Activity helpers ─────────────────────────────────────────────────────────
+
+function timeAgo(isoStr) {
+  if (!isoStr) return "";
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)  return "przed chwilą";
+  if (mins  < 60) return `${mins} min temu`;
+  if (hours < 24) return `${hours} godz. temu`;
+  if (days  < 7)  return `${days} dni temu`;
+  return new Date(isoStr).toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
+}
+
+const ACTIVITY_META = {
+  project_created: { icon: FolderKanban, color: "text-blue-500",   bg: "bg-blue-50"   },
+  project_updated: { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
+  task_created:    { icon: Plus,         color: "text-orange-500", bg: "bg-orange-50" },
+  task_done:       { icon: CheckCircle2, color: "text-green-500",  bg: "bg-green-50"  },
+  task_updated:    { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
+  client_added:    { icon: UserPlus,     color: "text-violet-500", bg: "bg-violet-50" },
+  client_updated:  { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
+  file_uploaded:   { icon: Upload,       color: "text-cyan-500",   bg: "bg-cyan-50"   },
+  lead_created:    { icon: Zap,          color: "text-orange-500", bg: "bg-orange-50" },
+};
+
+function ActivityFeed({ logs }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? logs : logs.slice(0, 8);
+
+  if (!logs || logs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-slate-300 gap-2">
+        <Activity className="w-7 h-7" />
+        <span className="text-xs">Brak aktywności — zaloguj się do GAS i wykonaj akcję</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {visible.map((log, i) => {
+        const meta = ACTIVITY_META[log.type] || { icon: Activity, color: "text-slate-400", bg: "bg-slate-100" };
+        const Icon = meta.icon;
+        return (
+          <motion.div
+            key={log.id || i}
+            initial={{ opacity: 0, x: -4 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.03 }}
+            className="flex items-start gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors group"
+          >
+            <div className={`w-6 h-6 rounded-full ${meta.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+              <Icon className={`w-3 h-3 ${meta.color}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-slate-700 leading-snug line-clamp-2">{log.description}</p>
+            </div>
+            <span className="text-[10px] text-slate-400 flex-shrink-0 whitespace-nowrap mt-0.5">
+              {timeAgo(log.timestamp)}
+            </span>
+          </motion.div>
+        );
+      })}
+      {logs.length > 8 && (
+        <button
+          onClick={() => setShowAll(v => !v)}
+          className="w-full text-center text-xs text-slate-400 hover:text-orange-500 py-2 transition-colors"
+        >
+          {showAll ? "Pokaż mniej" : `Pokaż wszystkie (${logs.length})`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
+export default function Dashboard({ projects, tasks, clients, activityLogs = [], onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -637,6 +728,26 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
           )}
         </div>
       </div>
+
+      {/* ── Logi aktywności (pełna szerokość) ── */}
+      <section>
+        <SectionHeader
+          color="slate"
+          badge={activityLogs.length > 0 ? activityLogs.length : undefined}
+          action={
+            activityLogs.length > 0 && (
+              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                <RefreshCw className="w-3 h-3" /> odświeża się przy Odśwież
+              </span>
+            )
+          }
+        >
+          Ostatnia aktywność
+        </SectionHeader>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-2 py-1">
+          <ActivityFeed logs={activityLogs} />
+        </div>
+      </section>
 
       {/* ── Modal edycji zadania ── */}
       <AnimatePresence>

@@ -92,6 +92,10 @@ var HEADERS = {
   // ── Listy zakupów projektów ───────────────────────────────────────────────────
   "Zakupy": [
     "id", "projectId", "items", "updatedDate"
+  ],
+  // ── Log aktywności admina ────────────────────────────────────────────────────
+  "Aktywnosci": [
+    "id", "timestamp", "type", "description", "projectId", "clientId"
   ]
 };
 
@@ -222,6 +226,29 @@ function findById(arr, id) {
     if (String(arr[i].id) === String(id)) return arr[i];
   }
   return null;
+}
+
+// ── Logowanie aktywności ─────────────────────────────────────────────────────
+// Zapisuje zdarzenie do arkusza "Aktywnosci". Nie rzuca wyjątku – logi nie mogą
+// zatrzymać głównej akcji.
+function logActivity(type, description, projectId, clientId) {
+  try {
+    var sh = ss_().getSheetByName("Aktywnosci");
+    if (!sh) {
+      sh = ss_().insertSheet("Aktywnosci");
+      sh.appendRow(["id", "timestamp", "type", "description", "projectId", "clientId"]);
+    }
+    sh.appendRow([
+      "act-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+      new Date().toISOString(),
+      type || "",
+      description || "",
+      projectId  || "",
+      clientId   || ""
+    ]);
+  } catch (e) {
+    // Cisza – logowanie nie może blokować głównej akcji
+  }
 }
 
 function ok(data) {
@@ -726,6 +753,20 @@ function doGet(e) {
         return ok({ logged: true, date: logEntry.date, loxoneStatus: loxoneStatus });
       }
 
+      // ── Logi aktywności ────────────────────────────────────────────────────────
+      // GET ?action=getActivity&limit=50
+      case "getActivity": {
+        var actLimit = parseInt(e.parameter.limit) || 50;
+        var actSh = ss_().getSheetByName("Aktywnosci");
+        if (!actSh || actSh.getLastRow() <= 1) return ok([]);
+        var actAll = sheetToObjects("Aktywnosci");
+        // Sortuj malejąco (najnowsze pierwsze), ogranicz do limit
+        actAll.sort(function(a, b) {
+          return String(b.timestamp) > String(a.timestamp) ? 1 : -1;
+        });
+        return ok(actAll.slice(0, actLimit));
+      }
+
       default:
         return err("Nieznana akcja GET: " + action);
     }
@@ -746,11 +787,17 @@ function doPost(e) {
     switch (action) {
 
       // ── Klienci ──────────────────────────────────────────────────────────────
-      case "createClient":
-        return ok(insertRow("Klienci", body.client));
+      case "createClient": {
+        var newCl = insertRow("Klienci", body.client);
+        logActivity("client_added", "Dodano klienta: " + (body.client.name || ""), "", newCl.id);
+        return ok(newCl);
+      }
 
-      case "updateClient":
-        return ok(upsertRow("Klienci", body.client));
+      case "updateClient": {
+        var updCl = upsertRow("Klienci", body.client);
+        logActivity("client_updated", "Zaktualizowano klienta: " + (body.client.name || ""), "", body.client.id);
+        return ok(updCl);
+      }
 
       case "deleteClient":
         return ok(deleteRow("Klienci", body.id));
@@ -762,22 +809,40 @@ function doPost(e) {
         return ok(upsertRow("Klienci", Object.assign({}, obj, { isArchived: body.isArchived })));
 
       // ── Projekty ──────────────────────────────────────────────────────────────
-      case "createProject":
+      case "createProject": {
         getOrCreateProjectFolder(body.project.code || body.project.id);
-        return ok(insertRow("Projekty", body.project));
+        var newProj = insertRow("Projekty", body.project);
+        logActivity("project_created", "Utworzono projekt: " + (body.project.name || body.project.code || ""), newProj.id, body.project.clientId || "");
+        return ok(newProj);
+      }
 
-      case "updateProject":
-        return ok(upsertRow("Projekty", body.project));
+      case "updateProject": {
+        var updProj = upsertRow("Projekty", body.project);
+        var stageDesc = (Array.isArray(body.project.stages) && body.project.stageIndex != null)
+          ? " → etap: " + (body.project.stages[body.project.stageIndex] || "") : "";
+        logActivity("project_updated", "Zaktualizowano projekt: " + (body.project.name || "") + stageDesc, body.project.id, body.project.clientId || "");
+        return ok(updProj);
+      }
 
       case "deleteProject":
         return ok(deleteRow("Projekty", body.id));
 
       // ── Zadania ───────────────────────────────────────────────────────────────
-      case "createTask":
-        return ok(insertRow("Zadania", body.task));
+      case "createTask": {
+        var newTask = insertRow("Zadania", body.task);
+        logActivity("task_created", "Dodano zadanie: " + (body.task.title || ""), body.task.projectId || "", "");
+        return ok(newTask);
+      }
 
-      case "updateTask":
-        return ok(upsertRow("Zadania", body.task));
+      case "updateTask": {
+        var updTask = upsertRow("Zadania", body.task);
+        if (body.task.status === "Zrobione") {
+          logActivity("task_done", "Ukończono zadanie: " + (body.task.title || ""), body.task.projectId || "", "");
+        } else {
+          logActivity("task_updated", "Zaktualizowano zadanie: " + (body.task.title || ""), body.task.projectId || "", "");
+        }
+        return ok(updTask);
+      }
 
       case "deleteTask":
         return ok(deleteRow("Zadania", body.id));
@@ -816,7 +881,9 @@ function doPost(e) {
           ? getOrCreateProjectFolder(uploadFolderName)
           : getOrCreateMaterialsFolder();
         if (!uploadFolder) return err("Nie można uzyskać dostępu do folderu Drive (sprawdź DRIVE_FOLDER_ID)");
-        return ok(uploadBlob(body.base64, body.name, body.mimeType, uploadFolder));
+        var uploadResult = uploadBlob(body.base64, body.name, body.mimeType, uploadFolder);
+        logActivity("file_uploaded", "Wgrano plik: " + body.name, body.projectId || "", "");
+        return ok(uploadResult);
       }
 
       // ── Materiały ─────────────────────────────────────────────────────────────
@@ -1025,6 +1092,7 @@ function doPost(e) {
           } catch(ex) {}
         }
 
+        logActivity("lead_created", "Nowy lead: " + (newLeadObj.name || newLeadObj.email || "") + " [" + (newLeadObj.source || "") + "]", "", "");
         return ok({ id: newLeadObj.id, status: newLeadObj.status });
       }
 

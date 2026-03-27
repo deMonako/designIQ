@@ -302,3 +302,13 @@ export async function getKalkulatorConfig(projectCode) {
 export async function saveKalkulatorConfig(projectCode, config) {
   return gasPost("saveKalkulatorConfig", { projectCode, config });
 }
+
+
+// ────────────────────────────────────────────────────────────────────────────────
+// LOGI AKTYWNOŚCI
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera ostatnie wpisy z logu aktywności admina */
+export async function getActivity(limit = 50) {
+  return gasGet("getActivity", { limit });
+}
