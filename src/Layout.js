@@ -104,7 +104,7 @@ export default function Layout({ children }) {
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           exit={{ opacity: 0, y: 10, scale: 0.95 }}
                           transition={{ duration: 0.2 }}
-                          className="absolute top-full left-0 min-w-[240px] bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50"
+                          className="absolute top-full left-0 min-w-[200px] max-w-[90vw] bg-white rounded-xl shadow-xl border border-slate-200 py-2 z-50"
                         >
                           {item.items.map((subItem) => (
                             <Link
@@ -251,7 +251,7 @@ export default function Layout({ children }) {
         </AnimatePresence>
       </header>
 
-      <main className="flex-1 pt-20 pb-16 lg:pb-0">{children}</main>
+      <main className="flex-1 pt-20 pb-20 lg:pb-0">{children}</main>
 
       <footer className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="container mx-auto px-4 lg:px-8 py-12 lg:py-16">

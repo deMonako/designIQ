@@ -268,8 +268,8 @@ export default function ClientZakupyView({ investment, zakupy, onBack }) {
                         <table className="w-full text-sm">
                           <thead>
                             <tr className="text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50/60 border-b border-slate-100">
-                              <th className="text-left px-5 py-2 font-medium">Nazwa</th>
-                              <th className="text-center px-3 py-2 w-16 font-medium">Ilość</th>
+                              <th className="text-left px-3 sm:px-5 py-2 font-medium">Nazwa</th>
+                              <th className="text-center px-2 sm:px-3 py-2 w-14 sm:w-16 font-medium">Ilość</th>
                               {catHasPrices && (
                                 <>
                                   <th className="text-right px-3 py-2 w-24 font-medium hidden sm:table-cell">Cena netto</th>
@@ -291,8 +291,8 @@ export default function ClientZakupyView({ investment, zakupy, onBack }) {
                                   key={item.id}
                                   className={`transition-colors ${item.status === "Dostarczone" ? "bg-green-50/40" : "hover:bg-slate-50/60"}`}
                                 >
-                                  <td className="px-5 py-3">
-                                    <div className={`font-medium truncate max-w-xs ${item.status === "Dostarczone" ? "line-through text-slate-400" : "text-slate-900"}`}>
+                                  <td className="px-3 sm:px-5 py-3">
+                                    <div className={`font-medium truncate max-w-[140px] sm:max-w-xs ${item.status === "Dostarczone" ? "line-through text-slate-400" : "text-slate-900"}`}>
                                       {item.name || <em className="text-slate-400 not-italic">Bez nazwy</em>}
                                     </div>
                                   </td>

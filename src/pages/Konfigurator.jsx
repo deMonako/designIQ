@@ -346,8 +346,8 @@ export default function Konfigurator() {
                       animate={{ opacity: 1 }}
                       className="text-center mt-1 sm:mt-2 px-0.5 sm:px-1"
                     >
-                      <div className="font-semibold text-[0.6rem] sm:text-xs md:text-sm whitespace-nowrap">{step.title}</div>
-                      <div className="text-[0.55rem] sm:text-xs text-slate-500 hidden lg:block whitespace-nowrap">{step.description}</div>
+                      <div className="font-semibold text-xs md:text-sm leading-tight">{step.title}</div>
+                      <div className="text-[0.6rem] sm:text-xs text-slate-500 hidden lg:block whitespace-nowrap">{step.description}</div>
                     </motion.div>
                   </div>
                   {index < steps.length - 1 && (
