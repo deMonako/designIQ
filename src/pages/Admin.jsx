@@ -408,15 +408,14 @@ export default function Admin() {
     setSyncStatus("syncing");
     try {
       const updated = await GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url);
-      // Sync state with what GAS actually wrote to the sheet
-      if (updated) {
-        setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, ...updated, clientVisible: updated.clientVisible } : d));
-      }
+      // Re-fetch all projectDocs to confirm what's actually in the sheet
+      const freshDocs = await GAS.getProjectDocs();
+      setProjectDocs(freshDocs);
       setSyncStatus("synced");
     } catch (e) {
-      // Revert on error
+      // Revert on error and show exact GAS error message
       setProjectDocs(prev => prev.map(d => d.id === id ? { ...d, clientVisible: !newVisible } : d));
-      syncErr("Błąd zmiany widoczności dokumentu");
+      syncErr("Błąd widoczności: " + (e?.message || String(e)));
     }
   };
 
