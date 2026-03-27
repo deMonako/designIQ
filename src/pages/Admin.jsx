@@ -410,7 +410,7 @@ export default function Admin() {
     if (!GAS_ON) return;
     setSyncStatus("syncing");
     try {
-      const updated = await GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url);
+      await GAS.toggleDocClientVisible(id, newVisible, doc?.driveId, doc?.url);
       // Re-fetch all projectDocs to confirm what's actually in the sheet
       const freshDocs = await GAS.getProjectDocs();
       setProjectDocs(freshDocs);
