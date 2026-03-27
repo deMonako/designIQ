@@ -843,10 +843,9 @@ function doPost(e) {
             }
           }
           if (existingDoc) {
-            // Zachowaj oryginalne id i clientVisible — tylko uzupełnij brakujące pola
+            // Zachowaj oryginalne id, ale użyj nowego clientVisible (jawnie podanego przez wywołującego)
             return ok(upsertRow("Dokumenty", Object.assign({}, newDoc, {
-              id:            existingDoc.id,
-              clientVisible: existingDoc.clientVisible,
+              id: existingDoc.id,
             })));
           }
         }
