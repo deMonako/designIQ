@@ -25,13 +25,8 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
   // Definiujemy listy przed renderowaniem
   const allDocs = investment?.documents || [];
   
-  const clientDocuments = allDocs.filter(
-    (doc) => doc.uploaded_by === "Klient" || doc.uploaded_by === investment?.client_name
-  );
-  
-  const contractorDocuments = allDocs.filter(
-    (doc) => doc.uploaded_by !== "Klient" && doc.uploaded_by !== investment?.client_name
-  );
+  const clientDocuments = allDocs.filter((doc) => doc.uploaded_by === "Klient");
+  const contractorDocuments = allDocs.filter((doc) => doc.uploaded_by !== "Klient");
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];

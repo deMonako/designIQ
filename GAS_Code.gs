@@ -600,7 +600,7 @@ function doGet(e) {
         // Sprawdzamy zarówno boolean true jak i stringi "TRUE"/"true" (legacy data z arkusza)
         var visibleDocs = projectDocs.filter(function(d) {
           var cv = d.clientVisible;
-          return cv === true || cv === "TRUE" || cv === "true" || cv === 1;
+          return cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1";
         });
         // Pliki z Drive — wykluczamy WSZYSTKIE pliki które mają wpis w Dokumenty (widoczne i ukryte).
         // Deduplication: driveId (najbardziej niezawodne), url bez query params jako fallback.

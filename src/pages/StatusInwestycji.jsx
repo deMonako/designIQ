@@ -112,7 +112,7 @@ export default function StatusInwestycji() {
   };
 
   // --- LOGIKA POBIERANIA DANYCH ---
-  const handleSearch = async () => {
+  const handleSearch = async ({ silent = false } = {}) => {
     if (!investmentCode.trim()) {
       toast.error("Podaj kod inwestycji");
       return;
@@ -129,18 +129,19 @@ export default function StatusInwestycji() {
 
       if (result.ok && result.data) {
         const mapped = mapInvestmentResponse(result.data);
-        const isUpdate = !!investment;
+        const isFirstLoad = !investment;
 
         setInvestment(mapped);
         setQuotation(mapped.quotation);
         setZakupy(mapped.zakupy);
 
-        if (!isUpdate) {
+        if (isFirstLoad) {
           setActiveView("status");
           scrollToResults();
+          toast.success("Dane załadowane pomyślnie");
+        } else if (!silent) {
+          toast.success("Dane odświeżone");
         }
-
-        toast.success("Dane załadowane pomyślnie");
       } else {
         setNotFound(true);
         setInvestment(null);
@@ -218,10 +219,10 @@ export default function StatusInwestycji() {
 
       default:
         return (
-          <StatusDashboard 
-            investment={investment} 
-            onNavigate={(view) => navigateTo(view)} // Tutaj zmiana - teraz wycena też scrolluje
-            onRefresh={handleSearch}
+          <StatusDashboard
+            investment={investment}
+            onNavigate={(view) => navigateTo(view)}
+            onRefresh={() => handleSearch({ silent: true })}
           />
         );
     }
