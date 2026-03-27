@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { logger } from "../../logger";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import { 
@@ -249,7 +250,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     // Kluczowe: upewniamy się, że mamy kod "DEMO"
     const code = investment.investment_code || investment.id;
     
-    console.log("Próba aktualizacji statusu dla:", code, "na:", newStatus);
+    logger.log("Próba aktualizacji statusu dla:", code, "na:", newStatus);
 
     const payload = {
       action: "updateInvestmentStatus",
@@ -285,7 +286,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
       }
 
     } catch (error) {
-      console.error("Błąd wysyłania:", error);
+      logger.error("Błąd wysyłania:", error);
       toast.error("Wystąpił problem techniczny.");
       setIsSubmitting(false);
     }

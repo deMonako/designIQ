@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const BASE_URL = 'https://www.designiq.pl';
-const OG_IMAGE_DEFAULT = 'https://www.designiq.pl/og-image.jpg';
+const OG_IMAGE_DEFAULT = 'https://www.designiq.pl/logo512.png';
 
 const ORGANIZATION_SCHEMA = {
   "@context": "https://schema.org",

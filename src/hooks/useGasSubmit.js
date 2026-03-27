@@ -32,7 +32,6 @@ export function useGasSubmit(gasEndpoint) {
           body: JSON.stringify(payload),
           signal: controller.signal,
         });
-        clearTimeout(timeoutId);
 
         const result = await response.json();
 
@@ -43,12 +42,13 @@ export function useGasSubmit(gasEndpoint) {
           logger.error(`GAS Error (próba ${i + 1}): ${result.error || response.statusText}`);
         }
       } catch (err) {
-        clearTimeout(timeoutId);
         if (err.name === 'AbortError') {
           logger.error(`Timeout żądania (próba ${i + 1})`);
         } else {
           logger.error(`Błąd sieci (próba ${i + 1}):`, err);
         }
+      } finally {
+        clearTimeout(timeoutId);
       }
 
       if (i < maxRetries - 1) {

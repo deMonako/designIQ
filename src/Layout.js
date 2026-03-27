@@ -158,6 +158,9 @@ export default function Layout({ children }) {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label={mobileMenuOpen ? "Zamknij menu" : "Otwórz menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
               className="lg:hidden p-2 rounded-xl hover:bg-slate-100 transition-colors"
             >
               {mobileMenuOpen ? <X className="w-6 h-6 text-slate-700" /> : <Menu className="w-6 h-6 text-slate-700" />}
@@ -172,6 +175,7 @@ export default function Layout({ children }) {
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
+              id="mobile-menu"
               className="lg:hidden bg-white border-t border-slate-200 shadow-xl overflow-hidden"
             >
               <div className="container mx-auto px-4 py-4 space-y-2">

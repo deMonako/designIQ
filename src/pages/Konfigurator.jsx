@@ -442,7 +442,7 @@ export default function Konfigurator() {
                     </div>
 
                     <div className="space-y-3">
-                      {showValidationError.step1 && (!formData.metraz || parseInt(formData.metraz) < 20 || parseInt(formData.metraz) > 2000) && (
+                      {showValidationError.step1 && (!formData.metraz || isNaN(parseInt(formData.metraz)) || parseInt(formData.metraz) < 20 || parseInt(formData.metraz) > 2000) && (
                         <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
                           {!formData.metraz ? "Podaj metraż domu, aby kontynuować." : "Metraż musi być między 20 a 2000 m²."}
                         </div>
@@ -460,7 +460,7 @@ export default function Konfigurator() {
                               setShowValidationError({ ...showValidationError, step1: true });
                               }
                               }}
-                              disabled={!formData.metraz || parseInt(formData.metraz) < 20 || parseInt(formData.metraz) > 2000}
+                              disabled={!formData.metraz || isNaN(parseInt(formData.metraz)) || parseInt(formData.metraz) < 20 || parseInt(formData.metraz) > 2000}
                               className="bg-gradient-to-r from-orange-600 to-orange-500 hover:shadow-xl px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg w-full sm:w-auto disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Dalej
