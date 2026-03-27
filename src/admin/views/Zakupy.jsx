@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
-  ShoppingCart, FolderKanban, Save, Plus, Trash2, Loader2,
+  FolderKanban, Save, Plus, Trash2, Loader2,
   RefreshCw, ChevronDown, ChevronUp, ExternalLink, Link as LinkIcon, Package,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -447,7 +447,7 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
           className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Wczytaj
+          Wczytaj dane
         </button>
       </div>
 
@@ -507,10 +507,9 @@ export default function Zakupy({ projects = [], initialProjectId, initialItems =
       )}
 
       {/* Brak projektu */}
-      {!projectId && (
-        <div className="bg-white border border-dashed border-slate-200 rounded-xl p-16 text-center">
-          <ShoppingCart className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">Wybierz projekt aby zarządzać listą zakupów</p>
+      {!projectId && !loading && (
+        <div className="text-center py-10 text-slate-300 text-sm">
+          Wybierz projekt aby rozpocząć
         </div>
       )}
 

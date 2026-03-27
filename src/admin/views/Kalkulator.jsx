@@ -583,7 +583,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
           className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-orange-500 text-white rounded-xl text-sm font-bold disabled:opacity-40 hover:shadow-md hover:from-orange-700 hover:to-orange-600 transition-all"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-          Wczytaj punkty
+          Wczytaj dane
         </button>
       </div>
 
