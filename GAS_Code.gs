@@ -920,6 +920,7 @@ function doPost(e) {
       }
 
       case "deleteProjectDoc":
+        if (!body.id) return err("Brak id dokumentu");
         return ok(deleteRow("Dokumenty", body.id));
 
       case "toggleDocClientVisible": {
