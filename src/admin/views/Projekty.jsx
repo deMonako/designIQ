@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Plus, Search, FolderKanban, User, Calendar,
@@ -213,18 +213,6 @@ function ProjectDetail({
   const [delConfirmProject, setDelConfirmProject] = useState(false);
   const [showWycena,        setShowWycena]        = useState(false);
   const [syncingDocs, setSyncingDocs] = useState(false);
-  const docsSyncedRef = useRef(false);
-
-  // Reset synced flag when project changes
-  useEffect(() => { docsSyncedRef.current = false; }, [project.id]);
-
-  // Auto-sync when dokumentacja tab opens (once per project per session)
-  useEffect(() => {
-    if (activeTab !== "dokumentacja" || docsSyncedRef.current || syncingDocs || !GAS_ON || !onResetProjectDocs) return;
-    docsSyncedRef.current = true;
-    setSyncingDocs(true);
-    onResetProjectDocs(project.id, project.code).finally(() => setSyncingDocs(false));
-  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Edit project ──
   const [editingProject, setEditingProject] = useState(false);
