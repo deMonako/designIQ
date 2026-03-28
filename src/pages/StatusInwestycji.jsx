@@ -22,7 +22,7 @@ const GAS_URL = GAS_CONFIG.scriptUrl;
 
 // Mapuje odpowiedź nowego GAS na format oczekiwany przez komponenty inwestycji
 function mapInvestmentResponse(data) {
-  const { project, docs = [], files = [], messages = [], wycena, zakupy } = data;
+  const { project, docs = [], messages = [], wycena, zakupy } = data;
 
   // Etapy: nowy GAS przechowuje jako tablicę stringów, InvestmentTimeline oczekuje obiektów
   const stages = (project.stages || []).map((name, i) => ({
@@ -32,32 +32,19 @@ function mapInvestmentResponse(data) {
     notes: null,
   }));
 
-  // Dokumenty: połącz rekordy z arkusza + niezarejestrowane pliki z Drive
-  // docs = wpisy z arkusza (widoczne dla klienta) — uploadedBy może być "Klient" lub "designIQ"
-  // files = pliki z Drive BEZ wpisu w arkuszu (niezarejestrowane) — zawsze od strony designIQ
-  // Filtr clientVisible: belt-and-suspenders na wypadek gdyby GAS zwrócił ukryte docs
-  const visibleDocs = docs.filter(d => {
-    const cv = d.clientVisible;
-    // Jeśli pole nie istnieje (legacy) — przyjmij widoczny
-    if (cv === undefined || cv === null || cv === "") return true;
-    return cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1";
-  });
-  const documents = [
-    ...visibleDocs.map(d => ({
+  // Dokumenty: tylko rekordy z arkusza z clientVisible=true
+  const documents = docs
+    .filter(d => {
+      const cv = d.clientVisible;
+      if (cv === undefined || cv === null || cv === "") return false;
+      return cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1";
+    })
+    .map(d => ({
       name:          d.name,
       url:           d.url,
       uploaded_by:   d.uploadedBy || "designIQ",
       uploaded_date: d.date,
-    })),
-    ...files
-      .filter(f => !/^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i.test(f.name))
-      .map(f => ({
-        name:          f.name,
-        url:           f.webViewLink || f.webContentLink,
-        uploaded_by:   "designIQ",
-        uploaded_date: f.modifiedTime ? f.modifiedTime.substring(0, 10) : null,
-      })),
-  ];
+    }));
 
   return {
     // Pola używane przez StatusDashboard / ClientWycenaView

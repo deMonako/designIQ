@@ -664,32 +664,9 @@ function doGet(e) {
 
         var allDocs   = sheetToObjects("Dokumenty");
         var projectDocs = allDocs.filter(function(d) { return String(d.projectId) === String(project.id); });
-        // Sprawdzamy zarówno boolean true jak i stringi "TRUE"/"true" (legacy data z arkusza)
         var visibleDocs = projectDocs.filter(function(d) {
           var cv = d.clientVisible;
           return cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1";
-        });
-        // Pliki z Drive — wykluczamy WSZYSTKIE pliki które mają wpis w Dokumenty (widoczne i ukryte).
-        // Deduplication: driveId (najbardziej niezawodne), url bez query params jako fallback.
-        var registeredDriveIds = {};
-        var registeredUrls     = {};
-        projectDocs.forEach(function(d) {
-          if (d.driveId) registeredDriveIds[String(d.driveId).trim()] = true;
-          if (d.url)     registeredUrls[String(d.url).split('?')[0]]  = true;
-          // też dodaj nazwę jako fallback
-        });
-        var registeredNames = {};
-        projectDocs.forEach(function(d) {
-          if (d.name) registeredNames[d.name.toLowerCase()] = true;
-        });
-        var SYS_PAT = /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i;
-        var allDriveFiles = getDriveFiles(project.code || project.id);
-        var driveFiles = allDriveFiles.filter(function(f) {
-          if (SYS_PAT.test(f.name)) return false;
-          if (registeredDriveIds[String(f.id).trim()]) return false;
-          if (registeredUrls[String(f.webViewLink || '').split('?')[0]]) return false;
-          if (registeredNames[f.name.toLowerCase()]) return false;
-          return true;
         });
         var messages    = sheetToObjects("Wiadomosci").filter(function(m) {
           return String(m.projectId) === String(project.id);
@@ -711,7 +688,7 @@ function doGet(e) {
         return ok({
           project:   project,
           docs:      visibleDocs,
-          files:     driveFiles,
+          files:     [],
           messages:  messages,
           wycena:    wycena,
           zakupy:    zakupy
