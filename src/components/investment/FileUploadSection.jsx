@@ -65,7 +65,7 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
 
       toast.success("Plik przesłany pomyślnie!");
       setSelectedFile(null);
-      if (onFileUploaded) onFileUploaded();
+      if (onFileUploaded) await onFileUploaded();
     } catch (error) {
       toast.error("Błąd przesyłania: " + (error.message || "Sprawdź połączenie"));
     } finally {

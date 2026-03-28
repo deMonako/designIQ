@@ -21,6 +21,7 @@ export async function gasGet(action, params = {}) {
   Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, String(v)));
 
   const res = await fetch(url.toString(), {
+    cache: "no-store",
     signal: AbortSignal.timeout(GAS_CONFIG.requestTimeout),
   });
 
