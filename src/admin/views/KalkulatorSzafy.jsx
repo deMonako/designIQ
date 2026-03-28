@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import ReactDOM from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Zap, Cpu, Package, Download, AlertTriangle,
@@ -293,19 +294,33 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
   const [unit, setUnit] = useState("szt.");
   const [type, setType] = useState("other");
   const [showSugg, setShowSugg] = useState(false);
-  const ref = useRef(null);
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0, width: 0 });
+  const inputRef = useRef(null);
+  const dropRef = useRef(null);
+  const wrapRef = useRef(null);
 
   const suggestions = useMemo(() => {
     if (search.length < 2) return [];
     const q = search.toLowerCase();
-    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 6);
+    return matOptions.filter(m => m.name && m.name.toLowerCase().includes(q)).slice(0, 8);
   }, [search, matOptions]);
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setShowSugg(false); };
+    const h = (e) => {
+      if (wrapRef.current?.contains(e.target) || dropRef.current?.contains(e.target)) return;
+      setShowSugg(false);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
   }, []);
+
+  const openSugg = () => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX, width: Math.max(rect.width, 260) });
+    }
+    setShowSugg(true);
+  };
 
   const commit = (name = search, resolvedType = type) => {
     if (!name.trim()) return;
@@ -313,41 +328,49 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
     setSearch(""); setQty(1); setUnit("szt."); setType("other"); setShowSugg(false);
   };
 
+  const suggPortal = showSugg && suggestions.length > 0 && ReactDOM.createPortal(
+    <ul
+      ref={dropRef}
+      className="absolute z-[9999] bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto"
+      style={{ top: dropPos.top, left: dropPos.left, width: dropPos.width }}
+    >
+      {suggestions.map(m => (
+        <li
+          key={m.name}
+          onMouseDown={() => {
+            const inferredType = m.type ?? (
+              /przewód|kabel|linka|drut|NYM|YDY|LgY/.test(m.name) ? "cable"
+              : /złączka|szyna|listwa|zacisk/.test(m.name) ? "terminal"
+              : "other"
+            );
+            setSearch(m.name);
+            setType(inferredType);
+            if (m.unit) setUnit(m.unit);
+            setShowSugg(false);
+          }}
+          className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex justify-between"
+        >
+          <span className="truncate">{m.name}</span>
+          {m.price_pln != null && <span className="text-orange-600 ml-2 shrink-0">{m.price_pln} zł</span>}
+        </li>
+      ))}
+    </ul>,
+    document.body
+  );
+
   return (
-    <div className="flex items-center gap-2" ref={ref}>
+    <div className="flex items-center gap-2" ref={wrapRef}>
       <div className="relative flex-1">
         <input
+          ref={inputRef}
           value={search}
-          onChange={e => { setSearch(e.target.value); setShowSugg(true); }}
-          onFocus={() => setShowSugg(true)}
+          onChange={e => { setSearch(e.target.value); openSugg(); }}
+          onFocus={openSugg}
           onKeyDown={e => e.key === "Enter" && commit()}
           placeholder="Szukaj materiału lub wpisz nazwę…"
           className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-orange-400"
         />
-        {showSugg && suggestions.length > 0 && (
-          <ul className="absolute left-0 top-full mt-0.5 w-64 bg-white border border-slate-200 rounded shadow-lg z-50 max-h-36 overflow-y-auto">
-            {suggestions.map(m => (
-              <li
-                key={m.name}
-                onMouseDown={() => {
-                  const inferredType = m.type ?? (
-                    /przewód|kabel|linka|drut|NYM|YDY|LgY/.test(m.name) ? "cable"
-                    : /złączka|szyna|listwa|zacisk/.test(m.name) ? "terminal"
-                    : "other"
-                  );
-                  setSearch(m.name);
-                  setType(inferredType);
-                  if (m.unit) setUnit(m.unit);
-                  setShowSugg(false);
-                }}
-                className="px-3 py-1.5 text-xs hover:bg-orange-50 cursor-pointer flex justify-between"
-              >
-                <span className="truncate">{m.name}</span>
-                {m.price_pln != null && <span className="text-orange-600 ml-2 shrink-0">{m.price_pln} zł</span>}
-              </li>
-            ))}
-          </ul>
-        )}
+        {suggPortal}
       </div>
       <select
         value={type}
