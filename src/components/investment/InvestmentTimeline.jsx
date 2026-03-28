@@ -105,8 +105,9 @@ export default function InvestmentTimeline({ stages, currentStage }) {
           <motion.div
             key={index}
             initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.4, delay: Math.min(index * 0.07, 0.4) }}
             className="relative"
           >
             

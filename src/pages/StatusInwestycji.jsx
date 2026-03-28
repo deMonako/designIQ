@@ -173,7 +173,8 @@ export default function StatusInwestycji() {
   };
 
   const renderActiveView = () => {
-    const isDemo = investment?.investment_code === "DEMO" || investment?.investment_code === "MATERIAŁY";
+    const code = investment?.investment_code || investment?.code || "";
+    const isDemo = code === "DEMO" || code === "MATERIAŁY";
 
     switch (activeView) {
       case "wycena":
@@ -261,8 +262,9 @@ export default function StatusInwestycji() {
                   <Input
                     value={investmentCode}
                     onChange={(e) => setInvestmentCode(e.target.value.toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                    onKeyDown={(e) => e.key === 'Enter' && !isSearching && handleSearch()}
                     placeholder="np. DEMO"
+                    disabled={isSearching}
                     className="h-14 text-lg"
                   />
                   <Button onClick={handleSearch} disabled={isSearching} className="h-14 px-8 bg-orange-600 hover:bg-orange-700 text-white transition-colors">

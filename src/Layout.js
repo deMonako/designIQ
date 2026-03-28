@@ -307,7 +307,7 @@ export default function Layout({ children }) {
             </div>
           </div>
           <div className="mt-12 pt-8 border-t border-white/10 text-center text-sm text-slate-400">
-            <p>&copy; 2025 designiQ. Wszelkie prawa zastrzeżone.</p>
+            <p>&copy; {new Date().getFullYear()} designiQ. Wszelkie prawa zastrzeżone.</p>
             <p className="mt-2">
               <Link to={createPageUrl("PolitykaPrywatnosci")} className="hover:text-orange-300 transition-colors">Polityka Prywatności</Link>
             </p>

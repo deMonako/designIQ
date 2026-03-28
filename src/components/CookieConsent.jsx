@@ -88,7 +88,7 @@ export default function CookieConsent() {
             initial={{ y: 100, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-0 left-0 right-0 z-50 p-4 bg-white border-t-2 border-orange-500 shadow-2xl"
+            className="fixed bottom-0 left-0 right-0 z-[60] p-4 pb-[calc(1rem+64px)] md:pb-4 bg-white border-t-2 border-orange-500 shadow-2xl"
           >
             <div className="container mx-auto max-w-6xl">
               <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
@@ -137,7 +137,7 @@ export default function CookieConsent() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4"
             onClick={() => setShowSettings(false)}
           >
             <motion.div

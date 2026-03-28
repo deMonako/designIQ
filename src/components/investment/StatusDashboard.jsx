@@ -154,7 +154,7 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
       <FileUploadSection
         investment={investment}
         onFileUploaded={onRefresh}
-        isReadOnly={investment.investment_code === "DEMO" || investment.investment_code === "MATERIAŁY"}
+        isReadOnly={["DEMO", "MATERIAŁY"].includes(investment.investment_code || investment.code)}
       />
     </div>
   );

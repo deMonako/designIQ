@@ -29,6 +29,19 @@ export default function Oferta() {
       ]
     },
     {
+      name: "Smart design+",
+      tagline: "Pełny projekt instalacji",
+      gradient: "from-orange-600 to-orange-500",
+      features: [
+        { icon: Home, text: "Projekt smart home" },
+        { icon: Pencil, text: "Projekt szafy sterowniczej"},
+        { icon: Plug, text: "Lista okablowania" },
+        { icon: Cpu, text: "Lista podzespołów" },
+        { icon: Headphones, text: "Wsparcie techniczne" },
+        { icon: Factory, text: "Prefabrykacja szafy sterowniczej", highlight: true }
+      ]
+    },
+    {
       name: "Full house",
       tagline: "Kompleksowe uruchomienie",
       gradient: "from-orange-700 to-slate-700",
@@ -41,19 +54,6 @@ export default function Oferta() {
         { icon: Headphones, text: "Wsparcie techniczne" },
         { icon: Factory, text: "Prefabrykacja szafy sterowniczej", highlight: true },
         { icon: Wrench, text: "Uruchomienie i integracja", highlight: true }
-      ]
-    },
-    {
-      name: "Smart design+",
-      tagline: "Pełny projekt instalacji",
-      gradient: "from-orange-600 to-orange-500",
-      features: [
-        { icon: Home, text: "Projekt smart home" },
-        { icon: Pencil, text: "Projekt szafy sterowniczej"},
-        { icon: Plug, text: "Lista okablowania" },
-        { icon: Cpu, text: "Lista podzespołów" },
-        { icon: Headphones, text: "Wsparcie techniczne" },
-        { icon: Factory, text: "Prefabrykacja szafy sterowniczej", highlight: true }
       ]
     }
   ];

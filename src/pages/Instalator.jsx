@@ -37,7 +37,7 @@ export default function Instalator() {
   };
 
   return (
-    <div className="min-h-screen bg-white pt-32 pb-20 px-4 overflow-hidden">
+    <div className="min-h-screen bg-white py-12 px-4 overflow-hidden">
       <div className="max-w-6xl mx-auto">
         
         {/* SEKCOJA PROOF OF CONCEPT */}

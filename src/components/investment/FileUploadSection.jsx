@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Card, CardContent } from "../ui/card";
-import { Upload, FileText, Image, Download, Loader2, X, AlertCircle } from "lucide-react";
+import { Upload, FileText, Image, Download, Loader2, X } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { gasPost } from "../../admin/api/gasClient";
@@ -90,37 +90,38 @@ export default function FileUploadSection({ investment, onFileUploaded, isReadOn
           Dokumenty i zdjęcia
         </h3>
 
-        <div className="mb-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
-          <p className="text-sm text-slate-600 mb-3">
-            Dodaj zdjęcia postępu prac, dokumenty lub inne pliki związane z inwestycją
-          </p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Input
-              type="file"
-              onChange={handleFileSelect}
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
-              className="flex-1"
-            />
-            {selectedFile && (
-              <Button onClick={() => setSelectedFile(null)} variant="outline" size="icon">
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || isUploading || isReadOnly}
-              className="bg-gradient-to-r from-orange-600 to-orange-500 text-white"
-            >
-              {isUploading ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Przesyłanie...</>
-              ) : isReadOnly ? (
-                <><AlertCircle className="w-4 h-4 mr-2" />Zablokowane</>
-              ) : (
-                <><Upload className="w-4 h-4 mr-2" />Prześlij</>
+        {!isReadOnly && (
+          <div className="mb-6 p-4 bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
+            <p className="text-sm text-slate-600 mb-3">
+              Dodaj zdjęcia postępu prac, dokumenty lub inne pliki związane z inwestycją
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                type="file"
+                onChange={handleFileSelect}
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx"
+                className="flex-1"
+                disabled={isUploading}
+              />
+              {selectedFile && (
+                <Button onClick={() => setSelectedFile(null)} variant="outline" size="icon" disabled={isUploading}>
+                  <X className="w-4 h-4" />
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={!selectedFile || isUploading}
+                className="bg-gradient-to-r from-orange-600 to-orange-500 text-white"
+              >
+                {isUploading ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Przesyłanie...</>
+                ) : (
+                  <><Upload className="w-4 h-4 mr-2" />Prześlij</>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="space-y-6">
           {/* Twoje pliki */}

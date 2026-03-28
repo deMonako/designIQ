@@ -155,7 +155,7 @@ export default function Home() {
           </motion.div>
 
           {/* Feature Pills */}
-          <div className="mt-12 md:mt-6 mb-28 flex flex-wrap justify-center gap-4">
+          <div className="mt-10 md:mt-6 mb-12 md:mb-8 flex flex-wrap justify-center gap-4">
             {features.map((feature, index) => {
               const Icon = feature.icon;
               return (

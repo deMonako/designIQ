@@ -289,12 +289,14 @@ const pageMetadata = {
     title: 'Panel Klienta – Status Inwestycji Smart Home | designiQ',
     description: 'Panel klienta designiQ – sprawdź status realizacji swojego projektu Smart Home. Śledzenie etapów budowy, dokumentacja i wyceny w jednym miejscu.',
     keywords: 'panel klienta smart home, status inwestycji designiq, śledzenie projektu smart home',
+    robots: 'noindex, nofollow',
     schema: null,
   },
   '/PolitykaPrywatnosci': {
     title: 'Polityka Prywatności i Cookies | designiQ Smart Home',
     description: 'Polityka prywatności designiQ: zasady przetwarzania danych osobowych zgodnie z RODO, polityka cookies oraz prawa użytkownika serwisu Smart Home.',
     keywords: 'polityka prywatności designiq, rodo smart home, cookies polityka',
+    robots: 'noindex, follow',
     schema: null,
   },
 };
@@ -311,7 +313,7 @@ export default function SEOHead() {
     // Update meta tags
     updateMetaTag('name', 'description', metadata.description);
     updateMetaTag('name', 'keywords', metadata.keywords);
-    updateMetaTag('name', 'robots', 'index, follow');
+    updateMetaTag('name', 'robots', metadata.robots || 'index, follow');
     updateMetaTag('name', 'author', 'designiQ');
     updateMetaTag('name', 'viewport', 'width=device-width, initial-scale=1.0');
 
@@ -340,12 +342,14 @@ export default function SEOHead() {
     }
     canonical.href = canonicalUrl;
 
-    // Schema.org structured data
-    let schemaScript = document.querySelector('script[type="application/ld+json"]');
+    // Schema.org structured data — używamy atrybutu data-page-schema, żeby nie kolidować
+    // ze statycznymi skryptami schema.org w index.html
+    let schemaScript = document.querySelector('script[data-page-schema="true"]');
     if (metadata.schema) {
       if (!schemaScript) {
         schemaScript = document.createElement('script');
         schemaScript.type = 'application/ld+json';
+        schemaScript.setAttribute('data-page-schema', 'true');
         document.head.appendChild(schemaScript);
       }
       schemaScript.textContent = JSON.stringify(metadata.schema);

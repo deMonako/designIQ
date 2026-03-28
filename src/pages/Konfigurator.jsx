@@ -43,14 +43,7 @@ export default function Konfigurator() {
     }
   };
 
-  const scrollToForm = () => {
-    setTimeout(() => {
-      if (configuratorRef.current) {
-        const top = configuratorRef.current.getBoundingClientRect().top + window.scrollY - 35;
-        window.scrollTo({ top, behavior: 'smooth' });
-      }
-    }, 30);
-  };
+  const scrollToForm = scrollToConfigurator;
 
   const pakiety = [
     { 
