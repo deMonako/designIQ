@@ -35,8 +35,15 @@ function mapInvestmentResponse(data) {
   // Dokumenty: połącz rekordy z arkusza + niezarejestrowane pliki z Drive
   // docs = wpisy z arkusza (widoczne dla klienta) — uploadedBy może być "Klient" lub "designIQ"
   // files = pliki z Drive BEZ wpisu w arkuszu (niezarejestrowane) — zawsze od strony designIQ
+  // Filtr clientVisible: belt-and-suspenders na wypadek gdyby GAS zwrócił ukryte docs
+  const visibleDocs = docs.filter(d => {
+    const cv = d.clientVisible;
+    // Jeśli pole nie istnieje (legacy) — przyjmij widoczny
+    if (cv === undefined || cv === null || cv === "") return true;
+    return cv === true || cv === "TRUE" || cv === "true" || cv === 1 || cv === "1";
+  });
   const documents = [
-    ...docs.map(d => ({
+    ...visibleDocs.map(d => ({
       name:          d.name,
       url:           d.url,
       uploaded_by:   d.uploadedBy || "designIQ",
