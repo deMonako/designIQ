@@ -534,18 +534,6 @@ function codeColor(code) {
 }
 
 function LoginTimeline({ logs }) {
-  // Histogram: liczba logowań per godzina
-  const byHour = useMemo(() => {
-    const counts = Array(24).fill(0);
-    logs.forEach(l => {
-      const h = l.timestamp ? new Date(l.timestamp).getHours() : -1;
-      if (h >= 0) counts[h]++;
-    });
-    return counts;
-  }, [logs]);
-
-  const maxHour = Math.max(...byHour, 1);
-
   // Unikalne kody (legenda)
   const codes = useMemo(() => {
     const seen = {};
@@ -567,7 +555,7 @@ function LoginTimeline({ logs }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* Legenda kodów */}
       <div className="flex flex-wrap gap-2">
         {codes.map(c => (
@@ -577,43 +565,15 @@ function LoginTimeline({ logs }) {
         ))}
       </div>
 
-      {/* Histogram godzinowy */}
-      <div>
-        <p className="text-xs text-slate-400 mb-2 font-medium">Aktywność wg godziny (wszystkie wpisy)</p>
-        <div className="flex items-end gap-0.5 h-16">
-          {byHour.map((count, h) => (
-            <div key={h} className="flex-1 flex flex-col items-center gap-0.5 group relative">
-              <div
-                className="w-full bg-orange-400 rounded-t transition-all"
-                style={{ height: `${Math.round((count / maxHour) * 52)}px`, minHeight: count > 0 ? 3 : 0 }}
-              />
-              {/* tooltip */}
-              {count > 0 && (
-                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-slate-800 text-white text-xs px-1.5 py-0.5 rounded whitespace-nowrap z-10">
-                  {h}:00 — {count}×
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex justify-between text-[10px] text-slate-300 mt-0.5 px-0.5">
-          <span>0</span><span>6</span><span>12</span><span>18</span><span>23</span>
-        </div>
-      </div>
-
-      {/* Oś czasu — ostatnie wpisy */}
+      {/* Lista ostatnich wejść */}
       <div>
         <p className="text-xs text-slate-400 mb-2 font-medium">Ostatnie wejścia ({logs.length} łącznie)</p>
         <div className="relative border-l-2 border-slate-100 ml-2 space-y-0">
           {entries.map((e, i) => (
             <div key={e.id || i} className="flex items-center gap-3 pl-4 py-1 relative">
-              {/* Kropka na osi */}
               <div className={`absolute -left-[5px] w-2.5 h-2.5 rounded-full border-2 border-white ${codeColor(e.code)}`} />
-              {/* Czas */}
               <span className="text-xs font-mono text-slate-400 w-10 shrink-0">{e.hhmm}</span>
-              {/* Data (tylko jeśli nie dzisiaj) */}
               {!e.isToday && <span className="text-[10px] text-slate-300 shrink-0">{e.date}</span>}
-              {/* Kod */}
               <span className={`text-xs font-semibold text-white px-2 py-0.5 rounded-full ${codeColor(e.code)}`}>
                 {e.code || "—"}
               </span>

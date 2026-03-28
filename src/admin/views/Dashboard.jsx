@@ -399,8 +399,7 @@ const ACTIVITY_META = {
 };
 
 function ActivityFeed({ logs }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? logs : logs.slice(0, 8);
+  const visible = logs.slice(0, 10);
 
   if (!logs || logs.length === 0) {
     return (
@@ -436,14 +435,6 @@ function ActivityFeed({ logs }) {
           </motion.div>
         );
       })}
-      {logs.length > 8 && (
-        <button
-          onClick={() => setShowAll(v => !v)}
-          className="w-full text-center text-xs text-slate-400 hover:text-orange-500 py-2 transition-colors"
-        >
-          {showAll ? "Pokaż mniej" : `Pokaż wszystkie (${logs.length})`}
-        </button>
-      )}
     </div>
   );
 }
