@@ -1047,27 +1047,49 @@ function doPost(e) {
 
       case "resetProjectDocs": {
         // Usuń wszystkie wpisy dokumentów projektu z arkusza,
-        // przeskanuj folder Drive i zarejestruj wszystko (visible=true),
-        // poza plikami systemowymi (config.json, projekt*.json, projekt*.svg)
+        // przeskanuj folder Drive i zarejestruj wszystko,
+        // poza plikami systemowymi (config.json, projekt*.json, projekt*.svg).
+        // WAŻNE: zachowuje ręcznie ustawione wartości clientVisible (po driveId, fallback po nazwie).
         var rpdProjectId = body.projectId;
         var rpdCode      = body.projectCode;
         if (!rpdProjectId || !rpdCode) return err("Brak projectId lub projectCode");
 
-        // 1. Usuń wszystkie istniejące wpisy dla tego projektu
-        // Skanujemy arkusz bezpośrednio (nie przez id) żeby usunąć też stare wiersze bez id
+        // 1. Snapshot istniejących clientVisible przed usunięciem
         var docSh = ss_().getSheetByName("Dokumenty");
         var docHeaders = docSh.getRange(1, 1, 1, docSh.getLastColumn()).getValues()[0];
-        var projIdColIdx = docHeaders.indexOf("projectId");
+        var projIdColIdx    = docHeaders.indexOf("projectId");
+        var driveIdColIdx   = docHeaders.indexOf("driveId");
+        var nameColIdx      = docHeaders.indexOf("name");
+        var cvColIdx        = docHeaders.indexOf("clientVisible");
         var lastRow = docSh.getLastRow();
-        // Usuwamy od końca żeby nie przesuwać indeksów
-        for (var ri = lastRow; ri >= 2; ri--) {
+
+        // snapshotById: { driveId -> clientVisible (bool) }
+        // snapshotByName: { name -> clientVisible (bool) } — fallback gdy driveId brak
+        var snapshotById   = {};
+        var snapshotByName = {};
+        for (var si = 2; si <= lastRow; si++) {
+          var row = docSh.getRange(si, 1, 1, docSh.getLastColumn()).getValues()[0];
+          if (String(row[projIdColIdx]) !== String(rpdProjectId)) continue;
+          var snapDriveId = String(row[driveIdColIdx] || "").trim();
+          var snapName    = String(row[nameColIdx]    || "").trim();
+          var snapCv      = row[cvColIdx];
+          // Konwertuj do bool — "TRUE"/"FALSE" lub true/false
+          var snapCvBool  = (snapCv === true || snapCv === "TRUE" || snapCv === "true" || snapCv === 1 || snapCv === "1");
+          if (snapDriveId) snapshotById[snapDriveId]   = snapCvBool;
+          if (snapName)    snapshotByName[snapName]     = snapCvBool;
+        }
+
+        // 2. Usuń wszystkie istniejące wpisy dla tego projektu
+        // Skanujemy od końca żeby nie przesuwać indeksów
+        var lastRow2 = docSh.getLastRow();
+        for (var ri = lastRow2; ri >= 2; ri--) {
           var cellVal = docSh.getRange(ri, projIdColIdx + 1).getValue();
           if (String(cellVal) === String(rpdProjectId)) {
             docSh.deleteRow(ri);
           }
         }
 
-        // 2. Pobierz pliki z Drive
+        // 3. Pobierz pliki z Drive
         var driveFiles = getDriveFiles(rpdCode);
         var registered = [];
 
@@ -1082,6 +1104,18 @@ function doPost(e) {
             : (ext === "jpg" || ext === "jpeg" || ext === "png" || ext === "gif" || ext === "webp") ? "zdjęcie"
             : (ext === "dwg" || ext === "dxf") ? "dwg"
             : "inne";
+
+          // Przywróć poprzednią wartość clientVisible jeśli istnieje w snapshot,
+          // w przeciwnym razie domyślnie: !isSystem
+          var prevCv;
+          if (f.id && snapshotById.hasOwnProperty(f.id)) {
+            prevCv = snapshotById[f.id];
+          } else if (snapshotByName.hasOwnProperty(f.name)) {
+            prevCv = snapshotByName[f.name];
+          } else {
+            prevCv = !isSystem;
+          }
+
           var newEntry = insertRow("Dokumenty", {
             projectId:     rpdProjectId,
             name:          f.name,
@@ -1090,7 +1124,7 @@ function doPost(e) {
             url:           f.webViewLink,
             driveId:       f.id,
             date:          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"),
-            clientVisible: !isSystem,
+            clientVisible: isSystem ? false : prevCv,
             uploadedBy:    "designIQ",
           });
           registered.push(newEntry);
