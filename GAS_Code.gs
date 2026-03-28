@@ -19,8 +19,11 @@
 
 // ─── KONFIGURACJA ───────────────────────────────────────────────────────────────
 
-/** ID głównego folderu DesignIQ na Drive (dokumenty projektów, materiały) */
+/** ID głównego folderu DesignIQ na Drive (zawiera Materiały/ i Projekty/) */
 var DRIVE_FOLDER_ID = "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6";
+
+/** ID folderu Projekty/ — tu są podfoldery z kodami projektów (np. DEMO, KOW-2026-001) */
+var PROJECTS_FOLDER_ID = "1bt-r9FQDR7rU3NrUPrLXzJ99lbfDaWuQ";
 
 /** ID folderu SVG/JSON projektów (subfoldery nazwane wg code projektu) */
 var SVG_FOLDER_ID = "1a0l_Az9JTxyHWo1Go2EO--RIxHfR7THO";
@@ -309,18 +312,18 @@ function todayStr() {
 
 // folderName: czytelna nazwa projektu (preferuj code projektu, np. "DEMO")
 function getProjectFolder(folderName) {
-  if (!DRIVE_FOLDER_ID || !folderName) return null;
+  if (!PROJECTS_FOLDER_ID || !folderName) return null;
   try {
-    var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var root    = DriveApp.getFolderById(PROJECTS_FOLDER_ID);
     var folders = root.getFoldersByName(String(folderName));
     return folders.hasNext() ? folders.next() : null;
   } catch(e) { return null; }
 }
 
 function getOrCreateProjectFolder(folderName) {
-  if (!DRIVE_FOLDER_ID || !folderName) return null;
+  if (!PROJECTS_FOLDER_ID || !folderName) return null;
   try {
-    var root    = DriveApp.getFolderById(DRIVE_FOLDER_ID);
+    var root    = DriveApp.getFolderById(PROJECTS_FOLDER_ID);
     var folders = root.getFoldersByName(String(folderName));
     if (folders.hasNext()) return folders.next();
     return root.createFolder(String(folderName));

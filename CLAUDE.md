@@ -82,7 +82,8 @@ REACT_APP_GA_ID=G-XXXXXXXXXX
 
 ### Google Sheets
 - **Sheet ID:** `1aq3kmpw5mOGcy7JHB29C0s6OiR3evdEWY1gS08EE2FU`
-- **Drive Folder ID:** `1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6`
+- **Drive Root Folder ID:** `1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6` (zawiera `Materiały/` i `Projekty/`)
+- **Projects Folder ID:** `1bt-r9FQDR7rU3NrUPrLXzJ99lbfDaWuQ` (`Projekty/` — podfoldery z kodami projektów)
 - **SVG Folder ID:** `1a0l_Az9JTxyHWo1Go2EO--RIxHfR7THO`
 
 ### Zakładki w Sheets
