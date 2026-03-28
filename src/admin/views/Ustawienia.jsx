@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Settings, Calculator, Plus, Trash2, Save, RefreshCw,
   ChevronDown, Info, RotateCcw, Package, Loader2, ExternalLink,
+  MonitorPlay, GripVertical, CheckCircle2,
 } from "lucide-react";
 import { gasGet, gasPost } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -664,6 +665,181 @@ function MaterialyPozostale() {
   );
 }
 
+// ── Zakładka: Ustawienia projektu DEMO ────────────────────────────────────────
+
+const DEFAULT_DEMO = {
+  name: "Dom Pokazowy — designIQ",
+  package: "Premium Smart Home",
+  stages: ["Wycena", "Projekt", "Montaż szafy", "Montaż instalacji", "Programowanie Loxone", "Odbiór"],
+  stageIndex: 2,
+  startDate: "2025-01-15",
+  deadline: "2025-06-30",
+  status: "W realizacji",
+  progress: 45,
+};
+
+function DemoProjectSettings() {
+  const [form, setForm] = useState(DEFAULT_DEMO);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [newStage, setNewStage] = useState("");
+  const dragIdx = useRef(null);
+
+  useEffect(() => {
+    if (!GAS_ON) { setLoading(false); return; }
+    gasGet("getDemoSettings").then(d => {
+      if (d) setForm(f => ({ ...DEFAULT_DEMO, ...d, stages: Array.isArray(d.stages) ? d.stages : DEFAULT_DEMO.stages }));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const addStage = () => {
+    if (!newStage.trim()) return;
+    setForm(f => ({ ...f, stages: [...f.stages, newStage.trim()] }));
+    setNewStage("");
+  };
+
+  const removeStage = (i) => {
+    setForm(f => {
+      const stages = f.stages.filter((_, idx) => idx !== i);
+      return { ...f, stages, stageIndex: Math.min(f.stageIndex, Math.max(0, stages.length - 1)) };
+    });
+  };
+
+  const moveStage = (from, to) => {
+    if (to < 0 || to >= form.stages.length) return;
+    setForm(f => {
+      const s = [...f.stages];
+      s.splice(to, 0, s.splice(from, 1)[0]);
+      return { ...f, stages: s };
+    });
+  };
+
+  const handleSave = async () => {
+    if (!GAS_ON) return;
+    setSaving(true);
+    try {
+      await gasPost("saveDemoSettings", { settings: form });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      alert("Błąd zapisu: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const iCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400";
+
+  if (loading) return <div className="flex items-center gap-2 text-slate-400 text-sm py-8"><Loader2 className="w-4 h-4 animate-spin" /> Ładowanie…</div>;
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      {/* Info */}
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-sm text-orange-800 flex gap-3">
+        <Info className="w-4 h-4 mt-0.5 shrink-0 text-orange-500" />
+        <div>
+          Projekt DEMO nie istnieje w bazie danych — jego dane są przechowywane tutaj.<br />
+          Kod <strong>DEMO</strong> w panelu klienta wyświetla ten projekt z plikami z folderu <strong>DEMO</strong> na Drive.<br />
+          Klient nie może dodawać dokumentów w trybie demo.
+        </div>
+      </div>
+
+      {/* Podstawowe dane */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+        <h3 className="text-sm font-semibold text-slate-700">Dane projektu</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-xs text-slate-500 mb-1">Nazwa projektu</label>
+            <input className={iCls} value={form.name} onChange={e => set("name", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Pakiet</label>
+            <input className={iCls} value={form.package} onChange={e => set("package", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Status</label>
+            <select className={iCls} value={form.status} onChange={e => set("status", e.target.value)}>
+              <option>W przygotowaniu</option>
+              <option>W realizacji</option>
+              <option>Zakończony</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Data rozpoczęcia</label>
+            <input type="date" className={iCls} value={form.startDate} onChange={e => set("startDate", e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Termin</label>
+            <input type="date" className={iCls} value={form.deadline} onChange={e => set("deadline", e.target.value)} />
+          </div>
+          <div className="col-span-2">
+            <label className="block text-xs text-slate-500 mb-1">Postęp: <strong>{form.progress}%</strong></label>
+            <input type="range" min="0" max="100" value={form.progress}
+              onChange={e => set("progress", Number(e.target.value))}
+              className="w-full accent-orange-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Etapy */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
+        <h3 className="text-sm font-semibold text-slate-700">Etapy realizacji</h3>
+        <p className="text-xs text-slate-400">Przeciągnij aby zmienić kolejność. Aktywny etap jest wyróżniony.</p>
+        <div className="space-y-1.5">
+          {form.stages.map((stage, i) => (
+            <div
+              key={i}
+              draggable
+              onDragStart={() => { dragIdx.current = i; }}
+              onDragOver={e => { e.preventDefault(); }}
+              onDrop={() => { moveStage(dragIdx.current, i); dragIdx.current = null; }}
+              onClick={() => set("stageIndex", i)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none transition-all ${
+                form.stageIndex === i
+                  ? "border-orange-400 bg-orange-50 text-orange-800"
+                  : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300"
+              }`}
+            >
+              <GripVertical className="w-3.5 h-3.5 text-slate-300 shrink-0 cursor-grab" />
+              <span className="flex-1 text-sm">{stage}</span>
+              {form.stageIndex === i && <span className="text-xs text-orange-600 font-medium">← aktywny</span>}
+              <button onClick={e => { e.stopPropagation(); removeStage(i); }}
+                className="p-0.5 text-slate-300 hover:text-red-500 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={newStage}
+            onChange={e => setNewStage(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && addStage()}
+            placeholder="Nazwa nowego etapu…"
+            className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+          />
+          <button onClick={addStage} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Zapis */}
+      <button
+        onClick={handleSave}
+        disabled={saving || !GAS_ON}
+        className="flex items-center gap-2 px-5 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white text-sm font-semibold rounded-xl transition-colors"
+      >
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+        {saving ? "Zapisywanie…" : saved ? "Zapisano!" : "Zapisz ustawienia DEMO"}
+      </button>
+    </div>
+  );
+}
+
 // ── Główny eksport ────────────────────────────────────────────────────────────
 
 export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS, onUpdateKalkulatorSettings }) {
@@ -688,8 +864,9 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   };
 
   const TABS = [
-    { id: "kalkulator",          label: "Kalkulator",          icon: Calculator },
-    { id: "materialy_pozostale", label: "Materiały pozostałe", icon: Package },
+    { id: "kalkulator",          label: "Kalkulator",          icon: Calculator    },
+    { id: "materialy_pozostale", label: "Materiały pozostałe", icon: Package       },
+    { id: "demo",                label: "Projekt DEMO",        icon: MonitorPlay   },
   ];
 
   const KALKULATOR_SUB_TABS = [
@@ -759,6 +936,10 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
 
       {activeTab === "materialy_pozostale" && (
         <MaterialyPozostale />
+      )}
+
+      {activeTab === "demo" && (
+        <DemoProjectSettings />
       )}
     </div>
   );

@@ -228,6 +228,39 @@ function findById(arr, id) {
   return null;
 }
 
+// ── Logowanie wejść do panelu klienta ────────────────────────────────────────
+// Zapisuje każde otwarcie panelu klienta (getInvestment) do arkusza "Logowania".
+function logInvestmentAccess(code) {
+  try {
+    var sh = ss_().getSheetByName("Logowania");
+    if (!sh) {
+      sh = ss_().insertSheet("Logowania");
+      sh.appendRow(["id", "timestamp", "code"]);
+    }
+    sh.appendRow(["log-" + Date.now(), new Date().toISOString(), code || ""]);
+  } catch (e) { /* Cisza */ }
+}
+
+// ── Ustawienia projektu DEMO ───────────────────────────────────────────────────
+var DEFAULT_DEMO_SETTINGS = {
+  name:       "Dom Pokazowy — designIQ",
+  package:    "Premium Smart Home",
+  stages:     ["Wycena", "Projekt", "Montaż szafy", "Montaż instalacji", "Programowanie Loxone", "Odbiór"],
+  stageIndex: 2,
+  startDate:  "2025-01-15",
+  deadline:   "2025-06-30",
+  status:     "W realizacji",
+  progress:   45
+};
+
+function getDemoSettings() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty("demoSettings");
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return DEFAULT_DEMO_SETTINGS;
+}
+
 // ── Logowanie aktywności ─────────────────────────────────────────────────────
 // Zapisuje zdarzenie do arkusza "Aktywnosci". Nie rzuca wyjątku – logi nie mogą
 // zatrzymać głównej akcji.
@@ -588,6 +621,37 @@ function doGet(e) {
       case "getInvestment": {
         var code = e.parameter.code;
         if (!code) return err("Brak parametru code");
+
+        // Loguj każde wejście do panelu klienta
+        logInvestmentAccess(code);
+
+        // ── Tryb DEMO — projekt nie jest w bazie danych ──────────────────────
+        if (String(code).toUpperCase() === "DEMO") {
+          var ds = getDemoSettings();
+          var demoFolder = getDriveFiles("DEMO");
+          var SYS_PAT_D = /^(config\.json|projekt(_[^.]+)?\.(?:svg|json))$/i;
+          var demoFiles  = demoFolder.filter(function(f) { return !SYS_PAT_D.test(f.name); });
+          return ok({
+            project:  {
+              id:         "demo",
+              code:       "DEMO",
+              name:       ds.name       || DEFAULT_DEMO_SETTINGS.name,
+              package:    ds.package    || DEFAULT_DEMO_SETTINGS.package,
+              stages:     ds.stages     || DEFAULT_DEMO_SETTINGS.stages,
+              stageIndex: ds.stageIndex != null ? ds.stageIndex : DEFAULT_DEMO_SETTINGS.stageIndex,
+              startDate:  ds.startDate  || DEFAULT_DEMO_SETTINGS.startDate,
+              deadline:   ds.deadline   || DEFAULT_DEMO_SETTINGS.deadline,
+              status:     ds.status     || DEFAULT_DEMO_SETTINGS.status,
+              progress:   ds.progress   != null ? ds.progress : DEFAULT_DEMO_SETTINGS.progress,
+            },
+            docs:     [],
+            files:    demoFiles,
+            messages: [],
+            wycena:   null,
+            zakupy:   null
+          });
+        }
+
         var projects = sheetToObjects("Projekty");
         var project  = null;
         for (var i = 0; i < projects.length; i++) {
@@ -760,11 +824,24 @@ function doGet(e) {
         var actSh = ss_().getSheetByName("Aktywnosci");
         if (!actSh || actSh.getLastRow() <= 1) return ok([]);
         var actAll = sheetToObjects("Aktywnosci");
-        // Sortuj malejąco (najnowsze pierwsze), ogranicz do limit
         actAll.sort(function(a, b) {
           return String(b.timestamp) > String(a.timestamp) ? 1 : -1;
         });
         return ok(actAll.slice(0, actLimit));
+      }
+
+      case "getDemoSettings":
+        return ok(getDemoSettings());
+
+      case "getLoginLogs": {
+        var llLimit = parseInt(e.parameter.limit) || 100;
+        var llSh = ss_().getSheetByName("Logowania");
+        if (!llSh || llSh.getLastRow() <= 1) return ok([]);
+        var llAll = sheetToObjects("Logowania");
+        llAll.sort(function(a, b) {
+          return String(b.timestamp) > String(a.timestamp) ? 1 : -1;
+        });
+        return ok(llAll.slice(0, llLimit));
       }
 
       default:
@@ -1209,6 +1286,13 @@ function doPost(e) {
       }
 
       // ── Zakupy ────────────────────────────────────────────────────────────────
+      case "saveDemoSettings": {
+        var ds2 = body.settings;
+        if (!ds2) return err("Brak danych ustawień DEMO");
+        PropertiesService.getScriptProperties().setProperty("demoSettings", JSON.stringify(ds2));
+        return ok(ds2);
+      }
+
       case "upsertZakupy": {
         var zakObj = body.zakupy;
         if (!zakObj || !zakObj.projectId) return err("Brak zakupy lub projectId");

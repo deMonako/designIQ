@@ -312,3 +312,22 @@ export async function saveKalkulatorConfig(projectCode, config) {
 export async function getActivity(limit = 50) {
   return gasGet("getActivity", { limit });
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// PROJEKT DEMO
+// ────────────────────────────────────────────────────────────────────────────────
+
+/** Pobiera ustawienia projektu DEMO z PropertiesService */
+export async function getDemoSettings() {
+  return gasGet("getDemoSettings");
+}
+
+/** Zapisuje ustawienia projektu DEMO do PropertiesService */
+export async function saveDemoSettings(settings) {
+  return gasPost("saveDemoSettings", { settings });
+}
+
+/** Pobiera logi wejść do panelu klienta (timestamp + code) */
+export async function getLoginLogs(limit = 100) {
+  return gasGet("getLoginLogs", { limit });
+}
