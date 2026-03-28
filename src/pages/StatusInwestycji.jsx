@@ -123,7 +123,8 @@ export default function StatusInwestycji() {
 
     try {
       const response = await fetch(
-        `${GAS_URL}?action=getInvestment&code=${encodeURIComponent(investmentCode.trim())}`
+        `${GAS_URL}?action=getInvestment&code=${encodeURIComponent(investmentCode.trim())}`,
+        { cache: "no-store" }
       );
       const result = await response.json();
 
