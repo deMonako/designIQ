@@ -142,9 +142,9 @@ export async function deleteMaterial(id) {
 // DOKUMENTY PROJEKTÓW
 // ────────────────────────────────────────────────────────────────────────────────
 
-/** Pobiera dokumenty powiązane z projektem */
+/** Pobiera dokumenty powiązane z projektem (bez projectId = wszystkie) */
 export async function getProjectDocs(projectId) {
-  return gasGet("getProjectDocs", { projectId });
+  return gasGet("getProjectDocs", projectId ? { projectId } : {});
 }
 
 /** Dodaje dokument do projektu */

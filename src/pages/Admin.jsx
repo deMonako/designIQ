@@ -429,15 +429,19 @@ export default function Admin() {
   };
 
   const handleResetProjectDocs = async (projectId, projectCode) => {
+    if (!GAS_ON) return;
     setSyncStatus("syncing");
     try {
       await GAS.resetProjectDocs(projectId, projectCode);
-      // Po resecie pobierz świeże dane ze Sheets — gwarantuje spójność z arkuszem
-      const freshDocs = await GAS.getProjectDocs();
-      setProjectDocs(freshDocs);
+      // Pobierz świeże dokumenty tylko dla tego projektu i wstaw do globalnego stanu
+      const freshDocs = await GAS.getProjectDocs(projectId);
+      setProjectDocs(prev => [
+        ...prev.filter(d => d.projectId !== projectId),
+        ...freshDocs,
+      ]);
       setSyncStatus("synced");
     } catch (e) {
-      syncErr("Błąd resetu dokumentów: " + e.message);
+      syncErr("Błąd synchronizacji dokumentów: " + e.message);
     }
   };
 

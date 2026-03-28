@@ -1054,29 +1054,34 @@ function doPost(e) {
         var rpdCode      = body.projectCode;
         if (!rpdProjectId || !rpdCode) return err("Brak projectId lub projectCode");
 
-        // 1. Snapshot istniejących clientVisible przed usunięciem
+        // 1. Snapshot istniejących wpisów przed usunięciem
         var docSh = ss_().getSheetByName("Dokumenty");
         var docHeaders = docSh.getRange(1, 1, 1, docSh.getLastColumn()).getValues()[0];
         var projIdColIdx    = docHeaders.indexOf("projectId");
         var driveIdColIdx   = docHeaders.indexOf("driveId");
         var nameColIdx      = docHeaders.indexOf("name");
         var cvColIdx        = docHeaders.indexOf("clientVisible");
+        var uploadedByColIdx = docHeaders.indexOf("uploadedBy");
+        var descColIdx      = docHeaders.indexOf("description");
         var lastRow = docSh.getLastRow();
 
-        // snapshotById: { driveId -> clientVisible (bool) }
-        // snapshotByName: { name -> clientVisible (bool) } — fallback gdy driveId brak
+        // snapshotById/ByName: { driveId|name -> { clientVisible, uploadedBy, description } }
         var snapshotById   = {};
         var snapshotByName = {};
         for (var si = 2; si <= lastRow; si++) {
           var row = docSh.getRange(si, 1, 1, docSh.getLastColumn()).getValues()[0];
           if (String(row[projIdColIdx]) !== String(rpdProjectId)) continue;
-          var snapDriveId = String(row[driveIdColIdx] || "").trim();
-          var snapName    = String(row[nameColIdx]    || "").trim();
+          var snapDriveId = String(row[driveIdColIdx]   || "").trim();
+          var snapName    = String(row[nameColIdx]       || "").trim();
           var snapCv      = row[cvColIdx];
-          // Konwertuj do bool — "TRUE"/"FALSE" lub true/false
           var snapCvBool  = (snapCv === true || snapCv === "TRUE" || snapCv === "true" || snapCv === 1 || snapCv === "1");
-          if (snapDriveId) snapshotById[snapDriveId]   = snapCvBool;
-          if (snapName)    snapshotByName[snapName]     = snapCvBool;
+          var snapEntry   = {
+            clientVisible: snapCvBool,
+            uploadedBy:    uploadedByColIdx >= 0 ? String(row[uploadedByColIdx] || "designIQ") : "designIQ",
+            description:   descColIdx >= 0       ? String(row[descColIdx]       || "")         : "",
+          };
+          if (snapDriveId) snapshotById[snapDriveId]   = snapEntry;
+          if (snapName)    snapshotByName[snapName]     = snapEntry;
         }
 
         // 2. Usuń wszystkie istniejące wpisy dla tego projektu
@@ -1105,27 +1110,25 @@ function doPost(e) {
             : (ext === "dwg" || ext === "dxf") ? "dwg"
             : "inne";
 
-          // Przywróć poprzednią wartość clientVisible jeśli istnieje w snapshot,
-          // w przeciwnym razie domyślnie: !isSystem
-          var prevCv;
+          // Przywróć poprzednie ustawienia jeśli plik był już zarejestrowany,
+          // w przeciwnym razie ustaw domyślne: clientVisible=!isSystem, uploadedBy="designIQ"
+          var snap = null;
           if (f.id && snapshotById.hasOwnProperty(f.id)) {
-            prevCv = snapshotById[f.id];
+            snap = snapshotById[f.id];
           } else if (snapshotByName.hasOwnProperty(f.name)) {
-            prevCv = snapshotByName[f.name];
-          } else {
-            prevCv = !isSystem;
+            snap = snapshotByName[f.name];
           }
 
           var newEntry = insertRow("Dokumenty", {
             projectId:     rpdProjectId,
             name:          f.name,
             type:          docType,
-            description:   "",
+            description:   snap ? snap.description : "",
             url:           f.webViewLink,
             driveId:       f.id,
             date:          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"),
-            clientVisible: isSystem ? false : prevCv,
-            uploadedBy:    "designIQ",
+            clientVisible: isSystem ? false : (snap ? snap.clientVisible : true),
+            uploadedBy:    snap ? snap.uploadedBy : "designIQ",
           });
           registered.push(newEntry);
         }
