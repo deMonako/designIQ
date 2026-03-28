@@ -129,7 +129,7 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
               </div>
               <div>
                 <h3 className={`text-base font-bold ${isDisabled ? "text-slate-400" : "text-slate-900"}`}>{title}</h3>
-                <p className="text-sm text-slate-500">{isDisabled ? "Brak danych" : desc}</p>
+                <p className="text-sm text-slate-500">{isDisabled ? (investment.investment_code === "DEMO" ? "Niedostępne" : "Brak danych") : desc}</p>
               </div>
             </CardContent>
           </Card>
