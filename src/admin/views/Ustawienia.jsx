@@ -898,12 +898,12 @@ function LoxoneNotifSettings() {
         <p className="font-semibold flex items-center gap-2"><Info className="w-4 h-4" /> Jak to działa</p>
         <p>Codziennie o wybranej godzinie GAS wysyła do Loxone Miniserver:</p>
         <ul className="list-disc ml-5 space-y-0.5 text-blue-700">
-          <li>Puls na <code className="bg-blue-100 px-1 rounded">WebButton</code> (sygnał "dane gotowe")</li>
-          <li>JSON z zadaniami dnia na Virtual Text Input <code className="bg-blue-100 px-1 rounded">DailyTasksJSON</code></li>
+          <li>JSON z zadaniami dnia na Virtual Text Input <code className="bg-blue-100 px-1 rounded">TasksJSON</code></li>
+          <li>Puls na <code className="bg-blue-100 px-1 rounded">TaskPulse</code> (sygnał "dane gotowe")</li>
         </ul>
         <p className="text-xs text-blue-600 mt-1">
-          W Loxone Config utwórz <strong>Virtual Text Input</strong> o nazwie <code>DailyTasksJSON</code> —
-          GAS wpisze tam JSON z listą zadań na dziś.
+          W Loxone Config utwórz <strong>Virtual Text Input</strong> o nazwie <code>TasksJSON</code> oraz
+          <strong> Virtual Input</strong> (impuls) o nazwie <code>TaskPulse</code>.
         </p>
       </div>
 
