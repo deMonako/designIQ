@@ -78,7 +78,7 @@ function sendDailyTasksToLoxone() {
     var proj = t.projectId ? (projectMap[t.projectId] || "designIQ") : "designIQ";
     lines.push((i + 1) + ". " + t.title + " - " + proj);
   });
-  var payload = lines.join("\n");
+  var payload = lines.join("\r\n");
 
   var status = [];
 
