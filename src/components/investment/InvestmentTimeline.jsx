@@ -10,18 +10,27 @@ function formatDatePL(dateStr) {
   return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-const stageDescriptions = {
-  1: "Zgłoszenie przyjęte i zarejestrowane w systemie",
-  2: "Analiza potrzeb i opracowanie koncepcji systemu Smart Home",
-  3: "Projekt instalacji elektrycznej i automatyki budynkowej",
-  4: "Zestawienie materiałowe — lista przewodów, osprzętu i urządzeń",
-  5: "Prefabrykacja szafy sterowniczej Loxone wraz z okablowaniem",
-  6: "Programowanie logiki i interfejsów użytkownika Loxone",
-  7: "Montaż urządzeń i okablowania na obiekcie",
-  8: "Uruchomienie i testy kompletnego systemu",
-  9: "Przekazanie instalacji i szkolenie z obsługi",
-  10: "Serwis gwarancyjny i wsparcie techniczne",
-};
+// Dopasowanie po słowach kluczowych w nazwie etapu (niezależnie od kolejności)
+const stageDescriptionsByKeyword = [
+  { keywords: ["zgłoszenie", "przyjęcie", "rejestracja"],    desc: "Zgłoszenie przyjęte i zarejestrowane w systemie" },
+  { keywords: ["analiza", "koncepcja"],                       desc: "Analiza potrzeb i opracowanie koncepcji systemu Smart Home" },
+  { keywords: ["projekt", "instalacja", "automatyk"],        desc: "Projekt instalacji elektrycznej i automatyki budynkowej" },
+  { keywords: ["zestawienie", "materiał", "specyfikacja", "bom"], desc: "Zestawienie materiałowe — lista przewodów, osprzętu i urządzeń" },
+  { keywords: ["szafa", "prefabryk", "sterown"],              desc: "Prefabrykacja szafy sterowniczej Loxone wraz z okablowaniem" },
+  { keywords: ["programow", "software", "logika"],            desc: "Programowanie logiki i interfejsów użytkownika Loxone" },
+  { keywords: ["montaż", "budow", "okablow"],                 desc: "Montaż urządzeń i okablowania na obiekcie" },
+  { keywords: ["uruchom", "test", "komis"],                   desc: "Uruchomienie i testy kompletnego systemu" },
+  { keywords: ["przekaz", "szkolenie", "odbiór"],             desc: "Przekazanie instalacji i szkolenie z obsługi" },
+  { keywords: ["serwis", "wsparcie", "gwarancja"],            desc: "Serwis gwarancyjny i wsparcie techniczne" },
+];
+
+function getStageDescription(name) {
+  const lower = (name || "").toLowerCase();
+  const match = stageDescriptionsByKeyword.find(({ keywords }) =>
+    keywords.some(kw => lower.includes(kw))
+  );
+  return match ? match.desc : null;
+}
 
 export default function InvestmentTimeline({ stages, currentStage }) {
   if (!stages || stages.length === 0) return null;
@@ -41,7 +50,7 @@ export default function InvestmentTimeline({ stages, currentStage }) {
       <div className="space-y-1">
         {stages.map((stage, index) => {
           const status = getStatus(index);
-          const description = stageDescriptions[stage.stage_number] || null;
+          const description = getStageDescription(stage.name);
           const isLast = index === stages.length - 1;
 
           return (
