@@ -44,14 +44,15 @@ var LOXONE_TASKS_CONTROL   = "TaskPulse";        // codzienny impuls z zadaniami
 var LOXONE_TASKS_VI        = "TasksJSON";        // Virtual Text Input – JSON z zadaniami
 
 /** URL webhooka irytacji (kompatybilność wsteczna z env REACT_APP_GAS_LOXONE_URL) */
-var LOXONE_URL = "https://" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
+var LOXONE_URL = "http://" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
 
 /**
- * Pomocnik – wywołuje endpoint Loxone przez HTTPS z Basic Auth w nagłówku.
+ * Pomocnik – wywołuje endpoint Loxone przez HTTP z Basic Auth w nagłówku.
  * GAS UrlFetchApp blokuje user:pass@ w URL, więc używamy Authorization header.
+ * Loxone Cloud DNS działa po HTTP (nie HTTPS).
  */
 function loxoneFetch(path) {
-  var url  = "https://" + LOXONE_HOST + path;
+  var url  = "http://" + LOXONE_HOST + path;
   var auth = "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS);
   return UrlFetchApp.fetch(url, {
     method:           "get",
