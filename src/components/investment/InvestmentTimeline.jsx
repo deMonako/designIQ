@@ -10,24 +10,55 @@ function formatDatePL(dateStr) {
   return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-// Dopasowanie po słowach kluczowych w nazwie etapu (niezależnie od kolejności)
-const stageDescriptionsByKeyword = [
-  { keywords: ["zgłoszenie", "przyjęcie", "rejestracja"],    desc: "Zgłoszenie przyjęte i zarejestrowane w systemie" },
-  { keywords: ["analiza", "koncepcja"],                       desc: "Analiza potrzeb i opracowanie koncepcji systemu Smart Home" },
-  { keywords: ["projekt", "instalacja", "automatyk"],        desc: "Projekt instalacji elektrycznej i automatyki budynkowej" },
-  { keywords: ["zestawienie", "materiał", "specyfikacja", "bom"], desc: "Zestawienie materiałowe — lista przewodów, osprzętu i urządzeń" },
-  { keywords: ["szafa", "prefabryk", "sterown"],              desc: "Prefabrykacja szafy sterowniczej Loxone wraz z okablowaniem" },
-  { keywords: ["programow", "software", "logika"],            desc: "Programowanie logiki i interfejsów użytkownika Loxone" },
-  { keywords: ["montaż", "budow", "okablow"],                 desc: "Montaż urządzeń i okablowania na obiekcie" },
-  { keywords: ["uruchom", "test", "komis"],                   desc: "Uruchomienie i testy kompletnego systemu" },
-  { keywords: ["przekaz", "szkolenie", "odbiór"],             desc: "Przekazanie instalacji i szkolenie z obsługi" },
-  { keywords: ["serwis", "wsparcie", "gwarancja"],            desc: "Serwis gwarancyjny i wsparcie techniczne" },
+// Opisy dopasowywane po dokładnej nazwie etapu (case-insensitive),
+// fallback na słowa kluczowe dla niestandardowych nazw
+const STAGE_DESCS = [
+  {
+    names: ["wycena"],
+    keywords: ["wycen", "ofert", "kosztorys"],
+    desc: "Przygotowanie szczegółowej wyceny systemu Smart Home",
+  },
+  {
+    names: ["projekt automatyki"],
+    keywords: ["projekt auto", "automatyk", "instalacj"],
+    desc: "Projekt instalacji elektrycznej i automatyki budynkowej",
+  },
+  {
+    names: ["projekt szafy"],
+    keywords: ["projekt szaf"],
+    desc: "Projekt szafy sterowniczej Loxone",
+  },
+  {
+    names: ["prefabrykacja"],
+    keywords: ["prefabryk", "kompletacj", "szaf"],
+    desc: "Prefabrykacja szafy sterowniczej Loxone wraz z okablowaniem",
+  },
+  {
+    names: ["montaż"],
+    keywords: ["montaż", "budow", "okablow"],
+    desc: "Montaż urządzeń i okablowania na obiekcie",
+  },
+  {
+    names: ["uruchomienie"],
+    keywords: ["uruchom", "test", "komis", "programow"],
+    desc: "Uruchomienie systemu i testy wszystkich funkcji",
+  },
+  {
+    names: ["szkolenie"],
+    keywords: ["szkolen", "przekaz", "instruktaż"],
+    desc: "Szkolenie z obsługi systemu i przekazanie instalacji",
+  },
+  {
+    names: ["odbiór"],
+    keywords: ["odbió", "odbioru", "zakończ", "finalizacj"],
+    desc: "Formalny odbiór instalacji i zakończenie projektu",
+  },
 ];
 
 function getStageDescription(name) {
-  const lower = (name || "").toLowerCase();
-  const match = stageDescriptionsByKeyword.find(({ keywords }) =>
-    keywords.some(kw => lower.includes(kw))
+  const lower = (name || "").toLowerCase().trim();
+  const match = STAGE_DESCS.find(({ names, keywords }) =>
+    names.includes(lower) || keywords.some(kw => lower.includes(kw))
   );
   return match ? match.desc : null;
 }

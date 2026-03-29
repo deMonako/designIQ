@@ -248,12 +248,12 @@ function logInvestmentAccess(code) {
 var DEFAULT_DEMO_SETTINGS = {
   name:       "Dom Pokazowy — designIQ",
   package:    "Premium Smart Home",
-  stages:     ["Wycena", "Projekt", "Montaż szafy", "Montaż instalacji", "Programowanie Loxone", "Odbiór"],
-  stageIndex: 2,
-  startDate:  "2025-01-15",
-  deadline:   "2025-06-30",
+  stages:     ["Wycena", "Projekt automatyki", "Projekt szafy", "Prefabrykacja", "Montaż", "Uruchomienie", "Szkolenie", "Odbiór"],
+  stageIndex: 3,
+  startDate:  "2026-01-01",
+  deadline:   "2026-12-24",
   status:     "W realizacji",
-  progress:   45
+  progress:   40
 };
 
 function getDemoSettings() {
