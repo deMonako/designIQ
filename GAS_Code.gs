@@ -35,30 +35,38 @@ var ADMIN_EMAIL = "obsluga.designiq@gmail.com";
 var COMPANY_NAME  = "DesignIQ Smart Home";
 var COMPANY_EMAIL = "kontakt@designiq.pl";
 
-/** Dane połączenia z Loxone Miniserver (irytacja instalatora) */
-var LOXONE_HOST        = "dns.loxonecloud.com/504F94D10B9B";
-var LOXONE_USER        = "web";
-var LOXONE_PASS        = "web1212";
-var LOXONE_CONTROL     = "WebButton";
+/** Dane połączenia z Loxone Miniserver */
+var LOXONE_HOST            = "dns.loxonecloud.com/504F94D10B9B";
+var LOXONE_USER            = "web";
+var LOXONE_PASS            = "web1212";
+var LOXONE_CONTROL         = "WebButton";        // irytacja – strona Możliwości
+var LOXONE_TASKS_CONTROL   = "TaskPulse";        // codzienny impuls z zadaniami
+var LOXONE_TASKS_VI        = "TasksJSON";        // Virtual Text Input – JSON z zadaniami
 
-/** URL webhooka Loxone – HTTPS z credentials wbudowanymi w URL (wymagane przez cloud proxy) */
-var LOXONE_URL = "https://" + LOXONE_USER + ":" + LOXONE_PASS + "@" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
+/** URL webhooka irytacji (kompatybilność wsteczna z env REACT_APP_GAS_LOXONE_URL) */
+var LOXONE_URL = "https://" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
 
-/** Pomocnik – wywołuje endpoint Loxone z Basic Auth */
+/**
+ * Pomocnik – wywołuje endpoint Loxone przez HTTPS z Basic Auth w nagłówku.
+ * GAS UrlFetchApp blokuje user:pass@ w URL, więc używamy Authorization header.
+ */
 function loxoneFetch(path) {
-  var url = "https://" + LOXONE_USER + ":" + LOXONE_PASS + "@" + LOXONE_HOST + path;
-  return UrlFetchApp.fetch(url, { method: "get", muteHttpExceptions: true });
+  var url  = "https://" + LOXONE_HOST + path;
+  var auth = "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS);
+  return UrlFetchApp.fetch(url, {
+    method:           "get",
+    headers:          { "Authorization": auth },
+    muteHttpExceptions: true,
+    followRedirects:  true,
+  });
 }
 
-/** Codzienny trigger: pobiera zadania na dziś i wysyła do Loxone */
+/** Codzienny trigger: pobiera zadania na dziś, wysyła JSON + puls do Loxone */
 function sendDailyTasksToLoxone() {
-  var props = PropertiesService.getScriptProperties();
-  var raw   = props.getProperty("notifSettings");
-  if (!raw) return; // nie skonfigurowane
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
   var allTasks = sheetToObjects("Zadania");
   var todayTasks = allTasks.filter(function(t) {
-    return t.dueDate === today && t.status !== "Zrobione";
+    return String(t.dueDate || "").substring(0, 10) === today && t.status !== "Zrobione";
   });
   var payload = JSON.stringify({
     date:  today,
@@ -67,21 +75,27 @@ function sendDailyTasksToLoxone() {
       return { title: t.title, projectId: t.projectId, priority: t.priority, status: t.status };
     })
   });
-  // Ustaw Virtual Text Input z jsonem zadań (nazwa kontrolki: DailyTasksJSON)
+
+  var status = [];
+
+  // 1. Virtual Text Input – JSON z zadaniami (odczytaj w Loxone Config)
   try {
-    loxoneFetch("/dev/sps/io/DailyTasksJSON/" + encodeURIComponent(payload));
-  } catch(e) {}
-  // Puls – sygnał że dane są gotowe
+    var viResp = loxoneFetch("/dev/sps/io/" + LOXONE_TASKS_VI + "/" + encodeURIComponent(payload));
+    status.push("VI:" + viResp.getResponseCode());
+  } catch(e) { status.push("VI:ERR " + e.message); }
+
+  // 2. Puls TaskPulse – sygnał że nowe dane są gotowe
   try {
-    loxoneFetch("/dev/sps/io/" + LOXONE_CONTROL + "/pulse");
-  } catch(e) {}
-  // Log
+    var pulseResp = loxoneFetch("/dev/sps/io/" + LOXONE_TASKS_CONTROL + "/pulse");
+    status.push("Pulse:" + pulseResp.getResponseCode());
+  } catch(e) { status.push("Pulse:ERR " + e.message); }
+
   insertRow("Wkurwienia", {
     id:           "daily-" + Date.now(),
     date:         new Date().toISOString(),
     action:       "Powiadomienie dzienne",
     note:         "Zadania: " + todayTasks.length + " | " + today,
-    loxoneStatus: "Wysłano",
+    loxoneStatus: status.join(", "),
   });
 }
 
