@@ -156,9 +156,10 @@ export default function AdminLayout({
     <div className="flex flex-col h-full bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-r border-slate-800/60">
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 h-14 border-b border-slate-800/60 flex-shrink-0">
-        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-700 rounded-xl flex items-center justify-center shadow-lg shadow-orange-900/40 ring-1 ring-orange-400/20">
+        <a href="https://www.designiq.pl" target="_blank" rel="noreferrer"
+           className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-700 rounded-xl flex items-center justify-center shadow-lg shadow-orange-900/40 ring-1 ring-orange-400/20 hover:from-orange-400 hover:to-orange-600 transition-all">
           <Zap className="w-4 h-4 text-white" />
-        </div>
+        </a>
         <div>
           <div className="text-white font-bold text-sm leading-none tracking-tight">designiQ</div>
           <div className="text-slate-500 text-[10px] leading-none mt-0.5 font-medium tracking-widest uppercase">Studio</div>
