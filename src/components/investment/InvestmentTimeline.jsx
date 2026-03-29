@@ -12,15 +12,15 @@ function formatDatePL(dateStr) {
 
 const stageDescriptions = {
   1: "Zgłoszenie przyjęte i zarejestrowane w systemie",
-  2: "Analiza potrzeb i przygotowanie koncepcji systemu",
-  3: "Kompleksowy projekt instalacji elektrycznej i automatyki",
-  4: "Specyfikacja przewodów i urządzeń do instalacji",
-  5: "Projektowanie i kompletacja szafy sterowniczej",
-  6: "Programowanie systemu Smart Home",
-  7: "Dostawa urządzeń i montaż na budowie",
-  8: "Testy i uruchomienie wszystkich funkcji systemu",
-  9: "Przekazanie i szkolenie z obsługi systemu",
-  10: "Wsparcie techniczne i rozwój systemu",
+  2: "Analiza potrzeb i opracowanie koncepcji systemu Smart Home",
+  3: "Projekt instalacji elektrycznej i automatyki budynkowej",
+  4: "Zestawienie materiałowe — lista przewodów, osprzętu i urządzeń",
+  5: "Prefabrykacja szafy sterowniczej Loxone wraz z okablowaniem",
+  6: "Programowanie logiki i interfejsów użytkownika Loxone",
+  7: "Montaż urządzeń i okablowania na obiekcie",
+  8: "Uruchomienie i testy kompletnego systemu",
+  9: "Przekazanie instalacji i szkolenie z obsługi",
+  10: "Serwis gwarancyjny i wsparcie techniczne",
 };
 
 export default function InvestmentTimeline({ stages, currentStage }) {
