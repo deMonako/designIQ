@@ -503,7 +503,6 @@ export default function Admin() {
         return (
           <Dashboard
             projects={projects} tasks={tasks} clients={clients}
-            activityLogs={activityLogs}
             onUpdateTask={handleUpdateTask} onAddTask={handleAddTask} onDeleteTask={handleDeleteTask}
             onSelectProject={(p) => { setSelectedProject(p); setCurrentView("projekty"); }}
           />

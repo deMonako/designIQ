@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
   FolderKanban, Phone, Mail, Pencil, Plus,
-  Zap, UserPlus, Upload, FileText, Activity,
-  ChevronRight, RefreshCw,
+  ChevronRight, ListTodo,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
@@ -29,7 +28,7 @@ function formatDayShort(dateStr) {
   return format(new Date(s + "T00:00:00"), "EEE d MMM", { locale: pl });
 }
 
-// ─── Circular progress ring ───────────────────────────────────────────────────
+// ─── Circular progress ring (wersja na ciemnym tle) ──────────────────────────
 
 function CircularRing({ done, total, size = 72 }) {
   const r = (size - 10) / 2;
@@ -40,46 +39,40 @@ function CircularRing({ done, total, size = 72 }) {
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="#f1f5f9" strokeWidth={8} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.2)" strokeWidth={7} fill="none" />
         <circle
           cx={size / 2} cy={size / 2} r={r}
-          stroke="url(#ringGrad)" strokeWidth={8} fill="none"
+          stroke="white" strokeWidth={7} fill="none"
           strokeDasharray={circ}
           strokeDashoffset={offset}
           strokeLinecap="round"
           style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
-        <defs>
-          <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#fb923c" />
-            <stop offset="100%" stopColor="#ea580c" />
-          </linearGradient>
-        </defs>
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-sm font-bold text-slate-800 leading-none tabular-nums">
+        <span className="text-base font-extrabold text-white leading-none tabular-nums">
           {done}/{total}
         </span>
-        <span className="text-[9px] text-slate-400 font-medium mt-0.5">dziś</span>
+        <span className="text-[9px] text-orange-100 font-medium mt-0.5">dziś</span>
       </div>
     </div>
   );
 }
 
-// ─── Stat card ────────────────────────────────────────────────────────────────
+// ─── StatBox (pasek statystyk pod headerem) ───────────────────────────────────
 
-function StatCard({ icon, value, label, color }) {
-  const colors = {
-    orange: "bg-orange-50 border-orange-100 text-orange-600",
-    red:    "bg-red-50   border-red-100   text-red-600",
-    slate:  "bg-slate-50 border-slate-100 text-slate-600",
-    green:  "bg-green-50 border-green-100 text-green-600",
-  };
+function StatBox({ icon: Icon, value, label, alert, green }) {
   return (
-    <div className={`flex flex-col items-center justify-center rounded-2xl border px-3 py-2.5 min-w-[64px] ${colors[color]}`}>
-      <div className="mb-1 opacity-70">{icon}</div>
-      <span className="text-xl font-extrabold tabular-nums leading-none">{value}</span>
-      <span className="text-[10px] font-semibold opacity-60 mt-0.5 whitespace-nowrap">{label}</span>
+    <div className="flex flex-col items-center justify-center py-3 px-2 gap-0.5">
+      <span className={`text-2xl font-extrabold tabular-nums leading-none ${
+        alert ? "text-red-500" : green ? "text-green-600" : "text-slate-800"
+      }`}>{value}</span>
+      <div className={`flex items-center gap-1 text-[10px] font-semibold ${
+        alert ? "text-red-400" : green ? "text-green-500" : "text-slate-400"
+      }`}>
+        <Icon className="w-3 h-3" />
+        {label}
+      </div>
     </div>
   );
 }
@@ -371,77 +364,10 @@ function SectionHeader({ color = "orange", children, badge, action }) {
   );
 }
 
-// ─── Activity helpers ─────────────────────────────────────────────────────────
-
-function timeAgo(isoStr) {
-  if (!isoStr) return "";
-  const diff = Date.now() - new Date(isoStr).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days  = Math.floor(diff / 86400000);
-  if (mins  < 1)  return "przed chwilą";
-  if (mins  < 60) return `${mins} min temu`;
-  if (hours < 24) return `${hours} godz. temu`;
-  if (days  < 7)  return `${days} dni temu`;
-  return new Date(isoStr).toLocaleDateString("pl-PL", { day: "numeric", month: "short" });
-}
-
-const ACTIVITY_META = {
-  project_created: { icon: FolderKanban, color: "text-blue-500",   bg: "bg-blue-50"   },
-  project_updated: { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
-  task_created:    { icon: Plus,         color: "text-orange-500", bg: "bg-orange-50" },
-  task_done:       { icon: CheckCircle2, color: "text-green-500",  bg: "bg-green-50"  },
-  task_updated:    { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
-  client_added:    { icon: UserPlus,     color: "text-violet-500", bg: "bg-violet-50" },
-  client_updated:  { icon: Pencil,       color: "text-slate-500",  bg: "bg-slate-100" },
-  file_uploaded:   { icon: Upload,       color: "text-cyan-500",   bg: "bg-cyan-50"   },
-  lead_created:    { icon: Zap,          color: "text-orange-500", bg: "bg-orange-50" },
-};
-
-function ActivityFeed({ logs }) {
-  const visible = logs.slice(0, 10);
-
-  if (!logs || logs.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-slate-300 gap-2">
-        <Activity className="w-7 h-7" />
-        <span className="text-xs">Brak aktywności — zaloguj się do GAS i wykonaj akcję</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-0.5">
-      {visible.map((log, i) => {
-        const meta = ACTIVITY_META[log.type] || { icon: Activity, color: "text-slate-400", bg: "bg-slate-100" };
-        const Icon = meta.icon;
-        return (
-          <motion.div
-            key={log.id || i}
-            initial={{ opacity: 0, x: -4 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.03 }}
-            className="flex items-start gap-2.5 px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors group"
-          >
-            <div className={`w-6 h-6 rounded-full ${meta.bg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
-              <Icon className={`w-3 h-3 ${meta.color}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-slate-700 leading-snug line-clamp-2">{log.description}</p>
-            </div>
-            <span className="text-[10px] text-slate-400 flex-shrink-0 whitespace-nowrap mt-0.5">
-              {timeAgo(log.timestamp)}
-            </span>
-          </motion.div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
-export default function Dashboard({ projects, tasks, clients, activityLogs = [], onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
+export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAddTask, onDeleteTask, onSelectProject }) {
   const todayDate = new Date(TODAY + "T00:00:00");
   const weekday   = format(todayDate, "EEEE",         { locale: pl });
   const dateFull  = format(todayDate, "d MMMM yyyy", { locale: pl });
@@ -508,42 +434,36 @@ export default function Dashboard({ projects, tasks, clients, activityLogs = [],
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.25 }}
-        className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex flex-wrap items-center gap-4"
+        className="rounded-2xl overflow-hidden shadow-md"
       >
-        {/* Data */}
-        <div className="flex-1 min-w-0">
-          <div className="text-3xl font-extrabold text-slate-900 capitalize tracking-tight leading-none">
-            {weekday}
-          </div>
-          <div className="text-sm text-slate-400 mt-1 font-medium">{dateFull}</div>
-          {overdueTasks.length > 0 && (
-            <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-100 rounded-lg text-xs font-semibold text-red-600">
-              <AlertTriangle className="w-3 h-3" />
-              {overdueTasks.length} zaległe {overdueTasks.length === 1 ? "zadanie" : "zadania"}
+        {/* Gradient top */}
+        <div className="bg-gradient-to-br from-orange-600 via-orange-500 to-amber-400 px-6 py-5 flex items-center justify-between gap-4 relative overflow-hidden">
+          {/* Dekoracyjne kółko w tle */}
+          <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white opacity-5 pointer-events-none" />
+          <div className="absolute right-20 -bottom-6 w-28 h-28 rounded-full bg-white opacity-5 pointer-events-none" />
+
+          <div>
+            <div className="text-3xl font-extrabold text-white capitalize tracking-tight leading-none drop-shadow-sm">
+              {weekday}
             </div>
-          )}
+            <div className="text-sm text-orange-100 mt-1 font-medium">{dateFull}</div>
+            {overdueTasks.length > 0 && (
+              <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/80 border border-red-400/40 rounded-lg text-xs font-semibold text-white backdrop-blur-sm">
+                <AlertTriangle className="w-3 h-3" />
+                {overdueTasks.length} zaległe {overdueTasks.length === 1 ? "zadanie" : "zadania"}
+              </div>
+            )}
+          </div>
+
+          <CircularRing done={todayDone} total={todayTotal} size={76} />
         </div>
 
-        {/* Divider */}
-        <div className="hidden sm:block w-px h-14 bg-slate-100" />
-
-        {/* Ring + stats */}
-        <div className="flex items-center gap-4">
-          <CircularRing done={todayDone} total={todayTotal} size={72} />
-          <div className="flex flex-col gap-2">
-            <StatCard
-              icon={<FolderKanban className="w-3.5 h-3.5" />}
-              value={activeProjects.length}
-              label="projekty"
-              color="slate"
-            />
-            <StatCard
-              icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-              value={totalDone}
-              label="ukończone"
-              color="green"
-            />
-          </div>
+        {/* Pasek statystyk */}
+        <div className="bg-white border-x border-b border-slate-200 grid grid-cols-4 divide-x divide-slate-100">
+          <StatBox icon={ListTodo}      value={todayItems.length}       label="na dziś"     alert={false} />
+          <StatBox icon={AlertTriangle} value={overdueTasks.length}     label="zaległe"     alert={overdueTasks.length > 0} />
+          <StatBox icon={FolderKanban}  value={activeProjects.length}   label="projekty"    />
+          <StatBox icon={CheckCircle2}  value={totalDone}               label="ukończone"   green />
         </div>
       </motion.div>
 
@@ -719,26 +639,6 @@ export default function Dashboard({ projects, tasks, clients, activityLogs = [],
           )}
         </div>
       </div>
-
-      {/* ── Logi aktywności (pełna szerokość) ── */}
-      <section>
-        <SectionHeader
-          color="slate"
-          badge={activityLogs.length > 0 ? activityLogs.length : undefined}
-          action={
-            activityLogs.length > 0 && (
-              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> odświeża się przy Odśwież
-              </span>
-            )
-          }
-        >
-          Ostatnia aktywność
-        </SectionHeader>
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-2 py-1">
-          <ActivityFeed logs={activityLogs} />
-        </div>
-      </section>
 
       {/* ── Modal edycji zadania ── */}
       <AnimatePresence>
