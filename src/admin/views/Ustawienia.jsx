@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   Settings, Calculator, Plus, Trash2, Save, RefreshCw,
   ChevronDown, Info, RotateCcw, Package, Loader2, ExternalLink,
-  MonitorPlay, GripVertical, CheckCircle2,
+  MonitorPlay, GripVertical, CheckCircle2, Bell, BellOff, Send,
 } from "lucide-react";
 import { gasGet, gasPost } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
@@ -840,6 +840,149 @@ function DemoProjectSettings() {
   );
 }
 
+// ── Powiadomienia Loxone ──────────────────────────────────────────────────────
+
+function LoxoneNotifSettings() {
+  const [settings, setSettings] = useState({ hour: 7, enabled: false });
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+  const [testing,  setTesting]  = useState(false);
+  const [saved,    setSaved]    = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  useEffect(() => {
+    if (!GAS_ON) { setLoading(false); return; }
+    gasGet("getNotifSettings")
+      .then(data => setSettings({ hour: data.hour ?? 7, enabled: data.enabled ?? false }))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true); setSaved(false);
+    try {
+      const result = await gasPost("saveNotifSettings", { hour: settings.hour, enabled: settings.enabled });
+      setSettings({ hour: result.hour ?? settings.hour, enabled: result.enabled ?? settings.enabled });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      alert("Błąd zapisu: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTestNow = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      await gasPost("testDailyNotif", {});
+      setTestResult("ok");
+    } catch (e) {
+      setTestResult("error: " + e.message);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const HOURS = Array.from({ length: 24 }, (_, i) => ({
+    value: i,
+    label: String(i).padStart(2, "0") + ":00",
+  }));
+
+  if (loading) return <div className="flex items-center gap-2 text-sm text-slate-400 py-6"><Loader2 className="w-4 h-4 animate-spin" /> Ładowanie…</div>;
+
+  return (
+    <div className="space-y-6">
+      {/* Informacja */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-1.5">
+        <p className="font-semibold flex items-center gap-2"><Info className="w-4 h-4" /> Jak to działa</p>
+        <p>Codziennie o wybranej godzinie GAS wysyła do Loxone Miniserver:</p>
+        <ul className="list-disc ml-5 space-y-0.5 text-blue-700">
+          <li>Puls na <code className="bg-blue-100 px-1 rounded">WebButton</code> (sygnał "dane gotowe")</li>
+          <li>JSON z zadaniami dnia na Virtual Text Input <code className="bg-blue-100 px-1 rounded">DailyTasksJSON</code></li>
+        </ul>
+        <p className="text-xs text-blue-600 mt-1">
+          W Loxone Config utwórz <strong>Virtual Text Input</strong> o nazwie <code>DailyTasksJSON</code> —
+          GAS wpisze tam JSON z listą zadań na dziś.
+        </p>
+      </div>
+
+      {/* Toggle włącz/wyłącz */}
+      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-800">Codzienny impuls Loxone</div>
+            <div className="text-xs text-slate-400 mt-0.5">Automatyczne wysyłanie zadań do Miniservera</div>
+          </div>
+          <button
+            onClick={() => setSettings(s => ({ ...s, enabled: !s.enabled }))}
+            className={`relative w-12 h-6 rounded-full transition-colors ${settings.enabled ? "bg-orange-500" : "bg-slate-200"}`}
+          >
+            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${settings.enabled ? "translate-x-7" : "translate-x-1"}`} />
+          </button>
+        </div>
+
+        {/* Godzina */}
+        <div className={settings.enabled ? "" : "opacity-40 pointer-events-none"}>
+          <label className="text-xs font-medium text-slate-600 block mb-1.5">Godzina wysyłki</label>
+          <Select
+            value={settings.hour}
+            onChange={v => setSettings(s => ({ ...s, hour: Number(v) }))}
+            options={HOURS}
+            className="w-36"
+          />
+          <p className="text-xs text-slate-400 mt-1.5">
+            Trigger uruchomi się między {String(settings.hour).padStart(2,"0")}:00 a {String(settings.hour).padStart(2,"0")}:59 czasu skryptu (Europe/Warsaw).
+          </p>
+        </div>
+
+        {/* Przyciski */}
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-lg disabled:opacity-40 transition-colors"
+          >
+            {saving
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Zapisywanie…</>
+              : saved
+              ? <><CheckCircle2 className="w-4 h-4" /> Zapisano!</>
+              : <><Save className="w-4 h-4" /> Zapisz i aktywuj</>}
+          </button>
+          <button
+            onClick={handleTestNow}
+            disabled={testing || !GAS_ON}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-600 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 transition-colors"
+            title="Wyślij teraz (test)"
+          >
+            {testing
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Wysyłam…</>
+              : <><Send className="w-4 h-4" /> Wyślij teraz</>}
+          </button>
+        </div>
+        {testResult && (
+          <p className={`text-xs font-medium ${testResult === "ok" ? "text-green-600" : "text-red-500"}`}>
+            {testResult === "ok" ? "✓ Wysłano pomyślnie" : testResult}
+          </p>
+        )}
+      </div>
+
+      {/* Format JSON */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <p className="text-xs font-semibold text-slate-600 mb-2">Format JSON wysyłany do Loxone:</p>
+        <pre className="text-xs text-slate-500 whitespace-pre-wrap font-mono">{`{
+  "date": "2026-03-29",
+  "count": 3,
+  "tasks": [
+    { "title": "Montaż szafy", "projectId": "proj-123", "priority": "Wysoki", "status": "W trakcie" },
+    ...
+  ]
+}`}</pre>
+      </div>
+    </div>
+  );
+}
+
 // ── Główny eksport ────────────────────────────────────────────────────────────
 
 export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTINGS, onUpdateKalkulatorSettings }) {
@@ -867,6 +1010,7 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     { id: "kalkulator",          label: "Kalkulator",          icon: Calculator    },
     { id: "materialy_pozostale", label: "Materiały pozostałe", icon: Package       },
     { id: "demo",                label: "Projekt DEMO",        icon: MonitorPlay   },
+    { id: "powiadomienia",       label: "Powiadomienia",       icon: Bell          },
   ];
 
   const KALKULATOR_SUB_TABS = [
@@ -940,6 +1084,10 @@ export default function Ustawienia({ kalkulatorSettings = EMPTY_KALKULATOR_SETTI
 
       {activeTab === "demo" && (
         <DemoProjectSettings />
+      )}
+
+      {activeTab === "powiadomienia" && (
+        <LoxoneNotifSettings />
       )}
     </div>
   );

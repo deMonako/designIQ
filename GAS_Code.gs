@@ -41,8 +41,49 @@ var LOXONE_USER        = "web";
 var LOXONE_PASS        = "web1212";
 var LOXONE_CONTROL     = "WebButton";
 
-/** URL webhooka Loxone – generowany automatycznie z powyższych stałych */
-var LOXONE_URL = "http://" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
+/** URL webhooka Loxone – HTTPS z credentials wbudowanymi w URL (wymagane przez cloud proxy) */
+var LOXONE_URL = "https://" + LOXONE_USER + ":" + LOXONE_PASS + "@" + LOXONE_HOST + "/dev/sps/io/" + LOXONE_CONTROL + "/pulse";
+
+/** Pomocnik – wywołuje endpoint Loxone z Basic Auth */
+function loxoneFetch(path) {
+  var url = "https://" + LOXONE_USER + ":" + LOXONE_PASS + "@" + LOXONE_HOST + path;
+  return UrlFetchApp.fetch(url, { method: "get", muteHttpExceptions: true });
+}
+
+/** Codzienny trigger: pobiera zadania na dziś i wysyła do Loxone */
+function sendDailyTasksToLoxone() {
+  var props = PropertiesService.getScriptProperties();
+  var raw   = props.getProperty("notifSettings");
+  if (!raw) return; // nie skonfigurowane
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  var allTasks = sheetToObjects("Zadania");
+  var todayTasks = allTasks.filter(function(t) {
+    return t.dueDate === today && t.status !== "Zrobione";
+  });
+  var payload = JSON.stringify({
+    date:  today,
+    count: todayTasks.length,
+    tasks: todayTasks.map(function(t) {
+      return { title: t.title, projectId: t.projectId, priority: t.priority, status: t.status };
+    })
+  });
+  // Ustaw Virtual Text Input z jsonem zadań (nazwa kontrolki: DailyTasksJSON)
+  try {
+    loxoneFetch("/dev/sps/io/DailyTasksJSON/" + encodeURIComponent(payload));
+  } catch(e) {}
+  // Puls – sygnał że dane są gotowe
+  try {
+    loxoneFetch("/dev/sps/io/" + LOXONE_CONTROL + "/pulse");
+  } catch(e) {}
+  // Log
+  insertRow("Wkurwienia", {
+    id:           "daily-" + Date.now(),
+    date:         new Date().toISOString(),
+    action:       "Powiadomienie dzienne",
+    note:         "Zadania: " + todayTasks.length + " | " + today,
+    loxoneStatus: "Wysłano",
+  });
+}
 
 // ─── NAGŁÓWKI KOLUMN ────────────────────────────────────────────────────────────
 var HEADERS = {
@@ -778,11 +819,7 @@ function doGet(e) {
         var loxoneStatus = "Brak konfiguracji LOXONE_URL";
         if (LOXONE_URL) {
           try {
-            var loxResp = UrlFetchApp.fetch(LOXONE_URL, {
-              method: "get",
-              headers: { "Authorization": "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS) },
-              muteHttpExceptions: true
-            });
+            var loxResp = loxoneFetch("/dev/sps/io/" + LOXONE_CONTROL + "/pulse");
             loxoneStatus = loxResp.getResponseCode() === 200 ? "Sukces (200 OK)" : "Loxone Error: " + loxResp.getResponseCode();
           } catch(ex) { loxoneStatus = "Błąd krytyczny: " + ex.toString(); }
         }
@@ -812,6 +849,11 @@ function doGet(e) {
 
       case "getDemoSettings":
         return ok(getDemoSettings());
+
+      case "getNotifSettings": {
+        var ns = PropertiesService.getScriptProperties().getProperty("notifSettings");
+        return ok(ns ? JSON.parse(ns) : { hour: null, enabled: false });
+      }
 
       case "getLoginLogs": {
         var llLimit = parseInt(e.parameter.limit) || 100;
@@ -1310,6 +1352,39 @@ function doPost(e) {
         return ok(ds2);
       }
 
+      case "testDailyNotif": {
+        // Wywołuje sendDailyTasksToLoxone natychmiast (do testowania z panelu)
+        try {
+          sendDailyTasksToLoxone();
+          return ok({ sent: true });
+        } catch(ex) {
+          return err("Błąd wysyłki: " + ex.toString());
+        }
+      }
+
+      case "saveNotifSettings": {
+        var nsHour    = parseInt(body.hour);
+        var nsEnabled = body.enabled === true || body.enabled === "true";
+
+        // Usuń istniejące triggery tej funkcji
+        ScriptApp.getProjectTriggers().forEach(function(tr) {
+          if (tr.getHandlerFunction() === "sendDailyTasksToLoxone") ScriptApp.deleteTrigger(tr);
+        });
+
+        if (nsEnabled && !isNaN(nsHour) && nsHour >= 0 && nsHour <= 23) {
+          ScriptApp.newTrigger("sendDailyTasksToLoxone")
+            .timeBased()
+            .everyDays(1)
+            .atHour(nsHour)
+            .inTimezone(Session.getScriptTimeZone())
+            .create();
+        }
+
+        var nsData = { hour: nsEnabled ? nsHour : null, enabled: nsEnabled };
+        PropertiesService.getScriptProperties().setProperty("notifSettings", JSON.stringify(nsData));
+        return ok(nsData);
+      }
+
       case "upsertZakupy": {
         var zakObj = body.zakupy;
         if (!zakObj || !zakObj.projectId) return err("Brak zakupy lub projectId");
@@ -1502,11 +1577,7 @@ function doPost(e) {
         var iLoxoneStatus = "Brak konfiguracji LOXONE_URL";
         if (LOXONE_URL) {
           try {
-            var iLoxResp = UrlFetchApp.fetch(LOXONE_URL, {
-              method: "get",
-              headers: { "Authorization": "Basic " + Utilities.base64Encode(LOXONE_USER + ":" + LOXONE_PASS) },
-              muteHttpExceptions: true
-            });
+            var iLoxResp = loxoneFetch("/dev/sps/io/" + LOXONE_CONTROL + "/pulse");
             iLoxoneStatus = iLoxResp.getResponseCode() === 200 ? "Sukces (200 OK)" : "Loxone Error: " + iLoxResp.getResponseCode();
           } catch(ex) { iLoxoneStatus = "Błąd krytyczny: " + ex.toString(); }
         }
