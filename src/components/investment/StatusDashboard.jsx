@@ -1,10 +1,9 @@
 import React from "react";
 import PropTypes from "prop-types";
 import { Card, CardContent } from "../ui/card";
-import { Calendar, DollarSign, ShoppingCart, Map, FileText } from "lucide-react";
+import { Calendar, DollarSign, ShoppingCart, Map, FileText, ChevronRight } from "lucide-react";
 import { motion } from "framer-motion";
 import InvestmentTimeline from "./InvestmentTimeline";
-import FileUploadSection from "./FileUploadSection";
 
 function safeDate(dateStr) {
   if (!dateStr) return null;
@@ -40,7 +39,6 @@ const NAV_CARDS = [
     icon: FileText,
     title: "Dokumenty",
     desc: "Pliki i dokumentacja projektu",
-    scrollTo: "dokumenty-section",
   },
 ];
 
@@ -51,6 +49,8 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
     if (!investment.stages || investment.stages.length === 0) return 0;
     return Math.round((investment.current_stage / investment.stages.length) * 100);
   };
+
+  const docCount = (investment.documents || []).length;
 
   return (
     <div className="space-y-8">
@@ -99,10 +99,11 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
 
       {/* Karty nawigacyjne */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {NAV_CARDS.map(({ key, icon: Icon, title, desc, scrollTo }) => {
+        {NAV_CARDS.map(({ key, icon: Icon, title, desc }) => {
           const isDisabled =
             (key === "wycena" && !investment.quotation) ||
             (key === "zakupy" && !investment.zakupy);
+          const badge = key === "dokumenty" && docCount > 0 ? docCount : null;
           return (
           <Card
             key={key}
@@ -111,26 +112,24 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
                 ? "border-slate-100 opacity-50 cursor-not-allowed"
                 : "border-slate-200 hover:border-orange-300 hover:shadow-md cursor-pointer group"
             }`}
-            onClick={() => {
-              if (isDisabled) return;
-              if (scrollTo) {
-                const el = document.getElementById(scrollTo);
-                if (el) el.scrollIntoView({ behavior: "smooth" });
-              } else {
-                onNavigate(key);
-              }
-            }}
+            onClick={() => { if (!isDisabled) onNavigate(key); }}
           >
-            <CardContent className="p-6 flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors shrink-0 ${
                 isDisabled ? "bg-slate-50" : "bg-orange-50 group-hover:bg-orange-100"
               }`}>
-                <Icon className={`w-6 h-6 ${isDisabled ? "text-slate-300" : "text-orange-600"}`} />
+                <Icon className={`w-5 h-5 ${isDisabled ? "text-slate-300" : "text-orange-600"}`} />
               </div>
-              <div>
-                <h3 className={`text-base font-bold ${isDisabled ? "text-slate-400" : "text-slate-900"}`}>{title}</h3>
-                <p className="text-sm text-slate-500">{isDisabled ? (investment.investment_code === "DEMO" ? "Niedostępne" : "Brak danych") : desc}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className={`text-sm font-bold ${isDisabled ? "text-slate-400" : "text-slate-900"}`}>{title}</h3>
+                  {badge && (
+                    <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">{badge}</span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">{isDisabled ? (investment.investment_code === "DEMO" ? "Niedostępne" : "Brak danych") : desc}</p>
               </div>
+              {!isDisabled && <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors" />}
             </CardContent>
           </Card>
           );
@@ -149,13 +148,6 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
         />
       </div>
 
-      {/* Pliki i Dokumenty */}
-      <div id="dokumenty-section" />
-      <FileUploadSection
-        investment={investment}
-        onFileUploaded={onRefresh}
-        isReadOnly={["DEMO", "MATERIAŁY"].includes(investment.investment_code || investment.code)}
-      />
     </div>
   );
 }

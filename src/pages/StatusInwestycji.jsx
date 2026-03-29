@@ -17,6 +17,7 @@ import StatusDashboard from "../components/investment/StatusDashboard";
 import ClientWycenaView from "../components/investment/ClientWycenaView";
 import ClientZakupyView from "../components/investment/ClientZakupyView";
 import DwgViewer from "../components/investment/DwgViewer";
+import FileUploadSection from "../components/investment/FileUploadSection";
 
 const GAS_URL = GAS_CONFIG.scriptUrl;
 
@@ -210,6 +211,22 @@ export default function StatusInwestycji() {
                 height="70svh"
               />
             </div>
+          </div>
+        );
+
+      case "dokumenty":
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Button onClick={() => navigateTo("status")} variant="ghost" className="text-sm">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Powrót do statusu
+              </Button>
+            </div>
+            <FileUploadSection
+              investment={investment}
+              onFileUploaded={() => handleSearch({ silent: true })}
+              isReadOnly={isDemo}
+            />
           </div>
         );
 

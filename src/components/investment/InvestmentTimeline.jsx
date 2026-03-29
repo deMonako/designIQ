@@ -1,13 +1,7 @@
 import React from "react";
-import {
-  CheckCircle2, Circle, Clock, FileText, Users, Layout,
-  Package, Truck, Code, TestTube, GraduationCap, Headphones,
-  Layers, Zap, Settings
-} from "lucide-react";
+import { CheckCircle2, Circle, Clock } from "lucide-react";
 import { motion } from "framer-motion";
-import { Card, CardContent } from "../ui/card";
 
-// Bezpieczna konwersja daty (obsługuje ISO strings z timezone)
 function formatDatePL(dateStr) {
   if (!dateStr) return null;
   const s = String(dateStr).substring(0, 10);
@@ -16,164 +10,100 @@ function formatDatePL(dateStr) {
   return d.toLocaleDateString("pl-PL", { day: "2-digit", month: "long", year: "numeric" });
 }
 
-// 1. Konfiguracja Ikon — dla standardowych etapów 1-10
-const stageIcons = {
-  1: FileText,
-  2: Users,
-  3: Layout,
-  4: FileText,
-  5: Package,
-  6: Code,
-  7: Truck,
-  8: TestTube,
-  9: GraduationCap,
-  10: Headphones
-};
-
-// Ikony rotacyjne dla niestandardowych etapów (> 10 lub dowolny numer)
-const fallbackIcons = [Layers, Zap, Settings, Package, Code, CheckCircle2, Users, FileText];
-
-// 2. Konfiguracja Opisów — tylko dla standardowych etapów 1-10
 const stageDescriptions = {
-  1: "Twoje zgłoszenie zostało przyjęte i zarejestrowane w systemie",
-  2: "Przeprowadzamy szczegółową analizę Twoich potrzeb i przygotowujemy koncepcję systemu",
-  3: "Tworzymy kompleksowy projekt instalacji elektrycznej i automatyki budynkowej",
-  4: "Przygotowujemy szczegółową listę wszystkich przewodów i urządzeń potrzebnych do instalacji",
-  5: "Projektujemy i kompletujemy szafę sterowniczą z całym niezbędnym osprzętem",
-  6: "Programujemy system Smart Home zgodnie z Twoimi wymaganiami",
-  7: "Realizujemy dostawę urządzeń i montaż systemu na Twojej budowie",
-  8: "Przeprowadzamy kompleksowe testy i uruchamiamy wszystkie funkcje systemu",
-  9: "Przekazujemy gotowy system i szkolimy Cię z jego obsługi",
-  10: "Jesteśmy do Twojej dyspozycji w zakresie wsparcia technicznego i rozwoju systemu"
-};
-
-// 3. Konfiguracja Kolorów i Statusów
-const getStatusConfig = (status) => {
-  const configs = {
-    completed: {
-      icon: CheckCircle2,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
-      borderColor: "border-green-300",
-      lineColor: "bg-green-500"
-    },
-    in_progress: {
-      icon: Clock,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100",
-      borderColor: "border-orange-300",
-      lineColor: "bg-orange-500"
-    },
-    pending: {
-      icon: Circle,
-      color: "text-slate-400",
-      bgColor: "bg-slate-100",
-      borderColor: "border-slate-300",
-      lineColor: "bg-slate-300"
-    }
-  };
-  return configs[status];
+  1: "Zgłoszenie przyjęte i zarejestrowane w systemie",
+  2: "Analiza potrzeb i przygotowanie koncepcji systemu",
+  3: "Kompleksowy projekt instalacji elektrycznej i automatyki",
+  4: "Specyfikacja przewodów i urządzeń do instalacji",
+  5: "Projektowanie i kompletacja szafy sterowniczej",
+  6: "Programowanie systemu Smart Home",
+  7: "Dostawa urządzeń i montaż na budowie",
+  8: "Testy i uruchomienie wszystkich funkcji systemu",
+  9: "Przekazanie i szkolenie z obsługi systemu",
+  10: "Wsparcie techniczne i rozwój systemu",
 };
 
 export default function InvestmentTimeline({ stages, currentStage }) {
   if (!stages || stages.length === 0) return null;
 
-  const totalStages = stages.length;
-
-  const getStageStatus = (index) => {
-    const humanPosition = index + 1;
-    if (humanPosition < currentStage) return "completed";
-    if (humanPosition === currentStage) return "in_progress";
+  const getStatus = (index) => {
+    const pos = index + 1;
+    if (pos < currentStage) return "completed";
+    if (pos === currentStage) return "in_progress";
     return "pending";
   };
 
   return (
-    <div className="space-y-6">
-      {stages.map((stage, index) => {
-        // Dane pobierane z JSONa w Arkuszu
-        const id = stage.stage_number;
-        const status = getStageStatus(index);
-        const statusConfig = getStatusConfig(status);
+    <div className="relative">
+      {/* Pionowa linia */}
+      <div className="absolute left-[19px] top-5 bottom-5 w-0.5 bg-slate-200" />
 
-        // Ikona etapu: standardowa (1-10) lub rotacyjna dla niestandardowych
-        const StageIcon = stageIcons[id] || fallbackIcons[(index) % fallbackIcons.length];
-        const StatusIcon = statusConfig.icon;
-        // Opis: tylko dla standardowych etapów; dla niestandardowych – brak (nie pokazuj "Brak opisu")
-        const description = stageDescriptions[id] || null;
+      <div className="space-y-1">
+        {stages.map((stage, index) => {
+          const status = getStatus(index);
+          const description = stageDescriptions[stage.stage_number] || null;
+          const isLast = index === stages.length - 1;
 
-        return (
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, x: -20 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.4, delay: Math.min(index * 0.07, 0.4) }}
-            className="relative"
-          >
-            
-            <Card className={`relative z-10 border-2 ${statusConfig.borderColor} transition-all hover:shadow-lg ${status === 'in_progress' ? 'shadow-lg' : ''}`}>
-              <CardContent className="p-6">
-                <div className="flex gap-6">
-                  {/* Sekcja Ikony */}
-                  <div className="flex-shrink-0">
-                    <div className={`relative w-16 h-16 rounded-2xl ${statusConfig.bgColor} flex items-center justify-center`}>
-                      <StageIcon className={`w-8 h-8 ${statusConfig.color}`} />
-                      <div className={`absolute -top-2 -right-2 w-8 h-8 rounded-full bg-white border-2 ${statusConfig.borderColor} flex items-center justify-center`}>
-                        <StatusIcon className={`w-4 h-4 ${statusConfig.color} ${status === 'in_progress' ? 'animate-pulse' : ''}`} />
-                      </div>
-                    </div>
+          return (
+            <motion.div
+              key={index}
+              initial={{ opacity: 0, x: -12 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-20px" }}
+              transition={{ duration: 0.3, delay: Math.min(index * 0.05, 0.3) }}
+              className={`relative flex gap-4 ${isLast ? "pb-0" : "pb-4"}`}
+            >
+              {/* Wskaźnik statusu */}
+              <div className="relative z-10 flex-shrink-0 flex items-start pt-0.5">
+                {status === "completed" && (
+                  <div className="w-10 h-10 rounded-full bg-green-100 border-2 border-green-400 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
                   </div>
-
-                  {/* Sekcja Treści */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4 mb-2">
-                      <div>
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className="text-sm font-semibold text-slate-500">
-                            Etap {index + 1}/{totalStages}
-                          </span>
-                          {status === 'in_progress' && (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-orange-100 text-orange-700 rounded-full">
-                              W trakcie
-                            </span>
-                          )}
-                          {status === 'completed' && (
-                            <span className="px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700 rounded-full">
-                              Zakończony
-                            </span>
-                          )}
-                        </div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">{stage.name}</h3>
-                        {description && (
-                          <p className="text-slate-600 leading-relaxed">{description}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Data zakończenia */}
-                    {stage.completion_date && status === 'completed' && formatDatePL(stage.completion_date) && (
-                      <div className="mt-3 pt-3 border-t border-slate-200">
-                        <p className="text-sm text-slate-500">
-                          Zakończono: {formatDatePL(stage.completion_date)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Uwagi dodatkowe */}
-                    {stage.notes && (
-                      <div className="mt-3 pt-3 border-t border-slate-200">
-                        <p className="text-sm text-slate-700 bg-slate-50 rounded-lg p-3">
-                          <span className="font-semibold">Uwaga:</span> {stage.notes}
-                        </p>
-                      </div>
-                    )}
+                )}
+                {status === "in_progress" && (
+                  <div className="w-10 h-10 rounded-full bg-orange-100 border-2 border-orange-400 flex items-center justify-center shadow-md shadow-orange-100">
+                    <Clock className="w-5 h-5 text-orange-600 animate-pulse" />
                   </div>
+                )}
+                {status === "pending" && (
+                  <div className="w-10 h-10 rounded-full bg-white border-2 border-slate-200 flex items-center justify-center">
+                    <Circle className="w-5 h-5 text-slate-300" />
+                  </div>
+                )}
+              </div>
+
+              {/* Treść */}
+              <div className={`flex-1 min-w-0 pt-1.5 pb-3 ${!isLast ? "border-b border-slate-100" : ""}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-sm font-semibold ${
+                    status === "completed" ? "text-green-700" :
+                    status === "in_progress" ? "text-orange-700 font-bold" :
+                    "text-slate-400"
+                  }`}>
+                    {stage.name}
+                  </span>
+                  {status === "in_progress" && (
+                    <span className="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                      W trakcie
+                    </span>
+                  )}
+                  {status === "completed" && stage.completion_date && formatDatePL(stage.completion_date) && (
+                    <span className="text-xs text-slate-400">{formatDatePL(stage.completion_date)}</span>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        );
-      })}
+                {status !== "pending" && description && (
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>
+                )}
+                {stage.notes && (
+                  <p className="text-xs text-slate-600 bg-slate-50 rounded px-2 py-1 mt-1.5 border-l-2 border-orange-300">
+                    {stage.notes}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+      </div>
     </div>
   );
 }
