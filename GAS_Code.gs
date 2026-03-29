@@ -170,6 +170,19 @@ var HEADERS = {
 // Pola przechowywane jako JSON string w komórce
 var JSON_FIELDS = ["stages", "stageSchedule", "invoices", "tags", "items", "rooms", "configData"];
 
+// ─── AUTORYZACJA ────────────────────────────────────────────────────────────────
+/**
+ * Uruchom tę funkcję ręcznie z edytora Apps Script żeby autoryzować
+ * dostęp do ScriptApp (wymagane do tworzenia triggerów czasowych).
+ * Run → authorizeScriptApp → zaakceptuj uprawnienia w oknie popup.
+ */
+function authorizeScriptApp() {
+  var triggers = ScriptApp.getProjectTriggers();
+  Logger.log("Autoryzacja OK. Liczba triggerów: " + triggers.length);
+  PropertiesService.getScriptProperties().setProperty("authCheck", new Date().toISOString());
+  Logger.log("Uprawnienia do ScriptApp i PropertiesService potwierdzone.");
+}
+
 // ─── SETUP ──────────────────────────────────────────────────────────────────────
 function setupSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
