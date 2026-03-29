@@ -967,17 +967,13 @@ function LoxoneNotifSettings() {
         )}
       </div>
 
-      {/* Format JSON */}
+      {/* Format tekstu */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-        <p className="text-xs font-semibold text-slate-600 mb-2">Format JSON wysyłany do Loxone:</p>
-        <pre className="text-xs text-slate-500 whitespace-pre-wrap font-mono">{`{
-  "date": "2026-03-29",
-  "count": 3,
-  "tasks": [
-    { "title": "Montaż szafy", "projectId": "proj-123", "priority": "Wysoki", "status": "W trakcie" },
-    ...
-  ]
-}`}</pre>
+        <p className="text-xs font-semibold text-slate-600 mb-2">Tekst wysyłany do <code>TasksJSON</code>:</p>
+        <pre className="text-xs text-slate-500 whitespace-pre-wrap font-mono">{`3 zadania na dziś:
+1. Montaż szafy - Dom Kowalskich
+2. Konfiguracja sieci - Dom Nowakowskich
+3. Dokumentacja - designIQ`}</pre>
       </div>
     </div>
   );

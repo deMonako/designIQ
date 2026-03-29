@@ -73,18 +73,12 @@ function sendDailyTasksToLoxone() {
   var projectMap = {};
   allProjects.forEach(function(p) { if (p.id) projectMap[p.id] = p.name || p.code || p.id; });
 
-  var payload = JSON.stringify({
-    date:  today,
-    count: todayTasks.length,
-    tasks: todayTasks.map(function(t) {
-      return {
-        title:       t.title,
-        projectName: t.projectId ? (projectMap[t.projectId] || "designIQ") : "designIQ",
-        priority:    t.priority,
-        status:      t.status
-      };
-    })
+  var lines = [todayTasks.length + " zadania na dziś:"];
+  todayTasks.forEach(function(t, i) {
+    var proj = t.projectId ? (projectMap[t.projectId] || "designIQ") : "designIQ";
+    lines.push((i + 1) + ". " + t.title + " - " + proj);
   });
+  var payload = lines.join("\n");
 
   var status = [];
 
