@@ -924,7 +924,7 @@ function LoxoneNotifSettings() {
 
         {/* Godzina */}
         <div className={settings.enabled ? "" : "opacity-40 pointer-events-none"}>
-          <label className="text-xs font-medium text-slate-600 block mb-1.5">Godzina wysyłki</label>
+          <label className="text-xs font-medium text-slate-600 block mb-1.5">Godzina wysyłki <span className="text-slate-400 font-normal">(Google wysyła w ciągu tej godziny, nie co do minuty)</span></label>
           <Select
             value={settings.hour}
             onChange={v => setSettings(s => ({ ...s, hour: Number(v) }))}
