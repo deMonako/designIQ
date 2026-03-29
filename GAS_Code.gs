@@ -69,11 +69,20 @@ function sendDailyTasksToLoxone() {
   var todayTasks = allTasks.filter(function(t) {
     return String(t.dueDate || "").substring(0, 10) === today && t.status !== "Zrobione";
   });
+  var allProjects = sheetToObjects("Projekty");
+  var projectMap = {};
+  allProjects.forEach(function(p) { if (p.id) projectMap[p.id] = p.name || p.code || p.id; });
+
   var payload = JSON.stringify({
     date:  today,
     count: todayTasks.length,
     tasks: todayTasks.map(function(t) {
-      return { title: t.title, projectId: t.projectId, priority: t.priority, status: t.status };
+      return {
+        title:       t.title,
+        projectName: t.projectId ? (projectMap[t.projectId] || "designIQ") : "designIQ",
+        priority:    t.priority,
+        status:      t.status
+      };
     })
   });
 
