@@ -38,12 +38,19 @@ export default function Konfigurator() {
 
   const scrollToConfigurator = () => {
     if (configuratorRef.current) {
-      const top = configuratorRef.current.getBoundingClientRect().top + window.scrollY - 35;
+      const top = configuratorRef.current.getBoundingClientRect().top + window.scrollY - 88;
       window.scrollTo({ top, behavior: 'smooth' });
     }
   };
 
   const scrollToForm = scrollToConfigurator;
+
+  // Scroll na górę konfiguratora przy każdej zmianie kroku
+  useEffect(() => {
+    if (currentStep > 1 || showContactForm) {
+      setTimeout(scrollToConfigurator, 50);
+    }
+  }, [currentStep, showContactForm]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pakiety = [
     { 
@@ -334,12 +341,12 @@ export default function Konfigurator() {
                     >
                       {step.number}
                     </motion.div>
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       className="text-center mt-1 sm:mt-2 px-0.5 sm:px-1"
                     >
-                      <div className="font-semibold text-xs md:text-sm leading-tight">{step.title}</div>
+                      <div className="font-semibold text-[0.6rem] sm:text-xs md:text-sm leading-tight hidden xs:block sm:block">{step.title}</div>
                       <div className="text-[0.6rem] sm:text-xs text-slate-500 hidden lg:block whitespace-nowrap">{step.description}</div>
                     </motion.div>
                   </div>

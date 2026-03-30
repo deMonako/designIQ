@@ -27,7 +27,7 @@ const Admin = React.lazy(() => import("./pages/Admin"));
 function PublicSite() {
   return (
     <Layout>
-      <Suspense fallback={null}>
+      <Suspense fallback={<div className="min-h-[calc(100vh-5rem)]" />}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/CoZyskasz" element={<CoZyskasz />} />
