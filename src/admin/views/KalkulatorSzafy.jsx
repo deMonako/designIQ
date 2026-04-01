@@ -5,7 +5,7 @@ import {
   Zap, Cpu, Package, Download, AlertTriangle,
   CheckCircle2, AlertCircle, Plus, X, Trash2, RefreshCw,
   FolderKanban, FolderOpen, Save, ChevronDown, ChevronRight,
-  Search, Info, RotateCcw, LayoutList, GripVertical,
+  Search, Info, RotateCcw, LayoutList, GripVertical, FlaskConical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { genId } from "../utils/id";
@@ -56,6 +56,12 @@ const TYPICAL_POWER = {
   lighting: 50, socket: 300, motor: 150,
   heating: 1000, hvac: 2500, ev: 11000, other: 100,
 };
+
+const PSU_SIZES_24V = [2.5, 5, 10, 20, 40]; // A — typowe zasilacze 24V DC
+
+function pickPsu24(totalA) {
+  return PSU_SIZES_24V.find(s => s >= totalA) ?? PSU_SIZES_24V[PSU_SIZES_24V.length - 1];
+}
 
 function detectCategory(rawTyp) {
   const t = (rawTyp ?? "").toLowerCase();
@@ -592,10 +598,11 @@ function LayoutTab({ rows }) {
 // ─── Główny komponent ─────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "smart_home", label: "Smart Home",           icon: Cpu },
-  { id: "klasyczna",  label: "Klasyczna instalacja", icon: Zap },
-  { id: "zestawienie",label: "Zestawienie",          icon: Package },
-  { id: "layout",     label: "Layout",               icon: LayoutList },
+  { id: "smart_home",  label: "Smart Home",           icon: Cpu,        group: "materialy" },
+  { id: "klasyczna",   label: "Klasyczna instalacja", icon: Zap,        group: "materialy" },
+  { id: "zestawienie", label: "Zestawienie",          icon: Package,    group: "materialy" },
+  { id: "layout",      label: "Layout",               icon: LayoutList },
+  { id: "obliczenia",  label: "Obliczenia",           icon: FlaskConical },
 ];
 
 export default function KalkulatorSzafy({
@@ -620,6 +627,11 @@ export default function KalkulatorSzafy({
   const [szafaPoints, setSzafaPoints] = useState({}); // { _id: { terminal, cabinetMaterials } }
   const [circuits, setCircuits]       = useState([]);
   const [loxoneIO, setLoxoneIO]       = useState(null); // null = nieobliczone
+
+  // Obliczenia
+  const [obliczeniaSubTab, setObliczeniaSubTab] = useState("zabezpieczenia");
+  const [acGroups, setAcGroups]   = useState([]);
+  const [dc24Groups, setDc24Groups] = useState([]);
 
   // UI
   const [tab, setTab]                       = useState("smart_home");
@@ -682,6 +694,8 @@ export default function KalkulatorSzafy({
     setSzafaPoints({});
     setCircuits([]);
     setLoxoneIO(null);
+    setAcGroups([]);
+    setDc24Groups([]);
     setExpandedPointId(null);
     setSaveResult(null);
     setExistingRowsConfig(null);
@@ -709,6 +723,8 @@ export default function KalkulatorSzafy({
           setSzafaPoints(cfg.szafa.points ?? {});
           setCircuits(cfg.szafa.circuits ?? []);
           if (cfg.szafa.loxoneIO) setLoxoneIO(cfg.szafa.loxoneIO);
+          if (cfg.szafa.obliczenia?.acGroups)   setAcGroups(cfg.szafa.obliczenia.acGroups);
+          if (cfg.szafa.obliczenia?.dc24Groups) setDc24Groups(cfg.szafa.obliczenia.dc24Groups);
         }
 
         if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
@@ -743,13 +759,14 @@ export default function KalkulatorSzafy({
           points:  szafaPoints,
           circuits,
           loxoneIO: loxoneIO ?? undefined,
+          obliczenia: { acGroups, dc24Groups },
         },
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setSaveResult("ok");
     } catch { setSaveResult("err"); }
     finally { setSaving(false); }
-  }, [project, rows, existingRowsConfig, szafaPoints, circuits, loxoneIO]);
+  }, [project, rows, existingRowsConfig, szafaPoints, circuits, loxoneIO, acGroups, dc24Groups]);
 
   // Reset konfiguracji szafy (punkty, materiały, obwody, I/O)
   const handleResetSzafa = useCallback(() => {
@@ -1032,12 +1049,28 @@ export default function KalkulatorSzafy({
         <>
           {/* Tab bar + Save */}
           <div className="flex items-center justify-between gap-3">
-            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
-              {TABS.map(t => (
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl flex-wrap">
+              {/* Grouped materialy tabs with subtle orange tint */}
+              <div className="flex items-center gap-1 bg-orange-50 rounded-lg px-1 py-0.5 border border-orange-100">
+                {TABS.filter(t => t.group === "materialy").map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setTab(t.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${
+                      tab === t.id ? "bg-white text-slate-900 shadow-sm" : "text-orange-600/70 hover:text-orange-700"
+                    }`}
+                  >
+                    <t.icon className="w-3.5 h-3.5" />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+              {/* Non-grouped tabs */}
+              {TABS.filter(t => !t.group).map(t => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
                     tab === t.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
@@ -1372,6 +1405,287 @@ export default function KalkulatorSzafy({
             {tab === "layout" && (
               <motion.div key="layout" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
                 <LayoutTab rows={effectiveRows} />
+              </motion.div>
+            )}
+
+            {/* ══ TAB: Obliczenia ══ */}
+            {tab === "obliczenia" && (
+              <motion.div key="obliczenia" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-4">
+
+                {/* Sub-tab bar */}
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+                  {[
+                    { id: "zabezpieczenia", label: "Zabezpieczenia AC" },
+                    { id: "dc24",           label: "Zasilanie 24V DC" },
+                  ].map(st => (
+                    <button
+                      key={st.id}
+                      onClick={() => setObliczeniaSubTab(st.id)}
+                      className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                        obliczeniaSubTab === st.id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── Zabezpieczenia AC ── */}
+                {obliczeniaSubTab === "zabezpieczenia" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
+                      <button
+                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [] }])}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Dodaj grupę
+                      </button>
+                    </div>
+
+                    {acGroups.length === 0 && (
+                      <div className="text-center py-10 text-slate-300 text-sm border border-dashed border-slate-200 rounded-xl">
+                        Brak grup — kliknij „Dodaj grupę" aby zacząć
+                      </div>
+                    )}
+
+                    {acGroups.map((group, gi) => {
+                      const totalP = group.circuits.reduce((s, c) => s + (Number(c.power) || 0), 0);
+                      const totalI = group.circuits.reduce((s, c) => {
+                        const pf = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
+                        return s + (Number(c.power) || 0) / (230 * pf);
+                      }, 0);
+                      const groupBreakerRating = pickBreakerRating(totalI);
+                      const groupBreakerType   = totalI > 0 ? (group.circuits.some(c => CIRCUIT_BREAKER_TYPES[c.type] === "C") ? "C" : "B") : "B";
+
+                      return (
+                        <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                          {/* Group header */}
+                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 border-b border-slate-200">
+                            <input
+                              value={group.name}
+                              onChange={e => setAcGroups(gs => gs.map((g, i) => i === gi ? { ...g, name: e.target.value } : g))}
+                              className="flex-1 text-sm font-semibold bg-transparent outline-none text-slate-800 min-w-0"
+                              placeholder="Nazwa grupy (np. Parter)"
+                            />
+                            <span className="text-xs text-slate-400 shrink-0">
+                              Σ {totalP.toFixed(0)} W · {totalI.toFixed(2)} A
+                            </span>
+                            {totalI > 0 && (
+                              <span className="text-xs font-bold px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md shrink-0">
+                                Główny: {groupBreakerType}{groupBreakerRating}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setAcGroups(g => [...g.slice(0, gi), { ...g[gi], circuits: [...g[gi].circuits, { id: genId(), name: "", type: "lighting", power: 0 }] }, ...g.slice(gi + 1)])}
+                              className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
+                            >
+                              + Obwód
+                            </button>
+                            <button
+                              onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))}
+                              className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Circuits table */}
+                          {group.circuits.length === 0 ? (
+                            <div className="text-center py-4 text-slate-300 text-xs">Brak obwodów — kliknij „+ Obwód"</div>
+                          ) : (
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100">
+                                  <th className="text-left px-3 py-1.5">Nazwa</th>
+                                  <th className="text-left px-3 py-1.5 w-36">Typ</th>
+                                  <th className="text-right px-3 py-1.5 w-24">Moc (W)</th>
+                                  <th className="text-right px-3 py-1.5 w-20">I (A)</th>
+                                  <th className="text-center px-3 py-1.5 w-28">Bezpiecznik</th>
+                                  <th className="text-center px-3 py-1.5 w-20">Przekrój</th>
+                                  <th className="w-8" />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.circuits.map((circuit, ci) => {
+                                  const ct   = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
+                                  const I    = (Number(circuit.power) || 0) / (230 * ct.pf);
+                                  const bTyp = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
+                                  const bRat = I > 0 ? pickBreakerRating(I) : null;
+                                  const cable = I > 0 ? pickCableSize(I) : null;
+                                  return (
+                                    <tr key={circuit.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                                      <td className="px-3 py-1.5">
+                                        <input
+                                          value={circuit.name}
+                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, name: e.target.value } : c) }))}
+                                          className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
+                                          placeholder="np. Oświetlenie salon"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-1.5">
+                                        <select
+                                          value={circuit.type}
+                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, type: e.target.value, power: TYPICAL_POWER[e.target.value] ?? c.power } : c) }))}
+                                          className="bg-transparent outline-none text-slate-600 text-xs w-full"
+                                        >
+                                          {CIRCUIT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={circuit.power || ""}
+                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, power: Number(e.target.value) } : c) }))}
+                                          className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300"
+                                          placeholder="0"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(2) : "—"}</td>
+                                      <td className="px-3 py-1.5 text-center">
+                                        {bRat != null ? (
+                                          <span className="font-bold text-slate-700">{bTyp}{bRat}</span>
+                                        ) : <span className="text-slate-300">—</span>}
+                                      </td>
+                                      <td className="px-3 py-1.5 text-center text-slate-500">{cable != null ? `${cable} mm²` : "—"}</td>
+                                      <td className="px-3 py-1.5">
+                                        <button onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.filter((_, j) => j !== ci) }))} className="text-slate-300 hover:text-red-400 transition-colors">
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── Zasilanie 24V DC ── */}
+                {obliczeniaSubTab === "dc24" && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-slate-400">Grupuj urządzenia 24V per zasilacz/kanał — sumaryczny prąd i dobór zasilacza automatycznie.</p>
+                      <button
+                        onClick={() => setDc24Groups(g => [...g, { id: genId(), name: "Zasilacz", voltage: 24, devices: [] }])}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Dodaj zasilacz
+                      </button>
+                    </div>
+
+                    {dc24Groups.length === 0 && (
+                      <div className="text-center py-10 text-slate-300 text-sm border border-dashed border-slate-200 rounded-xl">
+                        Brak zasilaczy — kliknij „Dodaj zasilacz" aby zacząć
+                      </div>
+                    )}
+
+                    {dc24Groups.map((group, gi) => {
+                      const voltage  = Number(group.voltage) || 24;
+                      const totalP   = group.devices.reduce((s, d) => s + (Number(d.power) || 0), 0);
+                      const totalI   = totalP / voltage;
+                      const psuSize  = totalI > 0 ? pickPsu24(totalI) : null;
+                      const overload = totalI > 0 && totalI > (psuSize ?? 0);
+
+                      return (
+                        <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                          {/* Group header */}
+                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 border-b border-slate-200">
+                            <input
+                              value={group.name}
+                              onChange={e => setDc24Groups(gs => gs.map((g, i) => i === gi ? { ...g, name: e.target.value } : g))}
+                              className="flex-1 text-sm font-semibold bg-transparent outline-none text-slate-800 min-w-0"
+                              placeholder="Nazwa zasilacza"
+                            />
+                            <div className="flex items-center gap-1 shrink-0">
+                              <input
+                                type="number"
+                                value={group.voltage}
+                                onChange={e => setDc24Groups(gs => gs.map((g, i) => i === gi ? { ...g, voltage: Number(e.target.value) } : g))}
+                                className="w-12 text-xs text-right bg-white border border-slate-200 rounded px-1 py-0.5 outline-none"
+                              />
+                              <span className="text-xs text-slate-400">V</span>
+                            </div>
+                            <span className="text-xs text-slate-400 shrink-0">
+                              Σ {totalP.toFixed(0)} W · {totalI.toFixed(2)} A
+                            </span>
+                            {psuSize != null && (
+                              <span className={`text-xs font-bold px-2 py-0.5 rounded-md shrink-0 ${overload ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                                PSU: {voltage}V/{psuSize}A{overload ? " ⚠" : ""}
+                              </span>
+                            )}
+                            <button
+                              onClick={() => setDc24Groups(g => [...g.slice(0, gi), { ...g[gi], devices: [...g[gi].devices, { id: genId(), name: "", power: 0 }] }, ...g.slice(gi + 1)])}
+                              className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
+                            >
+                              + Urządzenie
+                            </button>
+                            <button
+                              onClick={() => setDc24Groups(g => g.filter((_, i) => i !== gi))}
+                              className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Devices table */}
+                          {group.devices.length === 0 ? (
+                            <div className="text-center py-4 text-slate-300 text-xs">Brak urządzeń — kliknij „+ Urządzenie"</div>
+                          ) : (
+                            <table className="w-full text-xs">
+                              <thead>
+                                <tr className="text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100">
+                                  <th className="text-left px-3 py-1.5">Nazwa urządzenia</th>
+                                  <th className="text-right px-3 py-1.5 w-28">Moc (W)</th>
+                                  <th className="text-right px-3 py-1.5 w-24">Prąd (A)</th>
+                                  <th className="w-8" />
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.devices.map((device, di) => {
+                                  const I = (Number(device.power) || 0) / voltage;
+                                  return (
+                                    <tr key={device.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                                      <td className="px-3 py-1.5">
+                                        <input
+                                          value={device.name}
+                                          onChange={e => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j === di ? { ...d, name: e.target.value } : d) }))}
+                                          className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
+                                          placeholder="np. Loxone Tree Extension"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          value={device.power || ""}
+                                          onChange={e => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j === di ? { ...d, power: Number(e.target.value) } : d) }))}
+                                          className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300"
+                                          placeholder="0"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(3) : "—"}</td>
+                                      <td className="px-3 py-1.5">
+                                        <button onClick={() => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.filter((_, j) => j !== di) }))} className="text-slate-300 hover:text-red-400 transition-colors">
+                                          <X className="w-3.5 h-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </motion.div>
             )}
 
