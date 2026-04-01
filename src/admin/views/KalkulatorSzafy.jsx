@@ -595,6 +595,114 @@ function LayoutTab({ rows }) {
   );
 }
 
+// ─── PointPicker ─────────────────────────────────────────────────────────────
+
+function PointPicker({ allRows, selectedIds, takenIds, onChange }) {
+  const [open, setOpen]       = useState(false);
+  const [query, setQuery]     = useState("");
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
+  const dropRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (btnRef.current?.contains(e.target) || dropRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+    setQuery("");
+    setOpen(o => !o);
+  };
+
+  const q = query.toLowerCase();
+  const filtered = allRows
+    .filter(r => !q || (r.tag ?? "").toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (!q) return (a.tag ?? "").localeCompare(b.tag ?? "");
+      const aTag = (a.tag ?? "").toLowerCase();
+      const bTag = (b.tag ?? "").toLowerCase();
+      const aStarts = aTag.startsWith(q);
+      const bStarts = bTag.startsWith(q);
+      if (aStarts !== bStarts) return aStarts ? -1 : 1;
+      return aTag.localeCompare(bTag);
+    });
+
+  const toggle = (id) => {
+    if (selectedIds.includes(id)) onChange(selectedIds.filter(x => x !== id));
+    else onChange([...selectedIds, id]);
+  };
+
+  const dropdown = open && ReactDOM.createPortal(
+    <div
+      ref={dropRef}
+      className="absolute z-[9999] w-72 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+      style={{ top: dropPos.top, left: dropPos.left }}
+    >
+      <div className="p-2 border-b border-slate-100">
+        <input
+          autoFocus
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Szukaj punktu (tag, pokój)…"
+          className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-300 placeholder-slate-300"
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <div className="py-5 text-center text-xs text-slate-300">Brak wyników</div>
+      ) : (
+        <div className="max-h-56 overflow-y-auto">
+          {filtered.map(r => {
+            const isTaken  = takenIds.has(r._id) && !selectedIds.includes(r._id);
+            const isSelected = selectedIds.includes(r._id);
+            return (
+              <label
+                key={r._id}
+                className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-slate-50 transition-colors select-none ${isTaken ? "opacity-40 pointer-events-none" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggle(r._id)}
+                  className="accent-orange-500 shrink-0"
+                  disabled={isTaken}
+                />
+                <span className="text-xs font-mono font-semibold text-slate-700 shrink-0">{r.tag}</span>
+                {r.pomieszczenie && <span className="text-xs text-slate-400 truncate">{r.pomieszczenie}</span>}
+                {r.typ && <span className="text-[10px] text-slate-300 ml-auto shrink-0">{r.typ}</span>}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+
+  return (
+    <span className="relative inline-block">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleOpen}
+        title="Przypisz punkty instalacyjne"
+        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-dashed border-slate-300 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
+      >
+        <Plus className="w-2.5 h-2.5" /> Dodaj
+      </button>
+      {dropdown}
+    </span>
+  );
+}
+
 // ─── Główny komponent ─────────────────────────────────────────────────────────
 
 const TABS = [
@@ -632,6 +740,12 @@ export default function KalkulatorSzafy({
   const [obliczeniaSubTab, setObliczeniaSubTab] = useState("zabezpieczenia");
   const [acGroups, setAcGroups]   = useState([]);
   const [dc24Groups, setDc24Groups] = useState([]);
+
+  // Set wszystkich _id już przypisanych do jakiegokolwiek obwodu AC
+  const acTakenIds = useMemo(
+    () => new Set(acGroups.flatMap(g => g.circuits.flatMap(c => c.pointIds ?? []))),
+    [acGroups]
+  );
 
   // UI
   const [tab, setTab]                       = useState("smart_home");
@@ -1477,7 +1591,7 @@ export default function KalkulatorSzafy({
                               </span>
                             )}
                             <button
-                              onClick={() => setAcGroups(g => [...g.slice(0, gi), { ...g[gi], circuits: [...g[gi].circuits, { id: genId(), name: "", type: "lighting", power: 0 }] }, ...g.slice(gi + 1)])}
+                              onClick={() => setAcGroups(g => [...g.slice(0, gi), { ...g[gi], circuits: [...g[gi].circuits, { id: genId(), name: "", type: "lighting", power: 0, pointIds: [] }] }, ...g.slice(gi + 1)])}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >
                               + Obwód
@@ -1522,6 +1636,30 @@ export default function KalkulatorSzafy({
                                           className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
                                           placeholder="np. Oświetlenie salon"
                                         />
+                                        {/* Przypisane punkty + picker */}
+                                        <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
+                                          {(circuit.pointIds ?? []).map(pid => {
+                                            const pt = effectiveRows.find(r => r._id === pid);
+                                            return pt ? (
+                                              <span key={pid} className="inline-flex items-center gap-0.5 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 rounded px-1.5 py-0 leading-5">
+                                                {pt.tag}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j !== ci ? c : { ...c, pointIds: (c.pointIds ?? []).filter(x => x !== pid) }) }))}
+                                                  className="ml-0.5 hover:text-red-500 transition-colors"
+                                                >
+                                                  <X className="w-2.5 h-2.5" />
+                                                </button>
+                                              </span>
+                                            ) : null;
+                                          })}
+                                          <PointPicker
+                                            allRows={effectiveRows}
+                                            selectedIds={circuit.pointIds ?? []}
+                                            takenIds={acTakenIds}
+                                            onChange={(newIds) => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j !== ci ? c : { ...c, pointIds: newIds }) }))}
+                                          />
+                                        </div>
                                       </td>
                                       <td className="px-3 py-1.5">
                                         <select
