@@ -747,6 +747,12 @@ export default function KalkulatorSzafy({
     [acGroups]
   );
 
+  // Set wszystkich _id już przypisanych do jakiegokolwiek urządzenia 24V DC
+  const dc24TakenIds = useMemo(
+    () => new Set(dc24Groups.flatMap(g => g.devices.flatMap(d => d.pointIds ?? []))),
+    [dc24Groups]
+  );
+
   // UI
   const [tab, setTab]                       = useState("smart_home");
   const [expandedPointId, setExpandedPointId] = useState(null);
@@ -1758,7 +1764,7 @@ export default function KalkulatorSzafy({
                               </span>
                             )}
                             <button
-                              onClick={() => setDc24Groups(g => [...g.slice(0, gi), { ...g[gi], devices: [...g[gi].devices, { id: genId(), name: "", power: 0 }] }, ...g.slice(gi + 1)])}
+                              onClick={() => setDc24Groups(g => [...g.slice(0, gi), { ...g[gi], devices: [...g[gi].devices, { id: genId(), name: "", power: 0, pointIds: [] }] }, ...g.slice(gi + 1)])}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >
                               + Urządzenie
@@ -1796,6 +1802,30 @@ export default function KalkulatorSzafy({
                                           className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
                                           placeholder="np. Loxone Tree Extension"
                                         />
+                                        {/* Przypisane punkty + picker */}
+                                        <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
+                                          {(device.pointIds ?? []).map(pid => {
+                                            const pt = effectiveRows.find(r => r._id === pid);
+                                            return pt ? (
+                                              <span key={pid} className="inline-flex items-center gap-0.5 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0 leading-5">
+                                                {pt.tag}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j !== di ? d : { ...d, pointIds: (d.pointIds ?? []).filter(x => x !== pid) }) }))}
+                                                  className="ml-0.5 hover:text-red-500 transition-colors"
+                                                >
+                                                  <X className="w-2.5 h-2.5" />
+                                                </button>
+                                              </span>
+                                            ) : null;
+                                          })}
+                                          <PointPicker
+                                            allRows={effectiveRows}
+                                            selectedIds={device.pointIds ?? []}
+                                            takenIds={dc24TakenIds}
+                                            onChange={(newIds) => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j !== di ? d : { ...d, pointIds: newIds }) }))}
+                                          />
+                                        </div>
                                       </td>
                                       <td className="px-3 py-1.5 text-right">
                                         <input
