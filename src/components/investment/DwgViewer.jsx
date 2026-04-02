@@ -781,8 +781,13 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       setLoadProg({ pct: 40, label: "Pobieranie…" });
 
       // GAS zwraca { floors: [...] }
-      const floors = res?.floors;
-      if (!floors || floors.length === 0) { setLoadState("empty"); return; }
+      const floorsRaw = res?.floors;
+      if (!floorsRaw || floorsRaw.length === 0) { setLoadState("empty"); return; }
+
+      // Sortuj piętra alfabetycznie (parter przed piętrem itp.)
+      const floors = [...floorsRaw].sort((a, b) =>
+        (a.name ?? "").localeCompare(b.name ?? "", "pl", { sensitivity: "base" })
+      );
 
       floorsDataRef.current = floors;
       setFloorNames(floors.map(f => f.name));
