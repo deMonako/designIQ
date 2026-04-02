@@ -38,23 +38,17 @@ function pickBreakerRating(I) {
 }
 
 const CIRCUIT_BREAKER_TYPES = {
-  lighting: "B", socket: "B", motor: "C",
-  heating: "B", hvac: "C", ev: "C", other: "B",
+  automatyka: "C", instalacja: "B", inne: "B",
 };
 
 const CIRCUIT_TYPES = [
-  { key: "lighting", label: "Oświetlenie",   pf: 0.95 },
-  { key: "socket",   label: "Gniazdka",      pf: 0.95 },
-  { key: "motor",    label: "Silnik/pompa",  pf: 0.80 },
-  { key: "heating",  label: "Ogrzewanie",    pf: 1.00 },
-  { key: "hvac",     label: "Klimatyzacja",  pf: 0.85 },
-  { key: "ev",       label: "Ładowarka EV",  pf: 0.99 },
-  { key: "other",    label: "Inne",          pf: 0.90 },
+  { key: "automatyka", label: "Automatyka", pf: 0.85 },
+  { key: "instalacja", label: "Instalacja", pf: 0.95 },
+  { key: "inne",       label: "Inne",       pf: 0.90 },
 ];
 
 const TYPICAL_POWER = {
-  lighting: 50, socket: 300, motor: 150,
-  heating: 1000, hvac: 2500, ev: 11000, other: 100,
+  automatyka: 200, instalacja: 1000, inne: 500,
 };
 
 const PSU_SIZES_24V = [2.5, 5, 10, 20, 40]; // A — typowe zasilacze 24V DC
@@ -65,13 +59,9 @@ function pickPsu24(totalA) {
 
 function detectCategory(rawTyp) {
   const t = (rawTyp ?? "").toLowerCase();
-  if (/light|ośw|świat|lampa|led|spot/.test(t)) return "lighting";
-  if (/socket|gniazd|outlet/.test(t)) return "socket";
-  if (/rolet|motor|shutter|blind|żaluz/.test(t)) return "motor";
-  if (/heat|ogrzew|floor|podłog/.test(t)) return "heating";
-  if (/hvac|klim|ac |wentyl|rekup/.test(t)) return "hvac";
-  if (/ev|elektr.*pojazd|charge|ładow/.test(t)) return "ev";
-  return "other";
+  if (/automat|sterown|sensor|czujn|loxone|detektor/.test(t)) return "automatyka";
+  if (/light|ośw|świat|lampa|led|socket|gniazd|rolet|żaluz|heat|ogrzew|hvac|klim|wentyl|ev|ładow/.test(t)) return "instalacja";
+  return "inne";
 }
 
 function calcCircuit(c) {
@@ -747,9 +737,9 @@ export default function KalkulatorSzafy({
     [acGroups]
   );
 
-  // Set wszystkich _id już przypisanych do jakiegokolwiek urządzenia 24V DC
+  // Set wszystkich _id już przypisanych do jakiejkolwiek podgrupy 24V DC
   const dc24TakenIds = useMemo(
-    () => new Set(dc24Groups.flatMap(g => g.devices.flatMap(d => d.pointIds ?? []))),
+    () => new Set(dc24Groups.flatMap(g => (g.subgroups ?? g.devices ?? []).flatMap(s => s.pointIds ?? []))),
     [dc24Groups]
   );
 
@@ -1714,9 +1704,9 @@ export default function KalkulatorSzafy({
                 {obliczeniaSubTab === "dc24" && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-400">Grupuj urządzenia 24V per zasilacz/kanał — sumaryczny prąd i dobór zasilacza automatycznie.</p>
+                      <p className="text-xs text-slate-400">Grupuj podgrupy obwodów per zasilacz — sumaryczny prąd i dobór zasilacza automatycznie.</p>
                       <button
-                        onClick={() => setDc24Groups(g => [...g, { id: genId(), name: "Zasilacz", voltage: 24, devices: [] }])}
+                        onClick={() => setDc24Groups(g => [...g, { id: genId(), name: "Zasilacz", voltage: 24, subgroups: [] }])}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
                       >
                         <Plus className="w-3.5 h-3.5" /> Dodaj zasilacz
@@ -1730,11 +1720,15 @@ export default function KalkulatorSzafy({
                     )}
 
                     {dc24Groups.map((group, gi) => {
-                      const voltage  = Number(group.voltage) || 24;
-                      const totalP   = group.devices.reduce((s, d) => s + (Number(d.power) || 0), 0);
-                      const totalI   = totalP / voltage;
-                      const psuSize  = totalI > 0 ? pickPsu24(totalI) : null;
-                      const overload = totalI > 0 && totalI > (psuSize ?? 0);
+                      const voltage   = Number(group.voltage) || 24;
+                      const subgroups = group.subgroups ?? group.devices ?? []; // backward compat
+                      const totalP    = subgroups.reduce((s, sg) => s + (Number(sg.power) || 0), 0);
+                      const totalI    = totalP / voltage;
+                      const psuSize   = totalI > 0 ? pickPsu24(totalI) : null;
+                      const overload  = totalI > 0 && totalI > (psuSize ?? 0);
+
+                      const updateSubs = (fn) =>
+                        setDc24Groups(gs => gs.map((g, i) => i === gi ? { ...g, subgroups: fn(subgroups) } : g));
 
                       return (
                         <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden">
@@ -1764,10 +1758,10 @@ export default function KalkulatorSzafy({
                               </span>
                             )}
                             <button
-                              onClick={() => setDc24Groups(g => [...g.slice(0, gi), { ...g[gi], devices: [...g[gi].devices, { id: genId(), name: "", power: 0, pointIds: [] }] }, ...g.slice(gi + 1)])}
+                              onClick={() => updateSubs(s => [...s, { id: genId(), name: "", power: 0, pointIds: [] }])}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >
-                              + Urządzenie
+                              + Podgrupa
                             </button>
                             <button
                               onClick={() => setDc24Groups(g => g.filter((_, i) => i !== gi))}
@@ -1777,41 +1771,41 @@ export default function KalkulatorSzafy({
                             </button>
                           </div>
 
-                          {/* Devices table */}
-                          {group.devices.length === 0 ? (
-                            <div className="text-center py-4 text-slate-300 text-xs">Brak urządzeń — kliknij „+ Urządzenie"</div>
+                          {/* Subgroups table */}
+                          {subgroups.length === 0 ? (
+                            <div className="text-center py-4 text-slate-300 text-xs">Brak podgrup — kliknij „+ Podgrupa"</div>
                           ) : (
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100">
-                                  <th className="text-left px-3 py-1.5">Nazwa urządzenia</th>
+                                  <th className="text-left px-3 py-1.5">Podgrupa</th>
                                   <th className="text-right px-3 py-1.5 w-28">Moc (W)</th>
                                   <th className="text-right px-3 py-1.5 w-24">Prąd (A)</th>
                                   <th className="w-8" />
                                 </tr>
                               </thead>
                               <tbody>
-                                {group.devices.map((device, di) => {
-                                  const I = (Number(device.power) || 0) / voltage;
+                                {subgroups.map((sg, si) => {
+                                  const I = (Number(sg.power) || 0) / voltage;
                                   return (
-                                    <tr key={device.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                                    <tr key={sg.id} className="border-b border-slate-50 hover:bg-slate-50/50">
                                       <td className="px-3 py-1.5">
                                         <input
-                                          value={device.name}
-                                          onChange={e => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j === di ? { ...d, name: e.target.value } : d) }))}
+                                          value={sg.name}
+                                          onChange={e => updateSubs(s => s.map((x, j) => j === si ? { ...x, name: e.target.value } : x))}
                                           className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
-                                          placeholder="np. Loxone Tree Extension"
+                                          placeholder="Nazwa podgrupy"
                                         />
                                         {/* Przypisane punkty + picker */}
                                         <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
-                                          {(device.pointIds ?? []).map(pid => {
+                                          {(sg.pointIds ?? []).map(pid => {
                                             const pt = effectiveRows.find(r => r._id === pid);
                                             return pt ? (
                                               <span key={pid} className="inline-flex items-center gap-0.5 text-[10px] bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0 leading-5">
                                                 {pt.tag}
                                                 <button
                                                   type="button"
-                                                  onClick={() => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j !== di ? d : { ...d, pointIds: (d.pointIds ?? []).filter(x => x !== pid) }) }))}
+                                                  onClick={() => updateSubs(s => s.map((x, j) => j !== si ? x : { ...x, pointIds: (x.pointIds ?? []).filter(p => p !== pid) }))}
                                                   className="ml-0.5 hover:text-red-500 transition-colors"
                                                 >
                                                   <X className="w-2.5 h-2.5" />
@@ -1821,9 +1815,9 @@ export default function KalkulatorSzafy({
                                           })}
                                           <PointPicker
                                             allRows={effectiveRows}
-                                            selectedIds={device.pointIds ?? []}
+                                            selectedIds={sg.pointIds ?? []}
                                             takenIds={dc24TakenIds}
-                                            onChange={(newIds) => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j !== di ? d : { ...d, pointIds: newIds }) }))}
+                                            onChange={(newIds) => updateSubs(s => s.map((x, j) => j !== si ? x : { ...x, pointIds: newIds }))}
                                           />
                                         </div>
                                       </td>
@@ -1831,15 +1825,15 @@ export default function KalkulatorSzafy({
                                         <input
                                           type="number"
                                           min="0"
-                                          value={device.power || ""}
-                                          onChange={e => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.map((d, j) => j === di ? { ...d, power: Number(e.target.value) } : d) }))}
+                                          value={sg.power || ""}
+                                          onChange={e => updateSubs(s => s.map((x, j) => j === si ? { ...x, power: Number(e.target.value) } : x))}
                                           className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300"
                                           placeholder="0"
                                         />
                                       </td>
                                       <td className="px-3 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(3) : "—"}</td>
                                       <td className="px-3 py-1.5">
-                                        <button onClick={() => setDc24Groups(gs => gs.map((g, i) => i !== gi ? g : { ...g, devices: g.devices.filter((_, j) => j !== di) }))} className="text-slate-300 hover:text-red-400 transition-colors">
+                                        <button onClick={() => updateSubs(s => s.filter((_, j) => j !== si))} className="text-slate-300 hover:text-red-400 transition-colors">
                                           <X className="w-3.5 h-3.5" />
                                         </button>
                                       </td>
