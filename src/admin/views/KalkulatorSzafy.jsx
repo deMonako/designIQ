@@ -100,6 +100,27 @@ const TYPICAL_POWER = {
   automatyka: 200, instalacja: 1000, inne: 500,
 };
 
+// Zalecany typ przewodu wg metody układania (PN-IEC 60364 / praktyka PL)
+function cableTypeRec(method, phases, size, circuitType) {
+  if (!size) return null;
+  const n = phases === 3 ? 5 : 3;
+  const base = method === "B1"
+    ? `${n}×LgY ${size} mm²`   // przewody jednożyłowe w rurce
+    : `NYM-J ${n}×${size} mm²`; // przewód wielożyłowy
+  if (circuitType === "automatyka") return base + "\u00a0/ NHXMH";
+  return base;
+}
+
+// Status obwodu (green / yellow / red / none)
+function circuitStatus({ Ib, bRat, dU }) {
+  if (!Ib || Ib === 0) return "none";
+  if (Ib > 63)                             return "red";
+  if (dU != null && dU >= 5)               return "red";
+  if (dU != null && dU >= 3)               return "yellow";
+  if (bRat && Ib / bRat > 0.92)            return "yellow";
+  return "green";
+}
+
 const PSU_SIZES_24V = [2.5, 5, 10, 20, 40]; // A — typowe zasilacze 24V DC
 
 function pickPsu24(totalA) {
@@ -636,7 +657,14 @@ function LayoutTab({ rows }) {
 
 // ─── SortableCircuitRow ───────────────────────────────────────────────────────
 
-function SortableCircuitRow({ id, children }) {
+const STATUS_BORDER = {
+  red:    "border-l-[3px] border-l-red-400",
+  yellow: "border-l-[3px] border-l-amber-400",
+  green:  "border-l-[3px] border-l-emerald-400",
+  none:   "border-l-[3px] border-l-transparent",
+};
+
+function SortableCircuitRow({ id, status = "none", children }) {
   const {
     attributes, listeners, setNodeRef,
     transform, transition, isDragging,
@@ -653,7 +681,7 @@ function SortableCircuitRow({ id, children }) {
         position: "relative",
         zIndex: isDragging ? 10 : "auto",
       }}
-      className="border-b border-slate-50"
+      className={`border-b border-slate-50 ${STATUS_BORDER[status] ?? STATUS_BORDER.none}`}
     >
       <td
         className="px-1.5 py-1 cursor-grab active:cursor-grabbing touch-none select-none"
@@ -1631,11 +1659,19 @@ export default function KalkulatorSzafy({
                 {/* ── Zabezpieczenia AC ── */}
                 {obliczeniaSubTab === "zabezpieczenia" && (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
+                        {/* Legenda statusów */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />OK</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />ΔU≥3% lub Ib/In&gt;92%</span>
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />ΔU≥5% lub Ib&gt;63A</span>
+                        </div>
+                      </div>
                       <button
                         onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcd: null, installMethod: "B1" }])}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" /> Dodaj grupę
                       </button>
@@ -1650,6 +1686,24 @@ export default function KalkulatorSzafy({
                     {acGroups.map((group, gi) => {
                       const rcd    = group.rcd ?? null;
                       const method = group.installMethod ?? "B1";
+
+                      // Prekalkulacja danych obwodów (użyta w nagłówku i wierszach)
+                      const circuitData = group.circuits.map(c => {
+                        const ct   = CIRCUIT_TYPES.find(t => t.key === c.type) ?? CIRCUIT_TYPES[0];
+                        const ph   = c.phases ?? 1;
+                        const Ib   = (Number(c.power) || 0) / ((ph === 3 ? 400 * Math.sqrt(3) : 230) * ct.pf);
+                        const bTyp = CIRCUIT_BREAKER_TYPES[c.type] ?? "B";
+                        const bRat = Ib > 0 ? pickBreakerRating(Ib) : null;
+                        const cableEntry = bRat != null ? pickCableForBreaker(bRat, method, ph) : { size: null, Iz: null };
+                        const L   = Number(c.cableLength) || 0;
+                        const dU  = (bRat && cableEntry.size) ? calcVoltDropPct(Ib, ct.pf, L, cableEntry.size, ph) : null;
+                        const st  = circuitStatus({ Ib, bRat, dU });
+                        return { ct, ph, Ib, bTyp, bRat, ...cableEntry, L, dU, status: st };
+                      });
+                      const groupStatus = circuitData.some(d => d.status === "red")    ? "red"
+                                        : circuitData.some(d => d.status === "yellow") ? "yellow"
+                                        : circuitData.some(d => d.status === "green")  ? "green"
+                                        : "none";
                       const totalP = group.circuits.reduce((s, c) => s + (Number(c.power) || 0), 0);
                       const rawTotalI = group.circuits.reduce((s, c) => {
                         const pf  = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
@@ -1679,6 +1733,9 @@ export default function KalkulatorSzafy({
                         [cs[ci], cs[ni]] = [cs[ni], cs[ci]]; return { ...g, circuits: cs };
                       }));
 
+                      const groupStatusDot = { red: "bg-red-400", yellow: "bg-amber-400", green: "bg-emerald-400", none: "bg-slate-200" }[groupStatus];
+                      const groupStatusTitle = { red: "Błąd: przekroczony limit ΔU≥5% lub Ib>63A", yellow: "Ostrzeżenie: ΔU≥3% lub wysoki stopień obciążenia", green: "Wszystkie obwody OK", none: "Brak danych" }[groupStatus];
+
                       return (
                         <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden">
                           {/* Group header */}
@@ -1687,6 +1744,8 @@ export default function KalkulatorSzafy({
                               <button onClick={() => moveGroup(-1)} disabled={gi === 0} className="text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><ArrowUp className="w-3 h-3" /></button>
                               <button onClick={() => moveGroup(1)} disabled={gi === acGroups.length - 1} className="text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><ArrowDown className="w-3 h-3" /></button>
                             </div>
+                            {/* Status dot */}
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${groupStatusDot}`} title={groupStatusTitle} />
                             <input
                               value={group.name}
                               onChange={e => setAcGroups(gs => gs.map((g, i) => i === gi ? { ...g, name: e.target.value } : g))}
@@ -1799,24 +1858,13 @@ export default function KalkulatorSzafy({
                                 <SortableContext items={group.circuits.map(c => c.id)} strategy={verticalListSortingStrategy}>
                                   <tbody>
                                     {group.circuits.map((circuit, ci) => {
-                                      const ct   = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
-                                      const ph   = circuit.phases ?? 1;
-                                      const vEq  = ph === 3 ? 400 * Math.sqrt(3) : 230;
-                                      const Ib   = (Number(circuit.power) || 0) / (vEq * ct.pf);
-                                      const bTyp = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
-                                      const bRat = Ib > 0 ? pickBreakerRating(Ib) : null;
-                                      // Kabel dobierany wg Iz ≥ In (IEC 60364-4-43)
-                                      const { size: cableSize, Iz } = bRat != null
-                                        ? pickCableForBreaker(bRat, method, ph)
-                                        : { size: null, Iz: null };
-                                      const L       = Number(circuit.cableLength) || 0;
-                                      const dU      = bRat && cableSize
-                                        ? calcVoltDropPct(Ib, ct.pf, L, cableSize, ph)
-                                        : null;
+                                      // Pobierz prekalkulowane dane
+                                      const { ct, ph, Ib, bTyp, bRat, size: cableSize, Iz, L, dU, status: rowStatus } = circuitData[ci];
                                       const dUWarn  = dU != null && dU >= 3;
                                       const dUError = dU != null && dU >= 5;
+                                      const cableRec = cableTypeRec(method, ph, cableSize, circuit.type);
                                       return (
-                                        <SortableCircuitRow key={circuit.id} id={circuit.id}>
+                                        <SortableCircuitRow key={circuit.id} id={circuit.id} status={rowStatus}>
                                           {/* Nazwa + długość + punkty */}
                                           <td className="px-3 py-1.5">
                                             <input
@@ -1887,14 +1935,24 @@ export default function KalkulatorSzafy({
                                           <td className="px-2 py-1.5 text-right text-slate-500">{Ib > 0 ? Ib.toFixed(2) : "—"}</td>
                                           {/* Bezpiecznik */}
                                           <td className="px-2 py-1.5 text-center">
-                                            {bRat != null ? <span className="font-bold text-slate-700">{bTyp}{bRat}{ph === 3 ? "/3" : ""}</span> : <span className="text-slate-300">—</span>}
+                                            {bRat != null ? (
+                                              <span className="font-bold text-slate-700"
+                                                title={`${bTyp}${bRat}${ph === 3 ? "/3P+N" : "/1P+N"} — charakterystyka ${bTyp === "C" ? "C (urządzenia z dużym prądem rozruchowym)" : "B (rezystancyjne, oświetlenie)"}`}>
+                                                {bTyp}{bRat}{ph === 3 ? "/3" : ""}
+                                              </span>
+                                            ) : <span className="text-slate-300">—</span>}
                                           </td>
-                                          {/* Kabel: przekrój + Iz */}
+                                          {/* Kabel: przekrój + Iz + typ */}
                                           <td className="px-2 py-1.5 text-center">
                                             {cableSize != null ? (
-                                              <span className={`text-slate-600 ${dUError ? "text-red-600" : dUWarn ? "text-amber-600" : ""}`}>
-                                                {cableSize}<span className="text-slate-400 text-[10px]"> ({Iz}A)</span>
-                                              </span>
+                                              <div title={`Dobór wg Iz≥In (IEC 60364-4-43)\nZalecany: ${cableRec ?? "—"}\nIz=${Iz}A ≥ In=${bRat}A ✓`}>
+                                                <span className={`font-medium ${dUError ? "text-red-600" : dUWarn ? "text-amber-600" : "text-slate-600"}`}>
+                                                  {cableSize}<span className="font-normal text-slate-400 text-[10px]"> ({Iz}A)</span>
+                                                </span>
+                                                {cableRec && (
+                                                  <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{cableRec}</div>
+                                                )}
+                                              </div>
                                             ) : <span className="text-slate-300">—</span>}
                                           </td>
                                           {/* RCD */}
