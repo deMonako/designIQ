@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle, Plus, X, Trash2, RefreshCw,
   FolderKanban, FolderOpen, Save, ChevronDown, ChevronRight,
   Search, Info, RotateCcw, LayoutList, GripVertical, FlaskConical,
+  ArrowUp, ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { genId } from "../utils/id";
@@ -1546,7 +1547,7 @@ export default function KalkulatorSzafy({
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
                       <button
-                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [] }])}
+                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcds: [] }])}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
                       >
                         <Plus className="w-3.5 h-3.5" /> Dodaj grupę
@@ -1560,44 +1561,104 @@ export default function KalkulatorSzafy({
                     )}
 
                     {acGroups.map((group, gi) => {
+                      const rcds   = group.rcds ?? [];
                       const totalP = group.circuits.reduce((s, c) => s + (Number(c.power) || 0), 0);
                       const totalI = group.circuits.reduce((s, c) => {
-                        const pf = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
-                        return s + (Number(c.power) || 0) / (230 * pf);
+                        const pf  = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
+                        const vEq = (c.phases ?? 1) === 3 ? 400 * Math.sqrt(3) : 230;
+                        return s + (Number(c.power) || 0) / (vEq * pf);
                       }, 0);
                       const groupBreakerRating = pickBreakerRating(totalI);
                       const groupBreakerType   = totalI > 0 ? (group.circuits.some(c => CIRCUIT_BREAKER_TYPES[c.type] === "C") ? "C" : "B") : "B";
 
+                      const updateCircuit = (ci, patch) =>
+                        setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
+                          ...g, circuits: g.circuits.map((c, j) => j !== ci ? c : { ...c, ...patch })
+                        }));
+
+                      const moveGroup = (dir) => setAcGroups(gs => {
+                        const arr = [...gs]; const ni = gi + dir;
+                        if (ni < 0 || ni >= arr.length) return gs;
+                        [arr[gi], arr[ni]] = [arr[ni], arr[gi]]; return arr;
+                      });
+
+                      const moveCircuit = (ci, dir) => setAcGroups(gs => gs.map((g, i) => {
+                        if (i !== gi) return g;
+                        const cs = [...g.circuits]; const ni = ci + dir;
+                        if (ni < 0 || ni >= cs.length) return g;
+                        [cs[ci], cs[ni]] = [cs[ni], cs[ci]]; return { ...g, circuits: cs };
+                      }));
+
                       return (
                         <div key={group.id} className="border border-slate-200 rounded-xl overflow-hidden">
                           {/* Group header */}
-                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 border-b border-slate-200">
+                          <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 border-b border-slate-100">
+                            <div className="flex flex-col gap-0.5 shrink-0">
+                              <button onClick={() => moveGroup(-1)} disabled={gi === 0} className="text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><ArrowUp className="w-3 h-3" /></button>
+                              <button onClick={() => moveGroup(1)} disabled={gi === acGroups.length - 1} className="text-slate-300 hover:text-slate-600 disabled:opacity-20 transition-colors"><ArrowDown className="w-3 h-3" /></button>
+                            </div>
                             <input
                               value={group.name}
                               onChange={e => setAcGroups(gs => gs.map((g, i) => i === gi ? { ...g, name: e.target.value } : g))}
                               className="flex-1 text-sm font-semibold bg-transparent outline-none text-slate-800 min-w-0"
                               placeholder="Nazwa grupy (np. Parter)"
                             />
-                            <span className="text-xs text-slate-400 shrink-0">
-                              Σ {totalP.toFixed(0)} W · {totalI.toFixed(2)} A
-                            </span>
+                            <span className="text-xs text-slate-400 shrink-0">Σ {totalP.toFixed(0)} W · {totalI.toFixed(2)} A</span>
                             {totalI > 0 && (
                               <span className="text-xs font-bold px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md shrink-0">
                                 Główny: {groupBreakerType}{groupBreakerRating}
                               </span>
                             )}
                             <button
-                              onClick={() => setAcGroups(g => [...g.slice(0, gi), { ...g[gi], circuits: [...g[gi].circuits, { id: genId(), name: "", type: "lighting", power: 0, pointIds: [] }] }, ...g.slice(gi + 1)])}
+                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, rcdId: null, pointIds: [] }] }))}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
-                            >
-                              + Obwód
-                            </button>
-                            <button
-                              onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))}
-                              className="text-slate-400 hover:text-red-500 transition-colors shrink-0"
-                            >
+                            >+ Obwód</button>
+                            <button onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
                               <X className="w-4 h-4" />
                             </button>
+                          </div>
+
+                          {/* RCD row */}
+                          <div className="flex items-center gap-2 flex-wrap bg-slate-50/50 px-3 py-1.5 border-b border-slate-100">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Różnicówki:</span>
+                            {rcds.map((rcd, ri) => (
+                              <div key={rcd.id} className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5">
+                                <input
+                                  value={rcd.name}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, name: e.target.value } : r) }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-800 font-semibold w-16 min-w-0"
+                                  placeholder="RCD 1"
+                                />
+                                <select
+                                  value={rcd.mA ?? 30}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, mA: Number(e.target.value) } : r) }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-600"
+                                >
+                                  {[10, 30, 100, 300].map(v => <option key={v} value={v}>{v} mA</option>)}
+                                </select>
+                                <select
+                                  value={rcd.type ?? "A"}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, type: e.target.value } : r) }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-600"
+                                >
+                                  {["AC", "A", "F", "B"].map(t => <option key={t} value={t}>typ {t}</option>)}
+                                </select>
+                                <button
+                                  onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
+                                    ...g,
+                                    rcds: g.rcds.filter((_, j) => j !== ri),
+                                    circuits: g.circuits.map(c => c.rcdId === rcd.id ? { ...c, rcdId: null } : c),
+                                  }))}
+                                  className="text-purple-300 hover:text-red-500 transition-colors ml-0.5"
+                                ><X className="w-3 h-3" /></button>
+                              </div>
+                            ))}
+                            <button
+                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
+                                ...g, rcds: [...(g.rcds ?? []), { id: genId(), name: `RCD ${(g.rcds ?? []).length + 1}`, mA: 30, type: "A" }]
+                              }))}
+                              className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:text-purple-700 px-1.5 py-0.5 border border-dashed border-purple-300 rounded-md transition-colors"
+                            ><Plus className="w-3 h-3" /> Dodaj różnicówkę</button>
                           </div>
 
                           {/* Circuits table */}
@@ -1607,45 +1668,51 @@ export default function KalkulatorSzafy({
                             <table className="w-full text-xs">
                               <thead>
                                 <tr className="text-slate-400 font-semibold uppercase tracking-wide border-b border-slate-100">
-                                  <th className="text-left px-3 py-1.5">Nazwa</th>
-                                  <th className="text-left px-3 py-1.5 w-36">Typ</th>
-                                  <th className="text-right px-3 py-1.5 w-24">Moc (W)</th>
-                                  <th className="text-right px-3 py-1.5 w-20">I (A)</th>
-                                  <th className="text-center px-3 py-1.5 w-28">Bezpiecznik</th>
-                                  <th className="text-center px-3 py-1.5 w-20">Przekrój</th>
+                                  <th className="w-6" />
+                                  <th className="text-left px-3 py-1.5">Nazwa / Punkty</th>
+                                  <th className="text-center px-1 py-1.5 w-12">Fazy</th>
+                                  <th className="text-left px-2 py-1.5 w-28">Typ</th>
+                                  <th className="text-right px-3 py-1.5 w-20">Moc (W)</th>
+                                  <th className="text-right px-2 py-1.5 w-14">I (A)</th>
+                                  <th className="text-center px-2 py-1.5 w-20">Bezp.</th>
+                                  <th className="text-center px-2 py-1.5 w-14">mm²</th>
+                                  {rcds.length > 0 && <th className="text-center px-2 py-1.5 w-24">RCD</th>}
                                   <th className="w-8" />
                                 </tr>
                               </thead>
                               <tbody>
                                 {group.circuits.map((circuit, ci) => {
-                                  const ct   = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
-                                  const I    = (Number(circuit.power) || 0) / (230 * ct.pf);
-                                  const bTyp = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
-                                  const bRat = I > 0 ? pickBreakerRating(I) : null;
+                                  const ct    = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
+                                  const ph    = circuit.phases ?? 1;
+                                  const vEq   = ph === 3 ? 400 * Math.sqrt(3) : 230;
+                                  const I     = (Number(circuit.power) || 0) / (vEq * ct.pf);
+                                  const bTyp  = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
+                                  const bRat  = I > 0 ? pickBreakerRating(I) : null;
                                   const cable = I > 0 ? pickCableSize(I) : null;
                                   return (
                                     <tr key={circuit.id} className="border-b border-slate-50 hover:bg-slate-50/50">
+                                      {/* Order */}
+                                      <td className="px-1 py-1">
+                                        <div className="flex flex-col items-center gap-0.5">
+                                          <button onClick={() => moveCircuit(ci, -1)} disabled={ci === 0} className="text-slate-200 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowUp className="w-3 h-3" /></button>
+                                          <button onClick={() => moveCircuit(ci, 1)} disabled={ci === group.circuits.length - 1} className="text-slate-200 hover:text-slate-500 disabled:opacity-20 transition-colors"><ArrowDown className="w-3 h-3" /></button>
+                                        </div>
+                                      </td>
+                                      {/* Nazwa + punkty */}
                                       <td className="px-3 py-1.5">
                                         <input
                                           value={circuit.name}
-                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, name: e.target.value } : c) }))}
+                                          onChange={e => updateCircuit(ci, { name: e.target.value })}
                                           className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
-                                          placeholder="np. Oświetlenie salon"
+                                          placeholder="np. Zasilacz 24V, Klimatyzacja…"
                                         />
-                                        {/* Przypisane punkty + picker */}
                                         <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
                                           {(circuit.pointIds ?? []).map(pid => {
                                             const pt = effectiveRows.find(r => r._id === pid);
                                             return pt ? (
                                               <span key={pid} className="inline-flex items-center gap-0.5 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 rounded px-1.5 py-0 leading-5">
                                                 {pt.tag}
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j !== ci ? c : { ...c, pointIds: (c.pointIds ?? []).filter(x => x !== pid) }) }))}
-                                                  className="ml-0.5 hover:text-red-500 transition-colors"
-                                                >
-                                                  <X className="w-2.5 h-2.5" />
-                                                </button>
+                                                <button type="button" onClick={() => updateCircuit(ci, { pointIds: (circuit.pointIds ?? []).filter(x => x !== pid) })} className="ml-0.5 hover:text-red-500 transition-colors"><X className="w-2.5 h-2.5" /></button>
                                               </span>
                                             ) : null;
                                           })}
@@ -1653,36 +1720,53 @@ export default function KalkulatorSzafy({
                                             allRows={effectiveRows}
                                             selectedIds={circuit.pointIds ?? []}
                                             takenIds={acTakenIds}
-                                            onChange={(newIds) => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j !== ci ? c : { ...c, pointIds: newIds }) }))}
+                                            onChange={(newIds) => updateCircuit(ci, { pointIds: newIds })}
                                           />
                                         </div>
                                       </td>
-                                      <td className="px-3 py-1.5">
+                                      {/* Fazy */}
+                                      <td className="px-1 py-1.5 text-center">
+                                        <button
+                                          onClick={() => updateCircuit(ci, { phases: ph === 3 ? 1 : 3 })}
+                                          className={`text-[11px] font-bold px-1.5 py-0.5 rounded border transition-colors ${ph === 3 ? "bg-blue-100 text-blue-700 border-blue-300" : "bg-slate-100 text-slate-500 border-slate-200 hover:border-blue-300 hover:text-blue-600"}`}
+                                        >{ph === 3 ? "3φ" : "1φ"}</button>
+                                      </td>
+                                      {/* Typ */}
+                                      <td className="px-2 py-1.5">
                                         <select
                                           value={circuit.type}
-                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, type: e.target.value, power: TYPICAL_POWER[e.target.value] ?? c.power } : c) }))}
+                                          onChange={e => updateCircuit(ci, { type: e.target.value, power: TYPICAL_POWER[e.target.value] ?? circuit.power })}
                                           className="bg-transparent outline-none text-slate-600 text-xs w-full"
                                         >
                                           {CIRCUIT_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
                                         </select>
                                       </td>
+                                      {/* Moc */}
                                       <td className="px-3 py-1.5 text-right">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          value={circuit.power || ""}
-                                          onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.map((c, j) => j === ci ? { ...c, power: Number(e.target.value) } : c) }))}
-                                          className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300"
-                                          placeholder="0"
-                                        />
+                                        <input type="number" min="0" value={circuit.power || ""} onChange={e => updateCircuit(ci, { power: Number(e.target.value) })} className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300" placeholder="0" />
                                       </td>
-                                      <td className="px-3 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(2) : "—"}</td>
-                                      <td className="px-3 py-1.5 text-center">
-                                        {bRat != null ? (
-                                          <span className="font-bold text-slate-700">{bTyp}{bRat}</span>
-                                        ) : <span className="text-slate-300">—</span>}
+                                      {/* I */}
+                                      <td className="px-2 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(2) : "—"}</td>
+                                      {/* Bezpiecznik */}
+                                      <td className="px-2 py-1.5 text-center">
+                                        {bRat != null ? <span className="font-bold text-slate-700">{bTyp}{bRat}{ph === 3 ? "/3" : ""}</span> : <span className="text-slate-300">—</span>}
                                       </td>
-                                      <td className="px-3 py-1.5 text-center text-slate-500">{cable != null ? `${cable} mm²` : "—"}</td>
+                                      {/* Przekrój */}
+                                      <td className="px-2 py-1.5 text-center text-slate-500">{cable != null ? `${cable}` : "—"}</td>
+                                      {/* RCD */}
+                                      {rcds.length > 0 && (
+                                        <td className="px-2 py-1.5 text-center">
+                                          <select
+                                            value={circuit.rcdId ?? ""}
+                                            onChange={e => updateCircuit(ci, { rcdId: e.target.value || null })}
+                                            className="text-[11px] bg-transparent outline-none text-slate-600 max-w-[88px]"
+                                          >
+                                            <option value="">—</option>
+                                            {rcds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                          </select>
+                                        </td>
+                                      )}
+                                      {/* Delete */}
                                       <td className="px-3 py-1.5">
                                         <button onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: g.circuits.filter((_, j) => j !== ci) }))} className="text-slate-300 hover:text-red-400 transition-colors">
                                           <X className="w-3.5 h-3.5" />
