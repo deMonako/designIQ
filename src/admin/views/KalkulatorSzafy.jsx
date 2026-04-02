@@ -27,23 +27,63 @@ import { buildEffectiveMappings, EMPTY_KALKULATOR_SETTINGS } from "../../lib/sho
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
-// ─── Stałe elektryczne ────────────────────────────────────────────────────────
+// ─── Stałe elektryczne (IEC 60364 / PN-HD 60364) ─────────────────────────────
 
-const BREAKER_RATINGS = [6, 10, 13, 16, 20, 25, 32, 40, 50, 63];
-const RHO_COPPER      = 0.0175;
+// IEC 60898 — standardowa seria E bezpieczników (bez 13A który jest normą brytyjską BS 1363)
+const BREAKER_RATINGS = [6, 10, 16, 20, 25, 32, 40, 50, 63];
 
-function pickCableSize(I) {
-  if (I <=  10) return 1.5;
-  if (I <=  16) return 2.5;
-  if (I <=  25) return 4;
-  if (I <=  32) return 6;
-  if (I <=  50) return 10;
-  if (I <=  63) return 16;
-  return 25;
+// Rezystywność miedzi w 70°C (PVC, pełne obciążenie) wg IEC 60228
+const RHO_CU_70 = 0.0225; // Ω·mm²/m
+
+// Obciążalności prądowe przewodów Cu-PVC wg IEC 60364-5-52 tab. B.52.2/B.52.3
+// Tamb = 30°C, brak korekcji grupowania; klucz: metoda + fazy
+const CABLE_SIZES = [1.5, 2.5, 4, 6, 10, 16, 25, 35];
+const CABLE_IZ = {
+  B1_1: [15.5, 21,   28,  36,  50,  66,  84, 103], // B1 jedno-faz (rura na/w ścianie)
+  B1_3: [14,   18.5, 25,  32,  43,  57,  73,  89], // B1 trój-faz
+  C_1:  [19.5, 27,   36,  46,  63,  85, 112, 138], // C jedno-faz (na powierzchni)
+  C_3:  [17.5, 24,   32,  41,  57,  76,  96, 119], // C trój-faz
+  A_1:  [13,   17.5, 23,  29,  39,  52,  68,  83], // A jedno-faz (w ścianie termoizol.)
+  A_3:  [11.5, 15,   20,  25,  34,  45,  57,  70], // A trój-faz
+};
+
+const INSTALL_METHODS = [
+  { key: "B1", label: "B1 – rura na/w ścianie (domyślna)" },
+  { key: "C",  label: "C – kabel na powierzchni / korytko" },
+  { key: "A",  label: "A – w ścianie termoizolacyjnej" },
+];
+
+// Współczynnik jednoczesności wg PN-HD 60364-1 tab. C.1
+function simultaneityFactor(n) {
+  if (n <= 1) return 1;
+  if (n <= 3) return 0.9;
+  if (n <= 5) return 0.8;
+  if (n <= 9) return 0.7;
+  return 0.6;
+}
+
+// Dobór kabla wg zasady Iz ≥ In (IEC 60364-4-43 pkt 433.2)
+function pickCableForBreaker(In, method = "B1", phases = 1) {
+  const key = `${method}_${phases === 3 ? "3" : "1"}`;
+  const izArr = CABLE_IZ[key] ?? CABLE_IZ.B1_1;
+  const idx = izArr.findIndex(iz => iz >= In);
+  if (idx === -1) return { size: 35, Iz: izArr[izArr.length - 1] };
+  return { size: CABLE_SIZES[idx], Iz: izArr[idx] };
 }
 
 function pickBreakerRating(I) {
   return BREAKER_RATINGS.find(r => r >= I) ?? 63;
+}
+
+// Spadek napięcia [%] — IEC 60364-5-52 Aneks G; ρ Cu @70°C
+// 1φ: ΔU = 2ρLI_a/S (tam i z powrotem); 3φ: ΔU_LN = ρLI_a/S (tylko przewód liniowy)
+function calcVoltDropPct(Ib, pf, L, S, phases) {
+  if (!L || !S || !Ib) return null;
+  const I_active = Ib * pf; // składowa czynna prądu
+  const dU = phases === 3
+    ? RHO_CU_70 * L * I_active / S
+    : 2 * RHO_CU_70 * L * I_active / S;
+  return (dU / 230) * 100; // % napięcia znamionowego fazowego (230V)
 }
 
 const CIRCUIT_BREAKER_TYPES = {
@@ -74,17 +114,17 @@ function detectCategory(rawTyp) {
 }
 
 function calcCircuit(c) {
-  const pf  = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
-  const rawI = (parseFloat(c.power) || 0) / (c.phases === 3 ? (400 * Math.sqrt(3) * pf) : (230 * pf));
-  const I           = Math.round(rawI * 100) / 100;
-  const cableSize   = pickCableSize(I);
-  const breakerA    = pickBreakerRating(I);
+  const pf       = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
+  const ph       = c.phases ?? 1;
+  const Ib       = (parseFloat(c.power) || 0) / ((ph === 3 ? 400 * Math.sqrt(3) : 230) * pf);
+  const I        = Math.round(Ib * 100) / 100;
+  const breakerA = pickBreakerRating(I);
   const breakerType = CIRCUIT_BREAKER_TYPES[c.type] ?? "B";
-  const L           = parseFloat(c.cableLength) || 0;
-  const voltDrop    = L > 0
-    ? (2 * RHO_COPPER * L * I) / (cableSize * 230) * 100
-    : null;
-  return { I, cableSize, breakerA, breakerType, voltDrop };
+  const method   = c.installMethod ?? "B1";
+  const { size: cableSize, Iz } = pickCableForBreaker(breakerA, method, ph);
+  const L        = parseFloat(c.cableLength) || 0;
+  const voltDrop = calcVoltDropPct(I, pf, L, cableSize, ph);
+  return { I, cableSize, Iz, breakerA, breakerType, voltDrop };
 }
 
 function autoGenerateCircuits(rows) {
@@ -1594,7 +1634,7 @@ export default function KalkulatorSzafy({
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
                       <button
-                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcd: null }])}
+                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcd: null, installMethod: "B1" }])}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
                       >
                         <Plus className="w-3.5 h-3.5" /> Dodaj grupę
@@ -1608,15 +1648,18 @@ export default function KalkulatorSzafy({
                     )}
 
                     {acGroups.map((group, gi) => {
-                      const rcd = group.rcd ?? null;
+                      const rcd    = group.rcd ?? null;
+                      const method = group.installMethod ?? "B1";
                       const totalP = group.circuits.reduce((s, c) => s + (Number(c.power) || 0), 0);
-                      const totalI = group.circuits.reduce((s, c) => {
+                      const rawTotalI = group.circuits.reduce((s, c) => {
                         const pf  = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
                         const vEq = (c.phases ?? 1) === 3 ? 400 * Math.sqrt(3) : 230;
                         return s + (Number(c.power) || 0) / (vEq * pf);
                       }, 0);
-                      const groupBreakerRating = pickBreakerRating(totalI);
-                      const groupBreakerType   = totalI > 0 ? (group.circuits.some(c => CIRCUIT_BREAKER_TYPES[c.type] === "C") ? "C" : "B") : "B";
+                      const ks     = simultaneityFactor(group.circuits.length);
+                      const totalI = rawTotalI * ks; // prąd obliczeniowy z wsp. jednoczesności
+                      const groupBreakerRating = pickBreakerRating(rawTotalI); // bez ks — bezpiecznik na pełny prąd
+                      const groupBreakerType   = rawTotalI > 0 ? (group.circuits.some(c => CIRCUIT_BREAKER_TYPES[c.type] === "C") ? "C" : "B") : "B";
 
                       const updateCircuit = (ci, patch) =>
                         setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
@@ -1650,14 +1693,30 @@ export default function KalkulatorSzafy({
                               className="flex-1 text-sm font-semibold bg-transparent outline-none text-slate-800 min-w-0"
                               placeholder="Nazwa grupy (np. Parter)"
                             />
-                            <span className="text-xs text-slate-400 shrink-0">Σ {totalP.toFixed(0)} W · {totalI.toFixed(2)} A</span>
-                            {totalI > 0 && (
-                              <span className="text-xs font-bold px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md shrink-0">
+                            <span className="text-xs text-slate-400 shrink-0">Σ {totalP.toFixed(0)} W</span>
+                            {rawTotalI > 0 && ks < 1 && (
+                              <span className="text-[10px] text-slate-400 shrink-0" title={`Wsp. jednoczesności ks=${ks} (${group.circuits.length} obw.) → I_obl=${totalI.toFixed(2)} A`}>
+                                I_b={totalI.toFixed(2)} A <span className="text-slate-300">(×{ks})</span>
+                              </span>
+                            )}
+                            {rawTotalI > 0 && ks === 1 && (
+                              <span className="text-xs text-slate-400 shrink-0">I_b={rawTotalI.toFixed(2)} A</span>
+                            )}
+                            {rawTotalI > 0 && (
+                              <span className="text-xs font-bold px-2 py-0.5 bg-orange-100 text-orange-700 rounded-md shrink-0" title="Bezpiecznik główny dobierany na pełny prąd (bez ks)">
                                 Główny: {groupBreakerType}{groupBreakerRating}
                               </span>
                             )}
+                            <select
+                              value={method}
+                              onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, installMethod: e.target.value }))}
+                              className="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 outline-none text-slate-500 shrink-0"
+                              title="Metoda układania kabli (IEC 60364-5-52)"
+                            >
+                              {INSTALL_METHODS.map(m => <option key={m.key} value={m.key}>{m.key}</option>)}
+                            </select>
                             <button
-                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, underRcd: rcd != null, pointIds: [] }] }))}
+                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, underRcd: rcd != null, cableLength: 0, pointIds: [] }] }))}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >+ Obwód</button>
                             <button onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
@@ -1740,16 +1799,25 @@ export default function KalkulatorSzafy({
                                 <SortableContext items={group.circuits.map(c => c.id)} strategy={verticalListSortingStrategy}>
                                   <tbody>
                                     {group.circuits.map((circuit, ci) => {
-                                      const ct    = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
-                                      const ph    = circuit.phases ?? 1;
-                                      const vEq   = ph === 3 ? 400 * Math.sqrt(3) : 230;
-                                      const I     = (Number(circuit.power) || 0) / (vEq * ct.pf);
-                                      const bTyp  = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
-                                      const bRat  = I > 0 ? pickBreakerRating(I) : null;
-                                      const cable = I > 0 ? pickCableSize(I) : null;
+                                      const ct   = CIRCUIT_TYPES.find(t => t.key === circuit.type) ?? CIRCUIT_TYPES[0];
+                                      const ph   = circuit.phases ?? 1;
+                                      const vEq  = ph === 3 ? 400 * Math.sqrt(3) : 230;
+                                      const Ib   = (Number(circuit.power) || 0) / (vEq * ct.pf);
+                                      const bTyp = CIRCUIT_BREAKER_TYPES[circuit.type] ?? "B";
+                                      const bRat = Ib > 0 ? pickBreakerRating(Ib) : null;
+                                      // Kabel dobierany wg Iz ≥ In (IEC 60364-4-43)
+                                      const { size: cableSize, Iz } = bRat != null
+                                        ? pickCableForBreaker(bRat, method, ph)
+                                        : { size: null, Iz: null };
+                                      const L       = Number(circuit.cableLength) || 0;
+                                      const dU      = bRat && cableSize
+                                        ? calcVoltDropPct(Ib, ct.pf, L, cableSize, ph)
+                                        : null;
+                                      const dUWarn  = dU != null && dU >= 3;
+                                      const dUError = dU != null && dU >= 5;
                                       return (
                                         <SortableCircuitRow key={circuit.id} id={circuit.id}>
-                                          {/* Nazwa + punkty */}
+                                          {/* Nazwa + długość + punkty */}
                                           <td className="px-3 py-1.5">
                                             <input
                                               value={circuit.name}
@@ -1757,6 +1825,25 @@ export default function KalkulatorSzafy({
                                               className="w-full bg-transparent outline-none text-slate-700 placeholder-slate-300"
                                               placeholder="np. Zasilacz 24V, Klimatyzacja…"
                                             />
+                                            {/* Długość kabla */}
+                                            <div className="flex items-center gap-1 mt-1">
+                                              <input
+                                                type="number" min="0" step="1"
+                                                value={circuit.cableLength || ""}
+                                                onChange={e => updateCircuit(ci, { cableLength: Number(e.target.value) })}
+                                                className="w-14 text-[11px] bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 outline-none focus:border-orange-300 text-slate-500"
+                                                placeholder="0 m"
+                                              />
+                                              <span className="text-[10px] text-slate-400">m</span>
+                                              {dU != null && L > 0 && (
+                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${dUError ? "bg-red-100 text-red-700" : dUWarn ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}
+                                                  title={`Spadek napięcia: ${dU.toFixed(2)}% (limit: 3% żółty, 5% czerwony — IEC 60364-5-52 Aneks G)`}
+                                                >
+                                                  ΔU={dU.toFixed(1)}%
+                                                </span>
+                                              )}
+                                            </div>
+                                            {/* Punkty instalacyjne */}
                                             <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
                                               {(circuit.pointIds ?? []).map(pid => {
                                                 const pt = effectiveRows.find(r => r._id === pid);
@@ -1796,14 +1883,20 @@ export default function KalkulatorSzafy({
                                           <td className="px-3 py-1.5 text-right">
                                             <input type="number" min="0" value={circuit.power || ""} onChange={e => updateCircuit(ci, { power: Number(e.target.value) })} className="w-full bg-transparent outline-none text-right text-slate-700 placeholder-slate-300" placeholder="0" />
                                           </td>
-                                          {/* I */}
-                                          <td className="px-2 py-1.5 text-right text-slate-500">{I > 0 ? I.toFixed(2) : "—"}</td>
+                                          {/* Ib */}
+                                          <td className="px-2 py-1.5 text-right text-slate-500">{Ib > 0 ? Ib.toFixed(2) : "—"}</td>
                                           {/* Bezpiecznik */}
                                           <td className="px-2 py-1.5 text-center">
                                             {bRat != null ? <span className="font-bold text-slate-700">{bTyp}{bRat}{ph === 3 ? "/3" : ""}</span> : <span className="text-slate-300">—</span>}
                                           </td>
-                                          {/* Przekrój */}
-                                          <td className="px-2 py-1.5 text-center text-slate-500">{cable != null ? `${cable}` : "—"}</td>
+                                          {/* Kabel: przekrój + Iz */}
+                                          <td className="px-2 py-1.5 text-center">
+                                            {cableSize != null ? (
+                                              <span className={`text-slate-600 ${dUError ? "text-red-600" : dUWarn ? "text-amber-600" : ""}`}>
+                                                {cableSize}<span className="text-slate-400 text-[10px]"> ({Iz}A)</span>
+                                              </span>
+                                            ) : <span className="text-slate-300">—</span>}
+                                          </td>
                                           {/* RCD */}
                                           {rcd && (
                                             <td className="px-2 py-1.5 text-center">
