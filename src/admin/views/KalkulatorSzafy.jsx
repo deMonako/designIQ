@@ -470,12 +470,39 @@ function AddCabinetMaterialRow({ matOptions, onAdd }) {
 
 // ─── LayoutTab — przypisanie złączek do grup urządzeń ─────────────────────────
 
+function SortableLayoutRow({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{
+        transform: DndCSS.Transform.toString(transform),
+        transition: transition ?? "transform 200ms cubic-bezier(0.25, 1, 0.5, 1)",
+        opacity: isDragging ? 0.45 : 1,
+        background: isDragging ? "rgb(255 247 237)" : undefined,
+        position: "relative",
+        zIndex: isDragging ? 10 : "auto",
+      }}
+      className="border-b border-slate-100 hover:bg-orange-50/40 transition-colors select-none"
+    >
+      <td className="px-3 py-1.5 cursor-grab active:cursor-grabbing touch-none" {...attributes} {...listeners}>
+        <GripVertical className="w-4 h-4 text-slate-300 hover:text-slate-500 transition-colors" />
+      </td>
+      {children}
+    </tr>
+  );
+}
+
 function LayoutTab({ rows }) {
   const [selectedTyp,  setSelectedTyp]  = useState("");
   const [zugNr,        setZugNr]        = useState(1);
   const [zugsPkt,      setZugsPkt]      = useState(1);
   const [orderedIds,   setOrderedIds]   = useState([]);
-  const dragIdx = useRef(null);
+
+  const layoutSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const masterRows = useMemo(
     () => rows.filter(r => (r.rola ?? "").toLowerCase().includes("master")),
@@ -500,26 +527,6 @@ function LayoutTab({ rows }) {
       .sort((a, b) => naturalCmp(a.tag, b.tag));
     setOrderedIds(filtered.map(r => r._id));
   }, [selectedTyp]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Drag & drop ───────────────────────────────────────────────────────────
-  const handleDragStart = (e, idx) => {
-    dragIdx.current = idx;
-    e.dataTransfer.effectAllowed = "move";
-  };
-  // onDragEnter fires once per element (not continuously like onDragOver)
-  const handleDragEnter = (e, idx) => {
-    e.preventDefault();
-    if (dragIdx.current === null || dragIdx.current === idx) return;
-    const from = dragIdx.current;
-    dragIdx.current = idx;
-    setOrderedIds(prev => {
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(idx, 0, moved);
-      return next;
-    });
-  };
-  const handleDragEnd = () => { dragIdx.current = null; };
 
   // ── Generuj plik .txt ─────────────────────────────────────────────────────
   const handleGenerate = () => {
@@ -608,37 +615,41 @@ function LayoutTab({ rows }) {
                   <th className="text-left px-3 py-1.5 text-orange-600">Złączki</th>
                 </tr>
               </thead>
-              <tbody>
-                {orderedIds.map((id, idx) => {
-                  const r = rowMap[id];
-                  if (!r) return null;
-                  const first = 1 + idx * zugsPkt;
-                  const last  = first + zugsPkt - 1;
-                  return (
-                    <tr
-                      key={id}
-                      draggable
-                      onDragStart={e => handleDragStart(e, idx)}
-                      onDragOver={e => e.preventDefault()}
-                      onDragEnter={e => handleDragEnter(e, idx)}
-                      onDrop={e => e.preventDefault()}
-                      onDragEnd={handleDragEnd}
-                      className="border-b border-slate-100 hover:bg-orange-50/40 cursor-grab active:cursor-grabbing transition-colors select-none"
-                    >
-                      <td className="px-3 py-1.5 text-slate-300">
-                        <GripVertical className="w-4 h-4" />
-                      </td>
-                      <td className="px-3 py-1.5 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
-                      <td className="px-3 py-1.5 font-mono text-xs font-semibold text-slate-700">{r.tag}</td>
-                      <td className="px-3 py-1.5 text-xs text-slate-600">{r.pomieszczenie}</td>
-                      <td className="px-3 py-1.5 text-xs text-slate-500">{r.kondygnacja}</td>
-                      <td className="px-3 py-1.5 text-xs font-mono text-orange-600 font-semibold">
-                        X{zugNr}:{first}{zugsPkt > 1 ? `–${last}` : ""}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
+              <DndContext
+                sensors={layoutSensors}
+                collisionDetection={closestCenter}
+                onDragEnd={({ active, over }) => {
+                  if (over && active.id !== over.id) {
+                    setOrderedIds(prev => {
+                      const from = prev.indexOf(active.id);
+                      const to   = prev.indexOf(over.id);
+                      return arrayMove(prev, from, to);
+                    });
+                  }
+                }}
+              >
+                <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+                  <tbody>
+                    {orderedIds.map((id, idx) => {
+                      const r = rowMap[id];
+                      if (!r) return null;
+                      const first = 1 + idx * zugsPkt;
+                      const last  = first + zugsPkt - 1;
+                      return (
+                        <SortableLayoutRow key={id} id={id}>
+                          <td className="px-3 py-1.5 text-xs text-slate-400 tabular-nums">{idx + 1}</td>
+                          <td className="px-3 py-1.5 font-mono text-xs font-semibold text-slate-700">{r.tag}</td>
+                          <td className="px-3 py-1.5 text-xs text-slate-600">{r.pomieszczenie}</td>
+                          <td className="px-3 py-1.5 text-xs text-slate-500">{r.kondygnacja}</td>
+                          <td className="px-3 py-1.5 text-xs font-mono text-orange-600 font-semibold">
+                            X{zugNr}:{first}{zugsPkt > 1 ? `–${last}` : ""}
+                          </td>
+                        </SortableLayoutRow>
+                      );
+                    })}
+                  </tbody>
+                </SortableContext>
+              </DndContext>
             </table>
           </div>
         </div>
