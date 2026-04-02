@@ -1547,7 +1547,7 @@ export default function KalkulatorSzafy({
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-slate-400">Grupuj obwody i przypisuj bezpieczniki — prąd i typ wyznaczane automatycznie z mocy.</p>
                       <button
-                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcds: [] }])}
+                        onClick={() => setAcGroups(g => [...g, { id: genId(), name: "Nowa grupa", circuits: [], rcd: null }])}
                         className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-semibold"
                       >
                         <Plus className="w-3.5 h-3.5" /> Dodaj grupę
@@ -1561,7 +1561,7 @@ export default function KalkulatorSzafy({
                     )}
 
                     {acGroups.map((group, gi) => {
-                      const rcds   = group.rcds ?? [];
+                      const rcd = group.rcd ?? null;
                       const totalP = group.circuits.reduce((s, c) => s + (Number(c.power) || 0), 0);
                       const totalI = group.circuits.reduce((s, c) => {
                         const pf  = CIRCUIT_TYPES.find(t => t.key === c.type)?.pf ?? 0.9;
@@ -1610,7 +1610,7 @@ export default function KalkulatorSzafy({
                               </span>
                             )}
                             <button
-                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, rcdId: null, pointIds: [] }] }))}
+                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, underRcd: rcd != null, pointIds: [] }] }))}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >+ Obwód</button>
                             <button onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
@@ -1620,45 +1620,42 @@ export default function KalkulatorSzafy({
 
                           {/* RCD row */}
                           <div className="flex items-center gap-2 flex-wrap bg-slate-50/50 px-3 py-1.5 border-b border-slate-100">
-                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Różnicówki:</span>
-                            {rcds.map((rcd, ri) => (
-                              <div key={rcd.id} className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5">
-                                <input
-                                  value={rcd.name}
-                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, name: e.target.value } : r) }))}
-                                  className="text-[11px] bg-transparent outline-none text-purple-800 font-semibold w-16 min-w-0"
-                                  placeholder="RCD 1"
-                                />
-                                <select
-                                  value={rcd.mA ?? 30}
-                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, mA: Number(e.target.value) } : r) }))}
-                                  className="text-[11px] bg-transparent outline-none text-purple-600"
-                                >
-                                  {[10, 30, 100, 300].map(v => <option key={v} value={v}>{v} mA</option>)}
-                                </select>
-                                <select
-                                  value={rcd.type ?? "A"}
-                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcds: g.rcds.map((r, j) => j === ri ? { ...r, type: e.target.value } : r) }))}
-                                  className="text-[11px] bg-transparent outline-none text-purple-600"
-                                >
-                                  {["AC", "A", "F", "B"].map(t => <option key={t} value={t}>typ {t}</option>)}
-                                </select>
-                                <button
-                                  onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
-                                    ...g,
-                                    rcds: g.rcds.filter((_, j) => j !== ri),
-                                    circuits: g.circuits.map(c => c.rcdId === rcd.id ? { ...c, rcdId: null } : c),
-                                  }))}
-                                  className="text-purple-300 hover:text-red-500 transition-colors ml-0.5"
-                                ><X className="w-3 h-3" /></button>
-                              </div>
-                            ))}
-                            <button
-                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
-                                ...g, rcds: [...(g.rcds ?? []), { id: genId(), name: `RCD ${(g.rcds ?? []).length + 1}`, mA: 30, type: "A" }]
-                              }))}
-                              className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:text-purple-700 px-1.5 py-0.5 border border-dashed border-purple-300 rounded-md transition-colors"
-                            ><Plus className="w-3 h-3" /> Dodaj różnicówkę</button>
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Różnicówka:</span>
+                            {rcd ? (
+                              <>
+                                <div className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5">
+                                  <input
+                                    value={rcd.name ?? ""}
+                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, name: e.target.value } }))}
+                                    className="text-[11px] bg-transparent outline-none text-purple-800 font-semibold w-20 min-w-0"
+                                    placeholder="np. F1"
+                                  />
+                                  <select
+                                    value={rcd.mA ?? 30}
+                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, mA: Number(e.target.value) } }))}
+                                    className="text-[11px] bg-transparent outline-none text-purple-600"
+                                  >
+                                    {[10, 30, 100, 300].map(v => <option key={v} value={v}>{v} mA</option>)}
+                                  </select>
+                                  <select
+                                    value={rcd.type ?? "A"}
+                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, type: e.target.value } }))}
+                                    className="text-[11px] bg-transparent outline-none text-purple-600"
+                                  >
+                                    {["AC", "A", "F", "B"].map(t => <option key={t} value={t}>typ {t}</option>)}
+                                  </select>
+                                  <button
+                                    onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: null, circuits: g.circuits.map(c => ({ ...c, underRcd: false })) }))}
+                                    className="text-purple-300 hover:text-red-500 transition-colors ml-0.5"
+                                  ><X className="w-3 h-3" /></button>
+                                </div>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { name: "", mA: 30, type: "A" }, circuits: g.circuits.map(c => ({ ...c, underRcd: true })) }))}
+                                className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:text-purple-700 px-1.5 py-0.5 border border-dashed border-purple-300 rounded-md transition-colors"
+                              ><Plus className="w-3 h-3" /> Dodaj różnicówkę</button>
+                            )}
                           </div>
 
                           {/* Circuits table */}
@@ -1676,7 +1673,7 @@ export default function KalkulatorSzafy({
                                   <th className="text-right px-2 py-1.5 w-14">I (A)</th>
                                   <th className="text-center px-2 py-1.5 w-20">Bezp.</th>
                                   <th className="text-center px-2 py-1.5 w-14">mm²</th>
-                                  {rcds.length > 0 && <th className="text-center px-2 py-1.5 w-24">RCD</th>}
+                                  {rcd && <th className="text-center px-2 py-1.5 w-16">RCD</th>}
                                   <th className="w-8" />
                                 </tr>
                               </thead>
@@ -1754,16 +1751,14 @@ export default function KalkulatorSzafy({
                                       {/* Przekrój */}
                                       <td className="px-2 py-1.5 text-center text-slate-500">{cable != null ? `${cable}` : "—"}</td>
                                       {/* RCD */}
-                                      {rcds.length > 0 && (
+                                      {rcd && (
                                         <td className="px-2 py-1.5 text-center">
-                                          <select
-                                            value={circuit.rcdId ?? ""}
-                                            onChange={e => updateCircuit(ci, { rcdId: e.target.value || null })}
-                                            className="text-[11px] bg-transparent outline-none text-slate-600 max-w-[88px]"
-                                          >
-                                            <option value="">—</option>
-                                            {rcds.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                                          </select>
+                                          <input
+                                            type="checkbox"
+                                            checked={circuit.underRcd ?? true}
+                                            onChange={e => updateCircuit(ci, { underRcd: e.target.checked })}
+                                            className="accent-purple-500 w-3.5 h-3.5"
+                                          />
                                         </td>
                                       )}
                                       {/* Delete */}
