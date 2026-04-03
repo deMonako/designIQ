@@ -995,12 +995,12 @@ export default function KalkulatorSzafy({
   const [szafaResetConfirmOpen, setSzafaResetConfirmOpen] = useState(false);
 
   // Śledzenie niezapisanych zmian — snapshot JSON po wczytaniu / zapisaniu
-  const lastSavedSnap = useRef(null);
+  // savedSnap jako stan (nie ref!) — zmiana snapshota musi wyzwolić przeliczenie isDirty
+  const [savedSnap, setSavedSnap] = useState(null);
   const isDirty = useMemo(() => {
-    if (!lastSavedSnap.current) return false;
-    return JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups })
-      !== lastSavedSnap.current;
-  }, [szafaPoints, circuits, loxoneIO, acGroups, dc24Groups]);
+    if (!savedSnap) return false;
+    return JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups }) !== savedSnap;
+  }, [szafaPoints, circuits, loxoneIO, acGroups, dc24Groups, savedSnap]);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
@@ -1091,14 +1091,14 @@ export default function KalkulatorSzafy({
           if (snapIO) setLoxoneIO(snapIO);
           if (snapAc.length) setAcGroups(snapAc);
           if (snapDc.length) setDc24Groups(snapDc);
-          lastSavedSnap.current = JSON.stringify({
+          setSavedSnap(JSON.stringify({
             szafaPoints: snapPts, circuits: snapCir, loxoneIO: snapIO, acGroups: snapAc, dc24Groups: snapDc,
-          });
+          }));
         } else {
           // Brak zapisanej konfiguracji — "czyste" wczytanie, nie dirty
-          lastSavedSnap.current = JSON.stringify({
+          setSavedSnap(JSON.stringify({
             szafaPoints: {}, circuits: [], loxoneIO: null, acGroups: [], dc24Groups: [],
-          });
+          }));
         }
 
         if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
@@ -1138,7 +1138,7 @@ export default function KalkulatorSzafy({
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setSaveResult("ok");
-      lastSavedSnap.current = JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups });
+      setSavedSnap(JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups }));
     } catch { setSaveResult("err"); }
     finally { setSaving(false); }
   }, [project, rows, existingRowsConfig, szafaPoints, circuits, loxoneIO, acGroups, dc24Groups]);
