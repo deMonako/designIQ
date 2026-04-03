@@ -89,29 +89,32 @@ function defaultSortRows(rows) {
 
 function exportXLSX(rows, catalog, projectName = "projekt") {
   const headers = [
-    "Typ", "Kondygnacja", "Pomieszczenie", "ID/Tag", "Rola",
-    "Uwagi", "Przewód", "Wysokość", "Wariant", "Kolor", "Element sterujący", "I/O",
+    "Lp", "Nazwa", "Grupa", "Rola", "Piętro", "Pomieszczenie",
+    "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz",
   ];
 
   const sorted = defaultSortRows(rows);
-  const data = sorted.map(r => [
-    r.typ, r.kondygnacja, r.pomieszczenie, r.tag, r.rola, r.uwagi,
-    r.przewód, r.wysokość, r.wariant, r.kolor,
-    r.controlDevice === "uncontrolled"
-      ? "niesterowane"
-      : r.controlDevice.startsWith("mat:")
-        ? r.controlDevice.slice(4)
-        : (catalog.find(p => p.id === r.controlDevice)?.name ?? r.controlDevice),
-    r.controlDevice !== "uncontrolled" ? r.ioCount : "",
+  const data = sorted.map((r, i) => [
+    i + 1,
+    r.tag,
+    r.typ,
+    r.rola,
+    r.kondygnacja,
+    r.pomieszczenie,
+    r.przewód,
+    r.wysokość,
+    r.wariant,
+    r.kolor,
+    r.uwagi,
   ]);
 
   const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
 
   // Szerokości kolumn
   ws["!cols"] = [
-    { wch: 12 }, { wch: 14 }, { wch: 20 }, { wch: 20 }, { wch: 16 },
-    { wch: 24 }, { wch: 10 }, { wch: 10 }, { wch: 14 }, { wch: 10 },
-    { wch: 28 }, { wch: 6 },
+    { wch: 5 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
+    { wch: 20 }, { wch: 20 }, { wch: 10 }, { wch: 24 }, { wch: 10 },
+    { wch: 24 },
   ];
 
   // Styl nagłówka (bold + fill) — wymaga xlsx-style lub xlsx z opcją cellStyles

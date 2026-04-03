@@ -314,11 +314,18 @@ function attribsToRows(attribs, floorName, typMappings) {
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
+      nazwa:        a.nazwa        ?? "",
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",
       typ:          rawTyp,
+      grupa:        a.grupa        ?? "",
       rola,
       rawTyp,
+      przewód:      a.przewód      ?? a.przewod ?? "",
+      wysokość:     a.wysokość     ?? a.wysokosc ?? "",
+      opis:         a.opis         ?? "",
+      kolor:        a.kolor        ?? "",
+      komentarz:    a.komentarz    ?? "",
       controlDevice,
       ioCount:      typConfig?.ioCount ?? 1,
     });
