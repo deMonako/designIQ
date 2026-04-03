@@ -24,6 +24,22 @@ const NotFound         = React.lazy(() => import("./pages/NotFound"));
 // Panel admina — lazy (największy chunk, tylko dla admina)
 const Admin = React.lazy(() => import("./pages/Admin"));
 
+// Prefetch wszystkich chunków w tle po załadowaniu apki —
+// eliminuje flash pustej strony przy pierwszym wejściu na podstrony
+setTimeout(() => {
+  import("./pages/CoZyskasz");
+  import("./pages/Konfigurator");
+  import("./pages/Oferta");
+  import("./pages/ONas");
+  import("./pages/Kontakt");
+  import("./pages/PolitykaPrywatnosci");
+  import("./pages/StatusInwestycji");
+  import("./pages/FAQ");
+  import("./pages/Realizacje");
+  import("./pages/Instalator");
+  import("./pages/NotFound");
+}, 1500);
+
 function PublicSite() {
   return (
     <Layout>
