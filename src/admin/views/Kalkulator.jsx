@@ -56,6 +56,8 @@ function attribsToRows(attribs, floorName, typMappings) {
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
+      X:            a.X            ?? null,
+      Y:            a.Y            ?? null,
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",
       typ:          rawTyp,
@@ -136,6 +138,51 @@ function exportXLSX(rows, catalog, projectName = "projekt") {
 
   const safeName = projectName.replace(/[\\/:*?"<>|]/g, "_");
   XLSX.writeFile(wb, `punkty_instalacyjne_${safeName}.xlsx`);
+}
+
+// ── CDF/TXT export (format kompatybilny z ATTIN_SYMBOL.LSP) ──────────────────
+// Kolejność kolumn: X, Y, SYMBOL, GRUPA, ROLA, PIETRO, POMIESZCZENIE,
+//                  PRZEWOD, WYSOKOSC, RODZAJ, KOLOR, KOMENTARZ
+// Wartości string w apostrofach, liczby bez. Polskie znaki zostaną
+// skonwertowane przez konwertuj_cdf.py przed importem do NanoCAD.
+
+function exportCDF(rows, projectName = "projekt") {
+  const q = (v) => `'${(v ?? "").replace(/'/g, "\\'")}'`;
+
+  const noCoords = rows.filter(r => r.X == null || r.Y == null);
+  if (noCoords.length > 0) {
+    alert(`Brak współrzędnych XY dla ${noCoords.length} punktów.\nWgraj najpierw projekt.json wygenerowany przez convert-attext.js.`);
+    return;
+  }
+
+  // Sortuj po oryginalnym tagu (jak ATTEXT)
+  const sorted = [...rows].sort((a, b) =>
+    (a.tag ?? "").localeCompare(b.tag ?? "", "pl", { numeric: true })
+  );
+
+  const lines = sorted.map(r => [
+    r.X.toFixed(4),
+    r.Y.toFixed(4),
+    q(r.tag),
+    q(r.typ),
+    q(r.rola),
+    q(r.kondygnacja),
+    q(r.pomieszczenie),
+    q(r.przewód),
+    q(r.wysokość),
+    q(r.wariant),    // RODZAJ w CAD
+    q(r.kolor),
+    q(r.uwagi),      // KOMENTARZ w CAD
+  ].join(", "));
+
+  const content = lines.join("\r\n");
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${projectName.replace(/[\\/:*?"<>|]/g, "_")}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -684,12 +731,20 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               )}
             </div>
 
-            {/* Eksport Excel */}
+            {/* Eksport */}
             <button
               onClick={() => exportXLSX(rows, catalog, project?.code ?? "projekt")}
               className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
             >
               <Download className="w-3.5 h-3.5" /> Eksport XLSX
+            </button>
+            <button
+              onClick={() => exportCDF(rows, project?.code ?? "projekt")}
+              disabled={rows.length === 0}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 disabled:opacity-40 transition-colors"
+              title="Pobierz TXT do importu w NanoCAD (ATTIN_SYMBOL)"
+            >
+              <Download className="w-3.5 h-3.5" /> Pobierz TXT
             </button>
           </div>
 

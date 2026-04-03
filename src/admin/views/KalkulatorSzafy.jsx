@@ -314,6 +314,8 @@ function attribsToRows(attribs, floorName, typMappings) {
     rows.push({
       _id:          `${floorName ?? ""}__${handle}`,
       tag:          a.tag          ?? handle,
+      X:            a.X            ?? null,
+      Y:            a.Y            ?? null,
       nazwa:        a.nazwa        ?? "",
       kondygnacja:  a.kondygnacja  ?? floorName ?? "",
       pomieszczenie:a.pomieszczenie?? "",

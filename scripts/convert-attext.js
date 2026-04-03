@@ -2,6 +2,39 @@
 /**
  * convert-attext.js — Konwerter eksportu ATTEXT (NanoCAD) do projekt.json
  *
+ * ═══════════════════════════════════════════════════════
+ * PEŁNY WORKFLOW
+ * ═══════════════════════════════════════════════════════
+ *
+ * 1. EKSPORT z NanoCAD:
+ *    Polecenie ATTEXT → format CDF → plik projekt_Parter.txt
+ *    (atrybuty bloków: SYMBOL, GRUPA, ROLA, PIETRO, POMIESZCZENIE,
+ *     PRZEWOD, WYSOKOSC, RODZAJ, KOLOR, KOMENTARZ)
+ *
+ * 2. KONWERSJA TXT → JSON (ten skrypt):
+ *    node convert-attext.js projekt_Parter.txt \
+ *         --svg-width=898.06 --svg-height=635.04 \
+ *         > projekt_Parter.json
+ *
+ *    JSON trafia na Google Drive razem z projekt_Parter.svg
+ *
+ * 3. EDYCJA w panelu administratora:
+ *    Zakładka "Instalacja" — edytuj atrybuty punktów
+ *
+ * 4. EKSPORT z panelu z powrotem do NanoCAD:
+ *    Przycisk "Pobierz TXT" → projekt_Parter.txt
+ *    (ten sam format co oryginał z kroku 1)
+ *
+ * 5. KONWERSJA polskich znaków:
+ *    python konwertuj_cdf.py projekt_Parter.txt
+ *    → tworzy projekt_Parter_dxf.txt (polskie znaki → \U+XXXX)
+ *
+ * 6. IMPORT do NanoCAD:
+ *    Polecenie ATTIN_SYMBOL → wybierz projekt_Parter_dxf.txt
+ *    Skrypt dopasuje bloki po SYMBOL (tagu) i XY, zaktualizuje atrybuty
+ *
+ * ═══════════════════════════════════════════════════════
+ *
  * Użycie:
  *   node scripts/convert-attext.js projekt.txt [opcje] > projekt.json
  *
@@ -11,8 +44,9 @@
  *   --flip-y          Odwróć oś Y (domyślnie WŁĄCZONE, bo SVG ma Y w dół)
  *
  * Format pliku .txt z ATTEXT (kolejność kolumn):
- *   X, Y, Tag, Typ, Rola, Kondygnacja, Pomieszczenie, Przewód,
- *   Wysokość, Wariant, Kolor, Uwagi
+ *   X, Y, Tag(=SYMBOL), Typ(=GRUPA), Rola, Kondygnacja(=PIETRO),
+ *   Pomieszczenie, Przewód(=PRZEWOD), Wysokość(=WYSOKOSC),
+ *   Wariant(=RODZAJ), Kolor, Uwagi(=KOMENTARZ)
  *
  * Wyjście projekt.json:
  *   {
