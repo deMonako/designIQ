@@ -994,6 +994,14 @@ export default function KalkulatorSzafy({
   const [exporting, setExporting]           = useState(false);
   const [szafaResetConfirmOpen, setSzafaResetConfirmOpen] = useState(false);
 
+  // Śledzenie niezapisanych zmian — snapshot JSON po wczytaniu / zapisaniu
+  const lastSavedSnap = useRef(null);
+  const isDirty = useMemo(() => {
+    if (!lastSavedSnap.current) return false;
+    return JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups })
+      !== lastSavedSnap.current;
+  }, [szafaPoints, circuits, loxoneIO, acGroups, dc24Groups]);
+
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
   const effectiveMappings = useMemo(
@@ -1073,11 +1081,24 @@ export default function KalkulatorSzafy({
 
         // Wczytaj dane szafy
         if (cfg?.szafa) {
-          setSzafaPoints(cfg.szafa.points ?? {});
-          setCircuits(cfg.szafa.circuits ?? []);
-          if (cfg.szafa.loxoneIO) setLoxoneIO(cfg.szafa.loxoneIO);
-          if (cfg.szafa.obliczenia?.acGroups)   setAcGroups(cfg.szafa.obliczenia.acGroups);
-          if (cfg.szafa.obliczenia?.dc24Groups) setDc24Groups(cfg.szafa.obliczenia.dc24Groups);
+          const snapPts  = cfg.szafa.points   ?? {};
+          const snapCir  = cfg.szafa.circuits ?? [];
+          const snapIO   = cfg.szafa.loxoneIO ?? null;
+          const snapAc   = cfg.szafa.obliczenia?.acGroups   ?? [];
+          const snapDc   = cfg.szafa.obliczenia?.dc24Groups ?? [];
+          setSzafaPoints(snapPts);
+          setCircuits(snapCir);
+          if (snapIO) setLoxoneIO(snapIO);
+          if (snapAc.length) setAcGroups(snapAc);
+          if (snapDc.length) setDc24Groups(snapDc);
+          lastSavedSnap.current = JSON.stringify({
+            szafaPoints: snapPts, circuits: snapCir, loxoneIO: snapIO, acGroups: snapAc, dc24Groups: snapDc,
+          });
+        } else {
+          // Brak zapisanej konfiguracji — "czyste" wczytanie, nie dirty
+          lastSavedSnap.current = JSON.stringify({
+            szafaPoints: {}, circuits: [], loxoneIO: null, acGroups: [], dc24Groups: [],
+          });
         }
 
         if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
@@ -1117,6 +1138,7 @@ export default function KalkulatorSzafy({
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setSaveResult("ok");
+      lastSavedSnap.current = JSON.stringify({ szafaPoints, circuits, loxoneIO: loxoneIO ?? null, acGroups, dc24Groups });
     } catch { setSaveResult("err"); }
     finally { setSaving(false); }
   }, [project, rows, existingRowsConfig, szafaPoints, circuits, loxoneIO, acGroups, dc24Groups]);
@@ -1453,7 +1475,11 @@ export default function KalkulatorSzafy({
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-1.5 text-xs px-3 py-2 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
+                className={`flex items-center gap-1.5 text-xs px-3 py-2 border rounded-lg disabled:opacity-40 transition-colors ${
+                  isDirty && !saving
+                    ? "border-green-400 text-green-700 bg-green-50 animate-pulse hover:animate-none hover:bg-green-100"
+                    : "border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-600"
+                }`}
               >
                 {saving
                   ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
