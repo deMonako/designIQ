@@ -540,15 +540,20 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   const [floorDates,  setFloorDates]  = useState([]);    // daty plików JSON per piętro
   const [currentDate, setCurrentDate] = useState(null);  // data aktywnego piętra
+  const [showDim,     setShowDim]     = useState(false); // toggle warstwy wymiarów
+  const [hasDimSvg,   setHasDimSvg]  = useState(false); // czy aktywne piętro ma plik _dim
 
   const tRef         = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef      = useRef(null);
   const hasDragRef   = useRef(false);
   const rafRef       = useRef(null);
   const cleanupRef   = useRef(() => {});
-  const overlayElRef = useRef(null);  // referencja do overlay SVG (filtrowanie typów)
-  const floorsDataRef = useRef([]);   // pełne dane wszystkich pięter [{ name, svg, attribs }]
-  const loadIdRef    = useRef(0);     // guard przed podwójnym ładowaniem
+  const overlayElRef = useRef(null);   // referencja do overlay SVG (filtrowanie typów)
+  const dimOverlayRef = useRef(null);  // referencja do overlay SVG z wymiarami
+  const dimSvgRef    = useRef(null);   // SVG string wymiarów dla aktywnego piętra
+  const showDimRef   = useRef(false);  // synchronizacja showDim bez dep w mountView
+  const floorsDataRef = useRef([]);    // pełne dane wszystkich pięter [{ name, svg, attribs }]
+  const loadIdRef    = useRef(0);      // guard przed podwójnym ładowaniem
   const hasScrolledRef = useRef(false); // scroll do widoku tylko przy pierwszym załadowaniu
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
@@ -629,6 +634,14 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       containerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 150);
   }, [loadState, clientMode]);
+
+  // ── Toggle warstwy wymiarów (bezpośrednia manipulacja DOM) ────────────────
+  useEffect(() => {
+    showDimRef.current = showDim;
+    if (dimOverlayRef.current) {
+      dimOverlayRef.current.style.display = showDim ? "" : "none";
+    }
+  }, [showDim]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
   const mountView = useCallback(async () => {
@@ -735,6 +748,22 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       cleanupRef.current = () => { cleanup(); overlayEl.remove(); overlayElRef.current = null; };
     }
 
+    // ── Krok 5: nakładka wymiarów (dim SVG) ──────────────────────────────────
+    dimOverlayRef.current = null;
+    const dimStr = dimSvgRef.current;
+    if (dimStr) {
+      const dimDoc = parser.parseFromString(dimStr, "image/svg+xml");
+      const dimEl  = dimDoc.querySelector("svg");
+      if (dimEl) {
+        dimEl.removeAttribute("width");
+        dimEl.removeAttribute("height");
+        dimEl.style.cssText = layoutCss + "overflow:visible;pointer-events:none;";
+        dimEl.style.display = showDimRef.current ? "" : "none";
+        wrap.appendChild(dimEl);
+        dimOverlayRef.current = dimEl;
+      }
+    }
+
     setLoadProg({ pct: 100, label: "Gotowe" });
     setTimeout(() => setLoadState("ok_mounted"), 300);
   }, []);
@@ -745,11 +774,13 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (!floor) return;
     const { _meta, ...elems } = floor.attribs ?? {};
     svgContentRef.current = floor.svg ?? "";
+    dimSvgRef.current     = floor.dimSvg ?? null;
     metaRef.current       = _meta ?? null;
     elementsRef.current   = elems;
     setElements(elems);
     setSelected(null);
     setActiveTypes(null);
+    setHasDimSvg(!!floor.dimSvg);
     tRef.current = { scale: 1, panX: 0, panY: 0 };
     setScalePct(100);
     setActiveFloor(idx);
@@ -796,8 +827,10 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       const first = floors[0];
       const { _meta, ...elems } = first.attribs ?? {};
       svgContentRef.current = first.svg ?? "";
+      dimSvgRef.current     = first.dimSvg ?? null;
       metaRef.current       = _meta ?? null;
       elementsRef.current   = elems;
+      setHasDimSvg(!!first.dimSvg);
 
       setElements(elems);
       tRef.current = { scale: 1, panX: 0, panY: 0 };
@@ -1044,6 +1077,20 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
               </button>
             ))}
           </div>
+        )}
+
+        {/* Przycisk warstwy wymiarów – widoczny gdy piętro ma plik _dim.svg */}
+        {hasDimSvg && isLoaded && (
+          <button
+            onClick={() => setShowDim(d => !d)}
+            className={`absolute top-14 right-3 px-2.5 py-1 text-[11px] font-semibold rounded-lg border shadow-sm z-40 transition-colors ${
+              showDim
+                ? "bg-orange-600 border-orange-600 text-white"
+                : "bg-white/90 backdrop-blur border-slate-200 text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Wymiary
+          </button>
         )}
 
         {isLoaded && (

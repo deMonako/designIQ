@@ -554,32 +554,46 @@ function doGet(e) {
         var singleSvg      = null;
         var singleJson     = null;
         var singleJsonDate = null;
-        var floorMap       = {}; // { "Parter": { svg: null, json: null, jsonDate: null }, ... }
+        var singleDimSvg   = null;
+        var floorMap       = {}; // { "Parter": { svg, json, jsonDate, dimSvg }, ... }
 
         var dwgFiles = dwgFolder.getFiles();
         while (dwgFiles.hasNext()) {
-          var df      = dwgFiles.next();
+          var df       = dwgFiles.next();
           var origName = df.getName();
           var nameLow  = origName.toLowerCase();
 
           if (nameLow === "projekt.svg") {
-            singleSvg  = df.getBlob().getDataAsString("UTF-8");
+            singleSvg = df.getBlob().getDataAsString("UTF-8");
+          } else if (nameLow === "projekt_dim.svg") {
+            singleDimSvg = df.getBlob().getDataAsString("UTF-8");
           } else if (nameLow === "projekt.json") {
             singleJson     = df.getBlob().getDataAsString("UTF-8");
-            singleJsonDate = df.getLastUpdated().toISOString();
+            singleJsonDate = df.getDateCreated().toISOString();
           } else {
-            // projekt_NazwaPiętra.svg / projekt_NazwaPiętra.json
-            var floorSvg  = nameLow.match(/^projekt_(.+)\.svg$/);
-            var floorJson = nameLow.match(/^projekt_(.+)\.json$/);
-            if (floorSvg || floorJson) {
-              // Pobierz nazwę z oryginalnego pliku (zachowaj wielkość liter)
-              var dotIdx   = origName.lastIndexOf(".");
-              var floorKey = origName.slice(8, dotIdx); // "projekt_".length === 8
-              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null, jsonDate: null };
-              if (floorSvg)  floorMap[floorKey].svg  = df.getBlob().getDataAsString("UTF-8");
-              if (floorJson) {
+            // projekt_NazwaPiętra_dim.svg  → warstwa wymiarów dla piętra
+            // projekt_NazwaPiętra.svg      → rzut piętra
+            // projekt_NazwaPiętra.json     → dane ATTEXT
+            var dimSvgMatch  = nameLow.match(/^projekt_(.+)_dim\.svg$/);
+            var floorSvgMatch = (!dimSvgMatch) && nameLow.match(/^projekt_(.+)\.svg$/);
+            var floorJsonMatch = nameLow.match(/^projekt_(.+)\.json$/);
+
+            if (dimSvgMatch || floorSvgMatch || floorJsonMatch) {
+              var dotIdx = origName.lastIndexOf(".");
+              var floorKey;
+              if (dimSvgMatch) {
+                // "projekt_Parter_dim.svg" → klucz = "Parter"
+                var dimSufIdx = origName.lastIndexOf("_dim.");
+                floorKey = origName.slice(8, dimSufIdx); // "projekt_".length === 8
+              } else {
+                floorKey = origName.slice(8, dotIdx);
+              }
+              if (!floorMap[floorKey]) floorMap[floorKey] = { svg: null, json: null, jsonDate: null, dimSvg: null };
+              if (dimSvgMatch)   floorMap[floorKey].dimSvg  = df.getBlob().getDataAsString("UTF-8");
+              if (floorSvgMatch) floorMap[floorKey].svg     = df.getBlob().getDataAsString("UTF-8");
+              if (floorJsonMatch) {
                 floorMap[floorKey].json     = df.getBlob().getDataAsString("UTF-8");
-                floorMap[floorKey].jsonDate = df.getLastUpdated().toISOString();
+                floorMap[floorKey].jsonDate = df.getDateCreated().toISOString();
               }
             }
           }
@@ -594,7 +608,7 @@ function doGet(e) {
             if (floorMap[key].json) {
               try { att = JSON.parse(floorMap[key].json); } catch(ex) {}
             }
-            return { name: key, svg: floorMap[key].svg, attribs: att, date: floorMap[key].jsonDate ?? null };
+            return { name: key, svg: floorMap[key].svg, attribs: att, date: floorMap[key].jsonDate ?? null, dimSvg: floorMap[key].dimSvg ?? null };
           });
           return ok({ floors: floors });
         }
@@ -603,7 +617,7 @@ function doGet(e) {
         if (!singleSvg) return ok({ floors: [] });
         var singleAtt = null;
         if (singleJson) { try { singleAtt = JSON.parse(singleJson); } catch(ex) {} }
-        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt, date: singleJsonDate ?? null }] });
+        return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt, date: singleJsonDate ?? null, dimSvg: singleDimSvg ?? null }] });
       }
 
       // ── Leady / Kontakty / Wiadomości (admin) ─────────────────────────────────
