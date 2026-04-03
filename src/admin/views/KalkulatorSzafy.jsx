@@ -100,6 +100,33 @@ const TYPICAL_POWER = {
   automatyka: 200, instalacja: 1000, inne: 500,
 };
 
+// Znamionowe prądy różnicówek (In) wg IEC 61008/IEC 61009
+const RCD_IN_RATINGS = [16, 25, 40, 63, 80, 100, 125];
+
+// Wyekstrahuj przekrój przewodu z pola "przewód" punktu instalacyjnego
+// np. "Przewód prądowy 2x1.5 + EIB BUS 2x2x0,8" → 1.5
+// np. "3×2,5 mm²" → 2.5,  "5x4" → 4
+function parseCableSize(przewod) {
+  if (!przewod) return null;
+  const s = String(przewod);
+  // "NxS" lub "N×S" — bierze OSTATNIE wystąpienie (wyklucza dodatkowe kable EIB itp.)
+  const matches = [...s.matchAll(/\b\d+\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:mm[²2]?)?\b/gi)];
+  if (matches.length) return parseFloat(matches[0][1].replace(',', '.'));
+  // "S mm²"
+  const m2 = s.match(/\b(\d+(?:[.,]\d+)?)\s*mm[²2]/i);
+  if (m2) return parseFloat(m2[1].replace(',', '.'));
+  return null;
+}
+
+// Sugerowany prąd znamionowy różnicówki (In) wg sumy bezpieczników za nią
+// Σ(In_bezp) × ks → zaokrąglenie w górę do serii RCD_IN_RATINGS
+function suggestRcdIn(underRcdBreakerRatings) {
+  if (!underRcdBreakerRatings.length) return 25;
+  const ks    = simultaneityFactor(underRcdBreakerRatings.length);
+  const calcI = underRcdBreakerRatings.reduce((s, r) => s + r, 0) * ks;
+  return RCD_IN_RATINGS.find(r => r >= calcI) ?? 125;
+}
+
 // Zalecany typ przewodu wg metody układania (PN-IEC 60364 / praktyka PL)
 function cableTypeRec(method, phases, size, circuitType) {
   if (!size) return null;
@@ -1847,16 +1874,18 @@ export default function KalkulatorSzafy({
 
                       // Prekalkulacja danych obwodów (użyta w nagłówku i wierszach)
                       const circuitData = group.circuits.map(c => {
-                        const ct   = CIRCUIT_TYPES.find(t => t.key === c.type) ?? CIRCUIT_TYPES[0];
-                        const ph   = c.phases ?? 1;
-                        const Ib   = (Number(c.power) || 0) / ((ph === 3 ? 400 * Math.sqrt(3) : 230) * ct.pf);
-                        const bTyp = CIRCUIT_BREAKER_TYPES[c.type] ?? "B";
-                        const bRat = Ib > 0 ? pickBreakerRating(Ib) : null;
+                        const ct       = CIRCUIT_TYPES.find(t => t.key === c.type) ?? CIRCUIT_TYPES[0];
+                        const ph       = c.phases ?? 1;
+                        const Ib       = (Number(c.power) || 0) / ((ph === 3 ? 400 * Math.sqrt(3) : 230) * ct.pf);
+                        const bTyp     = CIRCUIT_BREAKER_TYPES[c.type] ?? "B";
+                        const bRatAuto = Ib > 0 ? pickBreakerRating(Ib) : null;
+                        const bRat     = c.manualBreaker ?? bRatAuto; // ręczna nadpisuje auto
+                        const isManualBreaker = c.manualBreaker != null;
                         const cableEntry = bRat != null ? pickCableForBreaker(bRat, method, ph) : { size: null, Iz: null };
                         const L   = Number(c.cableLength) || 0;
                         const dU  = (bRat && cableEntry.size) ? calcVoltDropPct(Ib, ct.pf, L, cableEntry.size, ph) : null;
                         const st  = circuitStatus({ Ib, bRat, dU });
-                        return { ct, ph, Ib, bTyp, bRat, ...cableEntry, L, dU, status: st };
+                        return { ct, ph, Ib, bTyp, bRat, bRatAuto, isManualBreaker, ...cableEntry, L, dU, status: st };
                       });
                       const groupStatus = circuitData.some(d => d.status === "red")    ? "red"
                                         : circuitData.some(d => d.status === "yellow") ? "yellow"
@@ -1872,6 +1901,12 @@ export default function KalkulatorSzafy({
                       const totalI = rawTotalI * ks; // prąd obliczeniowy z wsp. jednoczesności
                       const groupBreakerRating = pickBreakerRating(rawTotalI); // bez ks — bezpiecznik na pełny prąd
                       const groupBreakerType   = rawTotalI > 0 ? (group.circuits.some(c => CIRCUIT_BREAKER_TYPES[c.type] === "C") ? "C" : "B") : "B";
+
+                      // Sugerowany In różnicówki — suma bezpieczników obwodów za nią × ks
+                      const underRcdRatings = circuitData
+                        .filter((_, i) => group.circuits[i]?.underRcd)
+                        .map(d => d.bRat ?? 0).filter(r => r > 0);
+                      const suggestedRcdIn = suggestRcdIn(underRcdRatings.length ? underRcdRatings : circuitData.map(d => d.bRat ?? 0).filter(r => r > 0));
 
                       const updateCircuit = (ci, patch) =>
                         setAcGroups(gs => gs.map((g, i) => i !== gi ? g : {
@@ -1933,7 +1968,7 @@ export default function KalkulatorSzafy({
                               {INSTALL_METHODS.map(m => <option key={m.key} value={m.key}>{m.key}</option>)}
                             </select>
                             <button
-                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, underRcd: rcd != null, cableLength: 0, pointIds: [] }] }))}
+                              onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, circuits: [...g.circuits, { id: genId(), name: "", type: "automatyka", power: 0, phases: 1, underRcd: rcd != null, cableLength: 0, pointIds: [], manualBreaker: null }] }))}
                               className="text-xs px-2 py-1 text-orange-600 hover:bg-orange-50 rounded transition-colors font-semibold shrink-0"
                             >+ Obwód</button>
                             <button onClick={() => setAcGroups(g => g.filter((_, i) => i !== gi))} className="text-slate-400 hover:text-red-500 transition-colors shrink-0">
@@ -1945,39 +1980,59 @@ export default function KalkulatorSzafy({
                           <div className="flex items-center gap-2 flex-wrap bg-slate-50/50 px-3 py-1.5 border-b border-slate-100">
                             <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide shrink-0">Różnicówka:</span>
                             {rcd ? (
-                              <>
-                                <div className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5">
-                                  <input
-                                    value={rcd.name ?? ""}
-                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, name: e.target.value } }))}
-                                    className="text-[11px] bg-transparent outline-none text-purple-800 font-semibold w-20 min-w-0"
-                                    placeholder="np. F1"
-                                  />
-                                  <select
-                                    value={rcd.mA ?? 30}
-                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, mA: Number(e.target.value) } }))}
-                                    className="text-[11px] bg-transparent outline-none text-purple-600"
-                                  >
-                                    {[10, 30, 100, 300].map(v => <option key={v} value={v}>{v} mA</option>)}
-                                  </select>
-                                  <select
-                                    value={rcd.type ?? "A"}
-                                    onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, type: e.target.value } }))}
-                                    className="text-[11px] bg-transparent outline-none text-purple-600"
-                                  >
-                                    {["AC", "A", "F", "B"].map(t => <option key={t} value={t}>typ {t}</option>)}
-                                  </select>
-                                  <button
-                                    onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: null, circuits: g.circuits.map(c => ({ ...c, underRcd: false })) }))}
-                                    className="text-purple-300 hover:text-red-500 transition-colors ml-0.5"
-                                  ><X className="w-3 h-3" /></button>
-                                </div>
-                              </>
+                              <div className="flex items-center gap-1 bg-purple-50 border border-purple-200 rounded-md px-2 py-0.5">
+                                <input
+                                  value={rcd.name ?? ""}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, name: e.target.value } }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-800 font-semibold w-16 min-w-0"
+                                  placeholder="np. F1"
+                                />
+                                <span className="text-purple-300 text-[10px]">|</span>
+                                {/* In — prąd znamionowy, auto-sugerowany */}
+                                <select
+                                  value={rcd.In ?? suggestedRcdIn}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, In: Number(e.target.value) } }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-700 font-semibold"
+                                  title={`Prąd znamionowy różnicówki (In)\nAuto-sugerowany: ${suggestedRcdIn}A wg Σ bezpieczników × ks\nMożna zmienić ręcznie`}
+                                >
+                                  {RCD_IN_RATINGS.map(v => (
+                                    <option key={v} value={v}>{v}A{v === suggestedRcdIn && !rcd.In ? " ✓" : v === suggestedRcdIn ? " (sug.)" : ""}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={rcd.mA ?? 30}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, mA: Number(e.target.value) } }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-600"
+                                  title="Czułość różnicówki (IΔn)\n30 mA — ochrona przeciwporażeniowa (standard)\n10 mA — łazienki, dzieci\n100/300 mA — ochrona pożarowa / główna"
+                                >
+                                  {[10, 30, 100, 300].map(v => <option key={v} value={v}>{v} mA</option>)}
+                                </select>
+                                <select
+                                  value={rcd.type ?? "A"}
+                                  onChange={e => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { ...g.rcd, type: e.target.value } }))}
+                                  className="text-[11px] bg-transparent outline-none text-purple-600"
+                                  title="Typ różnicówki wg IEC 61008:\nAC — prąd sinusoidalny (podstawowy)\nA — AC + pulsujący DC (zalecany, ogólny)\nF — A + wysokoczęstotliwościowy (falowniki)\nB — wszystkie rodzaje (PV, napędy)"
+                                >
+                                  {["AC", "A", "F", "B"].map(t => <option key={t} value={t}>typ {t}</option>)}
+                                </select>
+                                <button
+                                  onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: null, circuits: g.circuits.map(c => ({ ...c, underRcd: false })) }))}
+                                  className="text-purple-300 hover:text-red-500 transition-colors ml-0.5"
+                                ><X className="w-3 h-3" /></button>
+                              </div>
                             ) : (
                               <button
-                                onClick={() => setAcGroups(gs => gs.map((g, i) => i !== gi ? g : { ...g, rcd: { name: "", mA: 30, type: "A" }, circuits: g.circuits.map(c => ({ ...c, underRcd: true })) }))}
+                                onClick={() => setAcGroups(gs => gs.map((g, i) => {
+                                  if (i !== gi) return g;
+                                  return { ...g, rcd: { name: "", mA: 30, type: "A", In: suggestedRcdIn }, circuits: g.circuits.map(c => ({ ...c, underRcd: true })) };
+                                }))}
                                 className="inline-flex items-center gap-1 text-[11px] text-purple-500 hover:text-purple-700 px-1.5 py-0.5 border border-dashed border-purple-300 rounded-md transition-colors"
                               ><Plus className="w-3 h-3" /> Dodaj różnicówkę</button>
+                            )}
+                            {rcd && suggestedRcdIn !== (rcd.In ?? suggestedRcdIn) && (
+                              <span className="text-[10px] text-amber-600 flex items-center gap-1" title={`Sugerowany In: ${suggestedRcdIn}A wg aktualnych obwodów`}>
+                                ⚠ sug. {suggestedRcdIn}A
+                              </span>
                             )}
                           </div>
 
@@ -2017,7 +2072,7 @@ export default function KalkulatorSzafy({
                                   <tbody>
                                     {group.circuits.map((circuit, ci) => {
                                       // Pobierz prekalkulowane dane
-                                      const { ct, ph, Ib, bTyp, bRat, size: cableSize, Iz, L, dU, status: rowStatus } = circuitData[ci];
+                                      const { ct, ph, Ib, bTyp, bRat, bRatAuto, isManualBreaker, size: cableSize, Iz, L, dU, status: rowStatus } = circuitData[ci];
                                       const dUWarn  = dU != null && dU >= 3;
                                       const dUError = dU != null && dU >= 5;
                                       const cableRec = cableTypeRec(method, ph, cableSize, circuit.type);
@@ -2042,23 +2097,47 @@ export default function KalkulatorSzafy({
                                               />
                                               <span className="text-[10px] text-slate-400">m</span>
                                               {dU != null && L > 0 && (
-                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${dUError ? "bg-red-100 text-red-700" : dUWarn ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}
-                                                  title={`Spadek napięcia: ${dU.toFixed(2)}% (limit: 3% żółty, 5% czerwony — IEC 60364-5-52 Aneks G)`}
+                                                <span
+                                                  className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${dUError ? "bg-red-100 text-red-700" : dUWarn ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}
+                                                  title={`Spadek napięcia ΔU = ${dU.toFixed(2)}%\n\nWzór (${ph===3?"3φ":"1φ"}): ΔU = ${ph===3?"ρ":"2ρ"} × L × Ia / S ÷ 230V × 100\n  ρ = ${RHO_CU_70} Ω·mm²/m  (Cu w 70°C, PVC)\n  L = ${L} m  |  Ia = Ib·cosφ = ${(Ib*ct.pf).toFixed(2)} A  |  S = ${cableSize} mm²\n${ph===1?"Czynnik ×2 — prąd płynie w obie strony (L i N)":"Czynnik ×1 — prąd liniowy, napięcie fazowe 230V"}\n\nLimity wg IEC 60364-5-52 Aneks G:\n  ΔU ≤ 3% — OK (instalacje odbiorcze)\n  ΔU 3–5% — ostrzeżenie\n  ΔU > 5% — przekroczenie limitu!\n\nAby zmniejszyć ΔU: zwiększ przekrój S lub skróć trasę kabla.`}
                                                 >
                                                   ΔU={dU.toFixed(1)}%
                                                 </span>
                                               )}
                                             </div>
-                                            {/* Punkty instalacyjne */}
+                                            {/* Punkty instalacyjne z kolorowaniem wg przewodu */}
                                             <div className="flex flex-wrap gap-1 mt-1 items-center min-h-[18px]">
                                               {(circuit.pointIds ?? []).map(pid => {
                                                 const pt = effectiveRows.find(r => r._id === pid);
-                                                return pt ? (
-                                                  <span key={pid} className="inline-flex items-center gap-0.5 text-[10px] bg-orange-50 text-orange-700 border border-orange-200 rounded px-1.5 py-0 leading-5">
+                                                if (!pt) return null;
+                                                const ptS  = parseCableSize(pt.przewód);
+                                                const recS = cableSize;
+                                                let chipCls = "bg-orange-50 text-orange-700 border-orange-200";
+                                                let chipTip = pt.przewód ? `${pt.tag} — ${pt.przewód}` : pt.tag;
+                                                if (ptS != null && recS != null) {
+                                                  const pi = CABLE_SIZES.indexOf(ptS);
+                                                  const ri = CABLE_SIZES.indexOf(recS);
+                                                  if (pi === -1) {
+                                                    chipTip = `${pt.tag} — przekrój ${ptS} mm² (niestandardowy)\n${pt.przewód ?? ""}`;
+                                                  } else if (pi < ri) {
+                                                    chipCls = "bg-red-50 text-red-700 border-red-300";
+                                                    chipTip = `${pt.tag} — ZBYT CIENKI przewód!\nPrzewód: ${ptS} mm²  |  Wymagane min: ${recS} mm² dla ${bTyp}${bRat}\nIz(${ptS})=${CABLE_IZ[`${method}_${ph===3?"3":"1"}`]?.[CABLE_SIZES.indexOf(ptS)] ?? "?"}A < In=${bRat}A — ryzyko przegrzania!\nWg IEC 60364-4-43 pkt 433.2: Iz ≥ In`;
+                                                  } else if (pi === ri) {
+                                                    chipCls = "bg-emerald-50 text-emerald-700 border-emerald-300";
+                                                    chipTip = `${pt.tag} — przewód OK ✓\nPrzekrój: ${ptS} mm² = zalecany dla ${bTyp}${bRat}\nIz=${Iz}A ≥ In=${bRat}A (IEC 60364-4-43)`;
+                                                  } else {
+                                                    chipCls = "bg-amber-50 text-amber-700 border-amber-300";
+                                                    chipTip = `${pt.tag} — przewód przewymiarowany\nPrzekrój: ${ptS} mm²  |  Zalecany: ${recS} mm² dla ${bTyp}${bRat}\nBezpieczny (Iz wystarczający), ale przewód jest za gruby`;
+                                                  }
+                                                }
+                                                return (
+                                                  <span key={pid} title={chipTip}
+                                                    className={`inline-flex items-center gap-0.5 text-[10px] border rounded px-1.5 py-0 leading-5 cursor-default ${chipCls}`}>
                                                     {pt.tag}
+                                                    {ptS != null && <span className="font-mono opacity-60 text-[9px] ml-0.5">{ptS}</span>}
                                                     <button type="button" onClick={() => updateCircuit(ci, { pointIds: (circuit.pointIds ?? []).filter(x => x !== pid) })} className="ml-0.5 hover:text-red-500 transition-colors"><X className="w-2.5 h-2.5" /></button>
                                                   </span>
-                                                ) : null;
+                                                );
                                               })}
                                               <PointPicker
                                                 allRows={effectiveRows}
@@ -2091,26 +2170,50 @@ export default function KalkulatorSzafy({
                                           </td>
                                           {/* Ib */}
                                           <td className="px-2 py-1.5 text-right text-slate-500">{Ib > 0 ? Ib.toFixed(2) : "—"}</td>
-                                          {/* Bezpiecznik */}
+                                          {/* Bezpiecznik — auto lub ręczna zmiana */}
                                           <td className="px-2 py-1.5 text-center">
-                                            {bRat != null ? (
-                                              <span className="font-bold text-slate-700"
-                                                title={`${bTyp}${bRat}${ph === 3 ? "/3P+N" : "/1P+N"} — charakterystyka ${bTyp === "C" ? "C (urządzenia z dużym prądem rozruchowym)" : "B (rezystancyjne, oświetlenie)"}`}>
-                                                {bTyp}{bRat}{ph === 3 ? "/3" : ""}
-                                              </span>
-                                            ) : <span className="text-slate-300">—</span>}
-                                          </td>
-                                          {/* Kabel: przekrój + Iz + typ */}
-                                          <td className="px-2 py-1.5 text-center">
-                                            {cableSize != null ? (
-                                              <div title={`Dobór wg Iz≥In (IEC 60364-4-43)\nZalecany: ${cableRec ?? "—"}\nIz=${Iz}A ≥ In=${bRat}A ✓`}>
-                                                <span className={`font-medium ${dUError ? "text-red-600" : dUWarn ? "text-amber-600" : "text-slate-600"}`}>
-                                                  {cableSize}<span className="font-normal text-slate-400 text-[10px]"> ({Iz}A)</span>
-                                                </span>
-                                                {cableRec && (
-                                                  <div className="text-[10px] text-slate-400 leading-tight mt-0.5">{cableRec}</div>
+                                            {bRatAuto != null ? (
+                                              <div className="flex flex-col items-center gap-0.5">
+                                                <div className="flex items-center justify-center gap-0.5">
+                                                  <span className={`text-[10px] font-mono ${isManualBreaker ? "text-blue-500" : "text-slate-400"}`}>{bTyp}</span>
+                                                  <select
+                                                    value={bRat ?? bRatAuto}
+                                                    onChange={e => {
+                                                      const val = Number(e.target.value);
+                                                      updateCircuit(ci, { manualBreaker: val !== bRatAuto ? val : null });
+                                                    }}
+                                                    className={`font-bold text-sm bg-transparent outline-none cursor-pointer text-center ${isManualBreaker ? "text-blue-700" : "text-slate-700"}`}
+                                                    title={isManualBreaker
+                                                      ? `Ręcznie: ${bTyp}${bRat} (auto: ${bTyp}${bRatAuto}${ph===3?"/3φ":""})\nKliknij aby zmienić`
+                                                      : `Auto: ${bTyp}${bRat}${ph===3?"/3P+N":"/1P+N"}\nChar. ${bTyp==="C"?"C — duży prąd rozruchowy (silniki, zasilacze)":"B — obciążenia rezystancyjne (oświetlenie, gniazda)"}\nKliknij aby zmienić ręcznie`}
+                                                  >
+                                                    {BREAKER_RATINGS.map(r => (
+                                                      <option key={r} value={r}>{r}A</option>
+                                                    ))}
+                                                  </select>
+                                                  {ph === 3 && <span className="text-[10px] text-slate-400">/3</span>}
+                                                </div>
+                                                {isManualBreaker && (
+                                                  <button
+                                                    onClick={() => updateCircuit(ci, { manualBreaker: null })}
+                                                    className="flex items-center gap-0.5 text-[9px] text-blue-400 hover:text-red-400 transition-colors"
+                                                    title="Wróć do automatycznego doboru"
+                                                  >
+                                                    <RotateCcw className="w-2.5 h-2.5" />auto
+                                                  </button>
                                                 )}
                                               </div>
+                                            ) : <span className="text-slate-300">—</span>}
+                                          </td>
+                                          {/* Kabel: przekrój w formacie NxS mm² */}
+                                          <td className="px-2 py-1.5 text-center">
+                                            {cableSize != null ? (
+                                              <span
+                                                className={`font-mono font-semibold text-[11px] ${dUError ? "text-red-600" : dUWarn ? "text-amber-600" : "text-slate-700"}`}
+                                                title={`Dobór wg Iz≥In (IEC 60364-4-43)\n${ph===3?5:3}×${cableSize} mm² — Iz=${Iz}A ≥ In=${bRat}A ✓\nZalecany typ: ${cableRec ?? "—"}`}
+                                              >
+                                                {ph === 3 ? 5 : 3}×{cableSize}
+                                              </span>
                                             ) : <span className="text-slate-300">—</span>}
                                           </td>
                                           {/* RCD */}
