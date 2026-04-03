@@ -104,18 +104,12 @@ const TYPICAL_POWER = {
 const RCD_IN_RATINGS = [16, 25, 40, 63, 80, 100, 125];
 
 // Wyekstrahuj przekrój przewodu z pola "przewód" punktu instalacyjnego
-// np. "Przewód prądowy 2x1.5 + EIB BUS 2x2x0,8" → 1.5
-// np. "3×2,5 mm²" → 2.5,  "5x4" → 4
+// Szuka wzorca NxS lub N×S (np. "przewód prądowy 3x2,5", "2×1.5", "5x16")
+// Bierze pierwsze wystąpienie — pomija dodatkowe kable (EIB, BUS itp.)
 function parseCableSize(przewod) {
   if (!przewod) return null;
-  const s = String(przewod);
-  // "NxS" lub "N×S" — bierze OSTATNIE wystąpienie (wyklucza dodatkowe kable EIB itp.)
-  const matches = [...s.matchAll(/\b\d+\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*(?:mm[²2]?)?\b/gi)];
-  if (matches.length) return parseFloat(matches[0][1].replace(',', '.'));
-  // "S mm²"
-  const m2 = s.match(/\b(\d+(?:[.,]\d+)?)\s*mm[²2]/i);
-  if (m2) return parseFloat(m2[1].replace(',', '.'));
-  return null;
+  const m = String(przewod).match(/\d+\s*[x×]\s*(\d+(?:[.,]\d+)?)/i);
+  return m ? parseFloat(m[1].replace(',', '.')) : null;
 }
 
 // Sugerowany prąd znamionowy różnicówki (In) wg sumy bezpieczników za nią
@@ -2112,22 +2106,22 @@ export default function KalkulatorSzafy({
                                                 if (!pt) return null;
                                                 const ptS  = parseCableSize(pt.przewód);
                                                 const recS = cableSize;
-                                                let chipCls = "bg-orange-50 text-orange-700 border-orange-200";
-                                                let chipTip = pt.przewód ? `${pt.tag} — ${pt.przewód}` : pt.tag;
+                                                let chipCls = "bg-amber-50 text-amber-700 border-amber-300";
+                                                const przewódInfo = pt.przewód ? `Przewód: ${pt.przewód}` : "Brak info o przewodzie";
+                                                let chipTip = `${pt.tag}\n${przewódInfo}`;
                                                 if (ptS != null && recS != null) {
                                                   const pi = CABLE_SIZES.indexOf(ptS);
                                                   const ri = CABLE_SIZES.indexOf(recS);
                                                   if (pi === -1) {
-                                                    chipTip = `${pt.tag} — przekrój ${ptS} mm² (niestandardowy)\n${pt.przewód ?? ""}`;
+                                                    chipTip = `${pt.tag}\n${przewódInfo}\nPrzekrój ${ptS} mm² (niestandardowy)`;
                                                   } else if (pi < ri) {
                                                     chipCls = "bg-red-50 text-red-700 border-red-300";
-                                                    chipTip = `${pt.tag} — ZBYT CIENKI przewód!\nPrzewód: ${ptS} mm²  |  Wymagane min: ${recS} mm² dla ${bTyp}${bRat}\nIz(${ptS})=${CABLE_IZ[`${method}_${ph===3?"3":"1"}`]?.[CABLE_SIZES.indexOf(ptS)] ?? "?"}A < In=${bRat}A — ryzyko przegrzania!\nWg IEC 60364-4-43 pkt 433.2: Iz ≥ In`;
+                                                    chipTip = `${pt.tag}\n${przewódInfo}\nZBYT CIENKI przewód!\nPrzekrój: ${ptS} mm²  |  Wymagane min: ${recS} mm² dla ${bTyp}${bRat}\nIz(${ptS})=${CABLE_IZ[`${method}_${ph===3?"3":"1"}`]?.[CABLE_SIZES.indexOf(ptS)] ?? "?"}A < In=${bRat}A — ryzyko przegrzania!\nWg IEC 60364-4-43 pkt 433.2: Iz ≥ In`;
                                                   } else if (pi === ri) {
                                                     chipCls = "bg-emerald-50 text-emerald-700 border-emerald-300";
-                                                    chipTip = `${pt.tag} — przewód OK ✓\nPrzekrój: ${ptS} mm² = zalecany dla ${bTyp}${bRat}\nIz=${Iz}A ≥ In=${bRat}A (IEC 60364-4-43)`;
+                                                    chipTip = `${pt.tag}\n${przewódInfo}\nPrzewód OK ✓  Przekrój: ${ptS} mm² = zalecany dla ${bTyp}${bRat}\nIz=${Iz}A ≥ In=${bRat}A (IEC 60364-4-43)`;
                                                   } else {
-                                                    chipCls = "bg-amber-50 text-amber-700 border-amber-300";
-                                                    chipTip = `${pt.tag} — przewód przewymiarowany\nPrzekrój: ${ptS} mm²  |  Zalecany: ${recS} mm² dla ${bTyp}${bRat}\nBezpieczny (Iz wystarczający), ale przewód jest za gruby`;
+                                                    chipTip = `${pt.tag}\n${przewódInfo}\nPrzewód przewymiarowany  Przekrój: ${ptS} mm²  |  Zalecany: ${recS} mm² dla ${bTyp}${bRat}\nBezpieczny (Iz wystarczający), ale przewód jest za gruby`;
                                                   }
                                                 }
                                                 return (
