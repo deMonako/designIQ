@@ -143,15 +143,23 @@ function exportXLSX(rows, catalog, projectName = "projekt") {
 // ── CDF/TXT export (format kompatybilny z ATTIN_SYMBOL.LSP) ──────────────────
 // Kolejność kolumn: X, Y, SYMBOL, GRUPA, ROLA, PIETRO, POMIESZCZENIE,
 //                  PRZEWOD, WYSOKOSC, RODZAJ, KOLOR, KOMENTARZ
-// Wartości string w apostrofach, liczby bez. Polskie znaki zostaną
-// skonwertowane przez konwertuj_cdf.py przed importem do NanoCAD.
+// Polskie znaki konwertowane do \U+XXXX w JS — plik wychodzi jako czysty ASCII
+// gotowy do importu przez ATTIN_SYMBOL bez dodatkowego konwertuj_cdf.py.
+
+function toDxfUnicode(str) {
+  let out = "";
+  for (const ch of String(str ?? "")) {
+    out += ch.charCodeAt(0) < 128 ? ch : `\\U+${ch.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
+  }
+  return out;
+}
 
 function exportCDF(rows, projectName = "projekt") {
-  const q = (v) => `'${(v ?? "").replace(/'/g, "\\'")}'`;
+  const q = (v) => `'${toDxfUnicode(v ?? "")}'`;
 
   const noCoords = rows.filter(r => r.X == null || r.Y == null);
   if (noCoords.length > 0) {
-    alert(`Brak współrzędnych XY dla ${noCoords.length} punktów.\nWgraj najpierw projekt.json wygenerowany przez convert-attext.js.`);
+    alert(`Brak współrzędnych XY dla ${noCoords.length} punktów.\nWgraj najpierw projekt.json wygenerowany przez generate_json.py.`);
     return;
   }
 
@@ -176,11 +184,12 @@ function exportCDF(rows, projectName = "projekt") {
   ].join(", "));
 
   const content = lines.join("\r\n");
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  // Czysty ASCII — nie wymaga konwertuj_cdf.py
+  const blob = new Blob([content], { type: "text/plain;charset=ascii" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${projectName.replace(/[\\/:*?"<>|]/g, "_")}.txt`;
+  a.download = `${projectName.replace(/[\\/:*?"<>|]/g, "_")}_dxf.txt`;
   a.click();
   URL.revokeObjectURL(url);
 }
