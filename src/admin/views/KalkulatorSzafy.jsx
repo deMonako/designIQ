@@ -814,6 +814,122 @@ function PointPicker({ allRows, selectedIds, takenIds, onChange }) {
   );
 }
 
+// ─── MaterialPicker — picker materiałów (styl PointPicker) ───────────────────
+
+function MaterialPicker({ matOptions, cabinetMaterials, onAdd, onRemove }) {
+  const [open, setOpen]       = useState(false);
+  const [query, setQuery]     = useState("");
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const btnRef  = useRef(null);
+  const dropRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (btnRef.current?.contains(e.target) || dropRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const handleOpen = () => {
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX });
+    }
+    setQuery("");
+    setOpen(o => !o);
+  };
+
+  const q = query.toLowerCase();
+  const filtered = (matOptions ?? [])
+    .filter(m => m.name && (!q || m.name.toLowerCase().includes(q)))
+    .sort((a, b) => {
+      if (!q) return (a.name ?? "").localeCompare(b.name ?? "", "pl");
+      const aS = (a.name ?? "").toLowerCase().startsWith(q);
+      const bS = (b.name ?? "").toLowerCase().startsWith(q);
+      if (aS !== bS) return aS ? -1 : 1;
+      return (a.name ?? "").localeCompare(b.name ?? "", "pl");
+    });
+
+  // Indeks: nazwa → id w cabinetMaterials (do togglowania)
+  const addedByName = {};
+  for (const m of cabinetMaterials ?? []) addedByName[m.name] = m.id;
+
+  const toggle = (mat) => {
+    const existingId = addedByName[mat.name];
+    if (existingId) {
+      onRemove(existingId);
+    } else {
+      const inferredType =
+        /przewód|kabel|linka|drut|NYM|YDY|LgY/i.test(mat.name) ? "cable"
+        : /złączka|szyna|listwa|zacisk/i.test(mat.name)         ? "terminal"
+        : mat.type ?? "other";
+      onAdd({ id: genId("cm"), type: inferredType, name: mat.name, qty: 1, unit: mat.unit ?? "szt." });
+    }
+  };
+
+  const dropdown = open && ReactDOM.createPortal(
+    <div
+      ref={dropRef}
+      className="absolute z-[9999] w-72 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden"
+      style={{ top: dropPos.top, left: dropPos.left }}
+    >
+      <div className="p-2 border-b border-slate-100">
+        <input
+          autoFocus
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          placeholder="Szukaj materiału…"
+          className="w-full text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-orange-300 placeholder-slate-300"
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <div className="py-5 text-center text-xs text-slate-300">{q ? "Brak wyników" : "Brak materiałów w katalogu"}</div>
+      ) : (
+        <div className="max-h-56 overflow-y-auto">
+          {filtered.map(m => {
+            const isSelected = !!addedByName[m.name];
+            return (
+              <label
+                key={m.name}
+                className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-slate-50 transition-colors select-none"
+              >
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggle(m)}
+                  className="accent-orange-500 shrink-0"
+                />
+                <span className="flex-1 text-xs text-slate-700 truncate">{m.name}</span>
+                {m.price_pln != null && (
+                  <span className="text-[10px] text-orange-500 shrink-0">{m.price_pln} zł</span>
+                )}
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+
+  return (
+    <span className="relative inline-block">
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={handleOpen}
+        className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded border border-dashed border-slate-300 text-slate-400 hover:border-orange-400 hover:text-orange-500 transition-colors"
+      >
+        <Plus className="w-2.5 h-2.5" /> Dodaj materiały
+      </button>
+      {dropdown}
+    </span>
+  );
+}
+
 // ─── Główny komponent ─────────────────────────────────────────────────────────
 
 const TABS = [
@@ -1479,7 +1595,12 @@ export default function KalkulatorSzafy({
                                             ))}
                                           </div>
                                         )}
-                                        <AddCabinetMaterialRow matOptions={matOptions} onAdd={mat => addMaterial(row._id, mat)} />
+                                        <MaterialPicker
+                                          matOptions={matOptions}
+                                          cabinetMaterials={mats}
+                                          onAdd={mat => addMaterial(row._id, mat)}
+                                          onRemove={matId => removeMaterial(row._id, matId)}
+                                        />
                                       </div>
                                     </td>
                                   </tr>
