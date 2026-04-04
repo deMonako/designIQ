@@ -393,6 +393,15 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [configSaving, setConfigSaving] = useState(false);
   const [configSaveResult, setConfigSaveResult] = useState(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [savedSnap, setSavedSnap] = useState(null);
+
+  const makeSnap = (r) => JSON.stringify(
+    r.map(x => ({ _id: x._id, controlDevice: x.controlDevice, ioCount: x.ioCount, requiresAttention: x.requiresAttention }))
+  );
+  const isDirty = useMemo(() => {
+    if (!savedSnap || rows.length === 0) return false;
+    return makeSnap(rows) !== savedSnap;
+  }, [rows, savedSnap]);
 
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
@@ -473,11 +482,14 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         // Zachowaj dane szafy z istniejącej konfiguracji
         if (cfg?.szafa) setSzafaData(cfg.szafa);
 
+        let finalRows;
         if (loaded.length > 0 && cfg?.rows && Object.keys(cfg.rows).length > 0) {
-          setRows(applyConfig(loaded, cfg)); // auto-apply saved config
+          finalRows = applyConfig(loaded, cfg);
         } else {
-          setRows(loaded);
+          finalRows = loaded;
         }
+        setRows(finalRows);
+        setSavedSnap(makeSnap(finalRows));
       }
 
       if (loaded.length === 0) {
@@ -516,6 +528,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setConfigSaveResult("ok");
+      setSavedSnap(makeSnap(rows));
     } catch { setConfigSaveResult("err"); }
     finally { setConfigSaving(false); }
   }, [project, rows, szafaData]);
@@ -547,6 +560,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         }
       }
       setRows(loaded);
+      setSavedSnap(makeSnap(loaded));
       if (loaded.length === 0) setLoadError("Brak danych instalacyjnych.");
     } catch (e) {
       setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
@@ -749,11 +763,46 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
             </button>
             <button
               onClick={() => exportCDF(rows, project?.code ?? "projekt")}
-              disabled={rows.length === 0}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 disabled:opacity-40 transition-colors"
+              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 transition-colors"
               title="Pobierz TXT do importu w NanoCAD (ATTIN_SYMBOL)"
             >
               <Download className="w-3.5 h-3.5" /> Pobierz TXT
+            </button>
+
+            {/* Separator */}
+            <div className="w-px h-5 bg-slate-200 mx-1" />
+
+            {/* Zapisz / Reset */}
+            <AnimatePresence>
+              {configSaveResult === "ok" && (
+                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600 whitespace-nowrap">
+                  <CheckCircle2 className="w-3.5 h-3.5" /> Zapisano
+                </motion.span>
+              )}
+              {configSaveResult === "err" && (
+                <span className="flex items-center gap-1 text-xs text-red-500 whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" /> Błąd</span>
+              )}
+            </AnimatePresence>
+            <button
+              onClick={() => setResetConfirmOpen(true)}
+              disabled={!project}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-red-300 hover:text-red-500 disabled:opacity-40 transition-colors"
+              title="Zresetuj konfigurację — usuwa przypisania urządzeń"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </button>
+            <button
+              onClick={handleSaveConfig}
+              disabled={configSaving || !project}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg disabled:opacity-40 transition-colors ${
+                isDirty && !configSaving
+                  ? "border-green-400 text-green-700 bg-green-50 animate-pulse hover:animate-none hover:bg-green-100"
+                  : "border-slate-200 text-slate-600 hover:border-orange-300 hover:text-orange-600"
+              }`}
+            >
+              {configSaving
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
+                : <><Save className="w-3.5 h-3.5" /> Zapisz</>}
             </button>
           </div>
 
@@ -837,43 +886,12 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
             </div>
           </div>
 
-          {/* Akcje pod tabelą */}
-          <div className="flex items-center justify-between pt-1 gap-3">
-            <div className="text-xs text-slate-400">
-              {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem
-              {rows.filter(r => r.requiresAttention).length > 0 && (
-                <span className="text-amber-500 ml-1">· {rows.filter(r => r.requiresAttention).length} wymaga uwagi</span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <AnimatePresence>
-                {configSaveResult === "ok" && (
-                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Konfiguracja zapisana
-                  </motion.span>
-                )}
-                {configSaveResult === "err" && (
-                  <span className="flex items-center gap-1 text-xs text-red-500"><AlertCircle className="w-3.5 h-3.5" /> Błąd zapisu</span>
-                )}
-              </AnimatePresence>
-              <button
-                onClick={() => setResetConfirmOpen(true)}
-                disabled={!project || rows.length === 0}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-500 hover:border-red-300 hover:text-red-500 disabled:opacity-40 transition-colors"
-                title="Zresetuj konfigurację — usuwa przypisania urządzeń"
-              >
-                <RotateCcw className="w-3.5 h-3.5" /> Reset
-              </button>
-              <button
-                onClick={handleSaveConfig}
-                disabled={configSaving || !project}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-40 transition-colors"
-              >
-                {configSaving
-                  ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
-                  : <><Save className="w-3.5 h-3.5" /> Zapisz konfigurację</>}
-              </button>
-            </div>
+          {/* Podsumowanie pod tabelą */}
+          <div className="text-xs text-slate-400 pt-1">
+            {rows.filter(r => r.controlDevice !== "uncontrolled").length} punktów ze sterowaniem
+            {rows.filter(r => r.requiresAttention).length > 0 && (
+              <span className="text-amber-500 ml-1">· {rows.filter(r => r.requiresAttention).length} wymaga uwagi</span>
+            )}
           </div>
         </>
       )}
