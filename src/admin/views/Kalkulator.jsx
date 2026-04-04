@@ -558,13 +558,6 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setConfigSaveResult("ok");
       setSavedSnap(makeSnap(rows));
-      // Async upload XLSX do Drive (nie blokuje zapisu)
-      if (GAS_ON) {
-        const xlsxB64 = buildXlsxBase64(rows);
-        GAS.saveInstallationXlsx(project.code, xlsxB64)
-          .then(() => setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : null))
-          .catch(() => {});
-      }
     } catch { setConfigSaveResult("err"); }
     finally { setConfigSaving(false); }
   }, [project, rows, szafaData]);
@@ -575,20 +568,6 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     if (!selectedProjectId || rows.length > 0) return;
     handleLoadPoints();
   }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Generuje XLSX base64 z aktualnych rows (do Drive sync)
-  const buildXlsxBase64 = useCallback((r) => {
-    const headers = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
-    const data = defaultSortRows(r).map((row, i) => [
-      i + 1, row.tag, row.typ, row.rola, row.kondygnacja, row.pomieszczenie,
-      row.przewód, row.wysokość, row.wariant, row.kolor, row.uwagi,
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
-    ws["!cols"] = [5,20,16,14,14,20,20,10,24,10,24].map(wch => ({ wch }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Instalacja");
-    return XLSX.write(wb, { bookType: "xlsx", type: "base64" });
-  }, []);
 
   // Wczytaj XLSX z Drive i zastosuj zmiany do rows
   const handleImportFromDriveXlsx = useCallback(async () => {
