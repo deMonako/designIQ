@@ -1326,63 +1326,64 @@ function doPost(e) {
         return ok({ saved: true });
       }
 
-      // Zapisuje rows z panelu admina do zakładki "Instalacja" w Google Sheets na Drive
-      // POST { action: "updateInstallationSheet", projectCode, rows: [{tag, typ, rola, ...}] }
+      // Zapisuje dane z panelu admina do pliku instalacja na Drive (XLSX lub Google Sheets)
+      // POST { action: "updateInstallationSheet", projectCode, xlsxBase64, rows }
+      // — xlsxBase64: używane gdy plik to natywny XLSX (Drive API PATCH, bez usuwania)
+      // — rows + SpreadsheetApp: używane gdy plik to Google Sheets
       case "updateInstallationSheet": {
-        if (!body.projectCode || !body.rows) return err("Brak danych");
+        if (!body.projectCode) return err("Brak projectCode");
         var usFolder = getProjectFolder(body.projectCode);
         if (!usFolder) return err("Brak folderu projektu: " + body.projectCode);
 
-        // Szukaj pliku Google Sheets — próbuj obie nazwy (z i bez .xlsx)
+        // Znajdź plik — akceptuj XLSX i Google Sheets
         var usFile = null;
         var usTry = ["instalacja_" + body.projectCode, "instalacja_" + body.projectCode + ".xlsx"];
         for (var uti = 0; uti < usTry.length && !usFile; uti++) {
-          var usIter = usFolder.getFilesByName(usTry[uti]);
-          while (usIter.hasNext()) {
-            var usCandidate = usIter.next();
-            if (usCandidate.getMimeType() === MimeType.GOOGLE_SHEETS) { usFile = usCandidate; break; }
-          }
+          var usIter2 = usFolder.getFilesByName(usTry[uti]);
+          if (usIter2.hasNext()) usFile = usIter2.next();
         }
-        if (!usFile) return err("Nie znaleziono pliku Google Sheets w folderze projektu (szukano: " + usTry.join(", ") + ")");
+        if (!usFile) return err("Nie znaleziono pliku instalacja w folderze projektu (szukano: " + usTry.join(", ") + ")");
 
+        var usMime = usFile.getMimeType();
         try {
-          var usSS = SpreadsheetApp.openById(usFile.getId());
-
-          // Znajdź lub utwórz zakładkę "Instalacja"
-          var usSheet = usSS.getSheetByName("Instalacja");
-          if (!usSheet) {
-            usSheet = usSS.insertSheet("Instalacja");
+          if (usMime === MimeType.GOOGLE_SHEETS) {
+            // Google Sheets — zapisuj komórkami przez SpreadsheetApp
+            if (!body.rows) return err("Brak rows dla pliku Sheets");
+            var usSS = SpreadsheetApp.openById(usFile.getId());
+            var usSheet = usSS.getSheetByName("Instalacja");
+            if (!usSheet) { usSheet = usSS.insertSheet("Instalacja"); } else { usSheet.clearContents(); }
+            var usHeaders = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
+            var usData = [usHeaders];
+            var usRows = body.rows;
+            for (var ri = 0; ri < usRows.length; ri++) {
+              var ur = usRows[ri];
+              usData.push([ri+1, ur.tag||"", ur.typ||"", ur.rola||"", ur.kondygnacja||"", ur.pomieszczenie||"", ur.przewód||"", ur.wysokość||"", ur.wariant||"", ur.kolor||"", ur.uwagi||""]);
+            }
+            usSheet.getRange(1,1,usData.length,usHeaders.length).setValues(usData);
+            usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
+            return ok({ saved: true, rows: usRows.length, type: "sheets" });
           } else {
-            usSheet.clearContents();
+            // Natywny XLSX — nadpisz zawartość przez Drive API PATCH (bez kasowania, ten sam fileId)
+            if (!body.xlsxBase64) return err("Brak xlsxBase64 dla pliku XLSX");
+            var usBytes = Utilities.base64Decode(body.xlsxBase64);
+            var usPatchUrl = "https://www.googleapis.com/upload/drive/v3/files/" + usFile.getId() + "?uploadType=media";
+            var usPatchResp = UrlFetchApp.fetch(usPatchUrl, {
+              method: "PATCH",
+              headers: {
+                Authorization: "Bearer " + ScriptApp.getOAuthToken(),
+                "Content-Type": MimeType.MICROSOFT_EXCEL,
+              },
+              payload: usBytes,
+              muteHttpExceptions: true,
+            });
+            if (usPatchResp.getResponseCode() !== 200) {
+              return err("Drive API PATCH błąd HTTP " + usPatchResp.getResponseCode() + ": " + usPatchResp.getContentText().substring(0, 300));
+            }
+            return ok({ saved: true, type: "xlsx" });
           }
-
-          // Nagłówki zgodne z kolejnością eksportu XLSX
-          var usHeaders = ["Lp", "Nazwa", "Grupa", "Rola", "Piętro", "Pomieszczenie", "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz"];
-          var usData = [usHeaders];
-          var usRows = body.rows;
-          for (var ri = 0; ri < usRows.length; ri++) {
-            var ur = usRows[ri];
-            usData.push([
-              ri + 1,
-              ur.tag           || "",
-              ur.typ           || "",
-              ur.rola          || "",
-              ur.kondygnacja   || "",
-              ur.pomieszczenie || "",
-              ur.przewód       || "",
-              ur.wysokość      || "",
-              ur.wariant       || "",
-              ur.kolor         || "",
-              ur.uwagi         || "",
-            ]);
-          }
-          usSheet.getRange(1, 1, usData.length, usHeaders.length).setValues(usData);
-          usSheet.getRange(1, 1, 1, usHeaders.length).setFontWeight("bold");
         } catch(usEx) {
-          return err("Błąd SpreadsheetApp: " + usEx.message);
+          return err("Błąd zapisu: " + usEx.message);
         }
-
-        return ok({ saved: true, rows: usRows.length });
       }
 
       // Zapisuje config.json do folderu projektu (konfiguracja kalkulatora)

@@ -631,26 +631,33 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     }
   }, [project]);
 
-  // Wyślij aktualne rows do zakładki "Instalacja" w Google Sheets na Drive
+  // Wyślij aktualne rows na Drive (nadpisuje istniejący plik XLSX lub Sheets bez usuwania)
   const handleExportToSheets = useCallback(async () => {
     if (!project) return;
     setSheetsSending(true);
     try {
-      const payload = defaultSortRows(rows).map(r => ({
-        tag: r.tag,
-        typ: r.typ ?? "",
-        rola: r.rola ?? "",
-        kondygnacja: r.kondygnacja ?? "",
-        pomieszczenie: r.pomieszczenie ?? "",
-        przewód: r.przewód ?? "",
-        wysokość: r.wysokość ?? "",
-        wariant: r.wariant ?? "",
-        kolor: r.kolor ?? "",
-        uwagi: r.uwagi ?? "",
+      const sorted = defaultSortRows(rows);
+      // Generuj XLSX base64 (dla natywnych plików XLSX na Drive)
+      const headers = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
+      const data = sorted.map((r, i) => [
+        i + 1, r.tag, r.typ, r.rola, r.kondygnacja, r.pomieszczenie,
+        r.przewód, r.wysokość, r.wariant, r.kolor, r.uwagi,
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+      ws["!cols"] = [5,20,16,14,14,20,20,10,24,10,24].map(wch => ({ wch }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Instalacja");
+      const xlsxBase64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+      // Rows JSON (dla plików Google Sheets na Drive)
+      const rowsPayload = sorted.map(r => ({
+        tag: r.tag || "", typ: r.typ || "", rola: r.rola || "",
+        kondygnacja: r.kondygnacja || "", pomieszczenie: r.pomieszczenie || "",
+        przewód: r.przewód || "", wysokość: r.wysokość || "",
+        wariant: r.wariant || "", kolor: r.kolor || "", uwagi: r.uwagi || "",
       }));
-      const result = await GAS.updateInstallationSheet(project.code, payload);
+      const result = await GAS.updateInstallationSheet(project.code, xlsxBase64, rowsPayload);
       if (!result?.saved) throw new Error(result?.error ?? "Brak potwierdzenia");
-      toast.success(`Wysłano ${result.rows} punktów do Google Sheets na Drive`);
+      toast.success(`Wysłano ${sorted.length} punktów na Drive (${result.type === "sheets" ? "Google Sheets" : "XLSX"})`);
       setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : d);
     } catch (e) {
       toast.error("Błąd wysyłania do Drive: " + (e?.message ?? "nieznany"));
