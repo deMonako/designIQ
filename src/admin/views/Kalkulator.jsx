@@ -24,7 +24,7 @@ const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 // ── Definicje kolumn ─────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: "tag",           label: "ID",            sortable: true,  defaultVisible: true,  width: "w-32" },
+  { key: "tag",           label: "Symbol",        sortable: true,  defaultVisible: true,  width: "w-32" },
   { key: "kondygnacja",   label: "Kondygnacja",   sortable: true,  defaultVisible: true,  width: "w-36" },
   { key: "pomieszczenie", label: "Pomieszczenie",  sortable: true,  defaultVisible: true  },
   { key: "typ",           label: "Typ",            sortable: true,  defaultVisible: true  },
@@ -349,10 +349,18 @@ function SortableTableRow({ id, children }) {
   return (
     <tr
       ref={setNodeRef}
-      style={{ transform: DndCSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors"
+      style={{
+        // translate-only — DndCSS.Transform.toString dodaje scale który psuje szerokości kolumn w tabelach
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        transition: transition ?? "transform 200ms cubic-bezier(0.25, 1, 0.5, 1)",
+        opacity: isDragging ? 0.45 : 1,
+        background: isDragging ? "rgb(255 247 237)" : undefined,
+        position: "relative",
+        zIndex: isDragging ? 10 : "auto",
+      }}
+      className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors select-none"
     >
-      <td className="px-2 py-0.5 cursor-grab active:cursor-grabbing touch-none select-none" {...attributes} {...listeners}>
+      <td className="px-2 py-0.5 cursor-grab active:cursor-grabbing touch-none" {...attributes} {...listeners}>
         <GripVertical className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500 transition-colors" />
       </td>
       {children}
@@ -747,6 +755,9 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
 
   useEffect(() => { setFilterRoom("all"); }, [filterFloor]);
 
+  // lpMap musi być przed filteredRows (używany w sortowaniu)
+  const lpMap = useMemo(() => Object.fromEntries(rows.map((r, i) => [r._id, i + 1])), [rows]);
+
   const filteredRows = useMemo(() => {
     const q = deferredSearch.toLowerCase();
     return rows
@@ -760,7 +771,17 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         return true;
       })
       .sort((a, b) => {
-        if (sortKey === "default") return 0; // zachowaj kolejność z rows (drag-and-drop)
+        if (sortKey === "default") {
+          // Symbol → Lp (jeśli ten sam symbol, używaj kolejności drag-and-drop)
+          const tagCmp = (a.tag ?? "").toString().localeCompare((b.tag ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
+          if (tagCmp !== 0) return tagCmp;
+          return (lpMap[a._id] ?? 0) - (lpMap[b._id] ?? 0);
+        }
+        if (sortKey === "lp") {
+          const al = lpMap[a._id] ?? 0;
+          const bl = lpMap[b._id] ?? 0;
+          return sortDir === "asc" ? al - bl : bl - al;
+        }
         const av = (a[sortKey] ?? "").toString().toLowerCase();
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv, "pl") : bv.localeCompare(av, "pl");
@@ -790,8 +811,6 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       return arrayMove(prev, oldIndex, newIndex);
     });
   }, []);
-
-  const lpMap = useMemo(() => Object.fromEntries(rows.map((r, i) => [r._id, i + 1])), [rows]);
 
   const activeCols = COLS.filter(c => visibleCols.has(c.key));
   const totalColSpan = activeCols.length + 5; // +5: drag, Lp, Uwaga, El.sterujący, I/O
@@ -1025,8 +1044,19 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               <table className="w-full text-sm" style={{ minWidth: "760px" }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
-                    <th className="w-6 px-2 py-1.5" title="Kolejność (drag-and-drop)" />
-                    <th className="text-center px-2 py-1.5 w-10">Lp</th>
+                    <th className="w-6 px-2 py-1.5" title="Przeciągnij aby zmienić kolejność (Lp)" />
+                    <th
+                      className="text-center px-2 py-1.5 w-10 cursor-pointer select-none hover:text-slate-700"
+                      onClick={() => handleSort("lp")}
+                      title="Sortuj po Lp (kolejność w eksporcie)"
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Lp
+                        {sortKey === "lp"
+                          ? sortDir === "asc" ? <ChevronUp className="w-3 h-3 text-orange-500 shrink-0" /> : <ChevronDown className="w-3 h-3 text-orange-500 shrink-0" />
+                          : <ChevronDown className="w-3 h-3 text-slate-300 shrink-0" />}
+                      </div>
+                    </th>
                     {activeCols.map(col => (
                       <th
                         key={col.key}
