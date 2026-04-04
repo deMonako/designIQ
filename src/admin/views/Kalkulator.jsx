@@ -811,96 +811,101 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       {rows.length > 0 && (
         <>
           {/* Pasek filtrów */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[180px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Szukaj…"
-                className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400"
-              />
-              {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>}
-            </div>
+          <div className="flex flex-col gap-2">
+            {/* Wiersz 1: filtry */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-300" />
+                <input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Szukaj…"
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-orange-400/20 focus:border-orange-400"
+                />
+                {search && <button onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"><X className="w-3.5 h-3.5" /></button>}
+              </div>
 
-            <select value={filterTyp} onChange={e => setFilterTyp(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
-              <option value="all">Wszystkie typy</option>
-              {uniqueTypy.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-
-            {uniqueFloors.length > 1 && (
-              <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[140px]">
-                <option value="all">Wszystkie piętra</option>
-                {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
+              <select value={filterTyp} onChange={e => setFilterTyp(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie typy</option>
+                {uniqueTypy.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
-            )}
 
-            <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
-              <option value="all">Wszystkie pomieszczenia</option>
-              {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-
-            <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap border border-slate-200 rounded-lg px-2.5 py-2 hover:border-slate-300">
-              <input
-                type="checkbox"
-                checked={filterMasterOnly}
-                onChange={e => setFilterMasterOnly(e.target.checked)}
-                className="rounded accent-orange-500"
-              />
-              Tylko master
-            </label>
-
-            <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none whitespace-nowrap border rounded-lg px-2.5 py-2 transition-colors ${filterNeedsAttention ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
-              <input
-                type="checkbox"
-                checked={filterNeedsAttention}
-                onChange={e => setFilterNeedsAttention(e.target.checked)}
-                className="rounded accent-amber-500"
-              />
-              Wymaga uwagi
-            </label>
-
-            <span className="text-xs text-slate-400 whitespace-nowrap">
-              {filteredRows.length} / {rows.length} pkt.
-            </span>
-
-            {/* Kolumny toggle */}
-            <div className="relative ml-auto">
-              <button
-                onClick={() => setShowColPicker(v => !v)}
-                className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg transition-colors ${showColPicker ? "border-orange-400 text-orange-600 bg-orange-50" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" /> Kolumny
-              </button>
-              {showColPicker && (
-                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-3 min-w-[180px]">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Widoczne kolumny</div>
-                  {COLS.map(col => (
-                    <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:text-slate-800 text-sm text-slate-600">
-                      <input
-                        type="checkbox"
-                        checked={visibleCols.has(col.key)}
-                        onChange={e => {
-                          const next = new Set(visibleCols);
-                          if (e.target.checked) next.add(col.key); else next.delete(col.key);
-                          setVisibleCols(next);
-                        }}
-                        className="rounded accent-orange-500"
-                      />
-                      {col.label}
-                    </label>
-                  ))}
-                </div>
+              {uniqueFloors.length > 1 && (
+                <select value={filterFloor} onChange={e => setFilterFloor(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[140px]">
+                  <option value="all">Wszystkie piętra</option>
+                  {uniqueFloors.map(f => <option key={f} value={f}>{f}</option>)}
+                </select>
               )}
+
+              <select value={filterRoom} onChange={e => setFilterRoom(e.target.value)} className="text-xs border border-slate-200 rounded-lg px-2.5 py-2 outline-none focus:ring-1 focus:ring-orange-400 bg-white max-w-[160px]">
+                <option value="all">Wszystkie pomieszczenia</option>
+                {uniqueRooms.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+
+              <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none whitespace-nowrap border border-slate-200 rounded-lg px-2.5 py-2 hover:border-slate-300">
+                <input
+                  type="checkbox"
+                  checked={filterMasterOnly}
+                  onChange={e => setFilterMasterOnly(e.target.checked)}
+                  className="rounded accent-orange-500"
+                />
+                Tylko master
+              </label>
+
+              <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none whitespace-nowrap border rounded-lg px-2.5 py-2 transition-colors ${filterNeedsAttention ? "border-amber-400 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600 hover:border-slate-300"}`}>
+                <input
+                  type="checkbox"
+                  checked={filterNeedsAttention}
+                  onChange={e => setFilterNeedsAttention(e.target.checked)}
+                  className="rounded accent-amber-500"
+                />
+                Wymaga uwagi
+              </label>
+
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {filteredRows.length} / {rows.length} pkt.
+              </span>
             </div>
 
-            <button
-              onClick={() => exportCDF(rows, project?.code ?? "projekt")}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 transition-colors"
-              title="Pobierz TXT do importu w NanoCAD (ATTIN_SYMBOL)"
-            >
-              <Download className="w-3.5 h-3.5" /> Pobierz TXT
-            </button>
+            {/* Wiersz 2: akcje (nigdy nie łamie) */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Kolumny toggle */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColPicker(v => !v)}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg transition-colors ${showColPicker ? "border-orange-400 text-orange-600 bg-orange-50" : "border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5" /> Kolumny
+                </button>
+                {showColPicker && (
+                  <div className="absolute left-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-30 p-3 min-w-[180px]">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-2">Widoczne kolumny</div>
+                    {COLS.map(col => (
+                      <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:text-slate-800 text-sm text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={visibleCols.has(col.key)}
+                          onChange={e => {
+                            const next = new Set(visibleCols);
+                            if (e.target.checked) next.add(col.key); else next.delete(col.key);
+                            setVisibleCols(next);
+                          }}
+                          className="rounded accent-orange-500"
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => exportCDF(rows, project?.code ?? "projekt")}
+                className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 transition-colors"
+                title="Pobierz TXT do importu w NanoCAD (ATTIN_SYMBOL)"
+              >
+                <Download className="w-3.5 h-3.5" /> Pobierz TXT
+              </button>
             <button
               onClick={handleImportFromDriveXlsx}
               disabled={xlsxLoading || !xlsxDrive?.found}
@@ -940,10 +945,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                 : <><Upload className="w-3.5 h-3.5" /> Wyślij na Drive</>}
             </button>
 
-            {/* Separator */}
-            <div className="w-px h-5 bg-slate-200 mx-1" />
-
-            {/* Zapisz / Reset — fixed-width slot na status żeby nie przesuwał przycisków */}
+            {/* Status slot + Zapisz / Reset */}
             <div className="w-16 flex items-center justify-end flex-shrink-0">
               <AnimatePresence>
                 {configSaveResult === "ok" && (
@@ -979,7 +981,8 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                 ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Zapisuję…</>
                 : <><Save className="w-3.5 h-3.5" /> Zapisz</>}
             </button>
-          </div>
+            </div>{/* koniec wiersza 2 akcji */}
+          </div>{/* koniec flex-col */}
 
           {/* Tabela */}
           <div className="border border-slate-200 rounded-xl overflow-hidden">

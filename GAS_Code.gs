@@ -718,10 +718,23 @@ function doGet(e) {
         } catch(ex) {
           return err("Błąd odczytu pliku: " + ex.message);
         }
+        // Pobierz rzeczywisty modifiedTime przez Drive REST API
+        // (getLastUpdated() może być aktualizowane przy każdym odczycie)
+        var ixModifiedAt = ixFile.getLastUpdated().toISOString();
+        try {
+          var ixMetaResp = UrlFetchApp.fetch(
+            "https://www.googleapis.com/drive/v3/files/" + ixFile.getId() + "?fields=modifiedTime",
+            { headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }
+          );
+          if (ixMetaResp.getResponseCode() === 200) {
+            var ixMeta = JSON.parse(ixMetaResp.getContentText());
+            if (ixMeta.modifiedTime) ixModifiedAt = ixMeta.modifiedTime;
+          }
+        } catch(ixMetaEx) {}
         return ok({
           found: true,
           xlsxBase64: Utilities.base64Encode(ixBlob.getBytes()),
-          modifiedAt: ixFile.getLastUpdated().toISOString(),
+          modifiedAt: ixModifiedAt,
           mime: ixFile.getMimeType(),
           fileId: ixFile.getId(),
         });
