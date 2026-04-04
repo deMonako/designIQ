@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, SlidersHorizontal, Save, FolderOpen, RotateCcw, Upload,
+  X, SlidersHorizontal, Save, FolderOpen, RotateCcw, Upload, GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as GAS from "../api/gasApi";
@@ -14,6 +14,9 @@ import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
 import { buildCatalogFromCennikWithSpecs } from "../../lib/shoppingList/productCatalog";
 import { buildEffectiveMappings, EMPTY_KALKULATOR_SETTINGS } from "../../lib/shoppingList/kalkulatorDefaults";
+import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { CSS as DndCSS } from "@dnd-kit/utilities";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
@@ -96,8 +99,7 @@ function exportXLSX(rows, catalog, projectName = "projekt") {
     "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz",
   ];
 
-  const sorted = defaultSortRows(rows);
-  const data = sorted.map((r, i) => [
+  const data = rows.map((r, i) => [
     i + 1,
     r.tag,
     r.typ,
@@ -339,6 +341,26 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SortableTableRow — wiersz tabeli z drag-and-drop
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SortableTableRow({ id, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  return (
+    <tr
+      ref={setNodeRef}
+      style={{ transform: DndCSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
+      className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors"
+    >
+      <td className="px-2 py-0.5 cursor-grab active:cursor-grabbing touch-none select-none" {...attributes} {...listeners}>
+        <GripVertical className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500 transition-colors" />
+      </td>
+      {children}
+    </tr>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // EditableCell — komórka z edycją inline
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -514,6 +536,14 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         } else {
           finalRows = loaded;
         }
+        // Przywróć kolejność z config.rowOrder (drag-and-drop)
+        if (cfg?.rowOrder?.length > 0 && finalRows.length > 0) {
+          const idMap = Object.fromEntries(finalRows.map(r => [r._id, r]));
+          const ordered = cfg.rowOrder.map(id => idMap[id]).filter(Boolean);
+          const orderedSet = new Set(cfg.rowOrder);
+          const remainder = finalRows.filter(r => !orderedSet.has(r._id));
+          finalRows = [...ordered, ...remainder];
+        }
         setRows(finalRows);
         setSavedSnap(makeSnap(finalRows));
         // Sprawdź czy XLSX istnieje na Drive
@@ -561,6 +591,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         version: 1,
         savedAt: TODAY,
         rows: rowOverrides,
+        rowOrder: rows.map(r => r._id),
         ...(szafaData ? { szafa: szafaData } : {}),
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
@@ -599,45 +630,32 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       }
       const ws = wb.Sheets[bestSheet];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      // Buduj słownik kluczem złożonym Nazwa|Piętro|Pomieszczenie (obsługa duplikatów tagów)
-      // Fallback do samego tagu gdy klucz złożony nie trafi
-      const byKey = {};
-      const byTag = {};
+      // Dopasowanie po Lp (kolumna 0) — pozycja w tablicy rows (1-based)
+      // Lp jest jednoznaczne nawet dla duplikatów tagów
+      const byLp = {};
       for (const row of data.slice(1)) {
-        const tag = String(row[1] || "").trim();
-        if (!tag) continue;
-        const kondygnacja = String(row[4] || "").trim();
-        const pomieszczenie = String(row[5] || "").trim();
-        const val = {
+        const lp = parseInt(String(row[0] || "").trim());
+        if (!lp || isNaN(lp)) continue;
+        byLp[lp] = {
           typ: String(row[2] || "").trim(),
           rola: String(row[3] || "").trim(),
-          kondygnacja,
-          pomieszczenie,
+          kondygnacja: String(row[4] || "").trim(),
+          pomieszczenie: String(row[5] || "").trim(),
           przewód: String(row[6] || "").trim(),
           wysokość: String(row[7] || "").trim(),
           wariant: String(row[8] || "").trim(),
           kolor: String(row[9] || "").trim(),
           uwagi: String(row[10] || "").trim(),
         };
-        byKey[`${tag}|${kondygnacja}|${pomieszczenie}`] = val;
-        byTag[tag] = val; // fallback (nadpisywany, ale używany tylko gdy klucz złożony nie pasuje)
       }
       let updated = 0;
-      setRows(prev => {
-        const knownKeys = new Set(prev.map(r => `${r.tag}|${r.kondygnacja || ""}|${r.pomieszczenie || ""}`));
-        const unknownKeys = Object.keys(byKey).filter(k => !knownKeys.has(k));
-        if (unknownKeys.length > 0) {
-          const unknownNames = [...new Set(unknownKeys.map(k => k.split("|")[0]))];
-          toast.warning(`Pominięto ${unknownKeys.length} nieznanych punktów z Sheets: ${unknownNames.slice(0, 5).join(", ")}${unknownNames.length > 5 ? "…" : ""}`);
-        }
-        return prev.map(r => {
-          const compositeKey = `${r.tag}|${r.kondygnacja || ""}|${r.pomieszczenie || ""}`;
-          const xl = byKey[compositeKey] ?? byTag[r.tag];
-          if (!xl) return r;
-          updated++;
-          return { ...r, ...xl };
-        });
-      });
+      setRows(prev => prev.map((r, i) => {
+        const lp = i + 1;
+        const xl = byLp[lp];
+        if (!xl) return r;
+        updated++;
+        return { ...r, ...xl };
+      }));
       toast.success(`Wczytano z Drive — zaktualizowano ${updated} punktów`);
       setXlsxDrive(d => ({ ...d, importedAt: new Date().toISOString() }));
     } catch (e) {
@@ -652,10 +670,9 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     if (!project) return;
     setSheetsSending(true);
     try {
-      const sorted = defaultSortRows(rows);
-      // Generuj XLSX base64 (dla natywnych plików XLSX na Drive)
+      // Użyj kolejności z rows (Lp = pozycja w tablicy)
       const headers = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
-      const data = sorted.map((r, i) => [
+      const data = rows.map((r, i) => [
         i + 1, r.tag, r.typ, r.rola, r.kondygnacja, r.pomieszczenie,
         r.przewód, r.wysokość, r.wariant, r.kolor, r.uwagi,
       ]);
@@ -665,7 +682,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       XLSX.utils.book_append_sheet(wb, ws, "Instalacja");
       const xlsxBase64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
       // Rows JSON (dla plików Google Sheets na Drive)
-      const rowsPayload = sorted.map(r => ({
+      const rowsPayload = rows.map(r => ({
         tag: r.tag || "", typ: r.typ || "", rola: r.rola || "",
         kondygnacja: r.kondygnacja || "", pomieszczenie: r.pomieszczenie || "",
         przewód: r.przewód || "", wysokość: r.wysokość || "",
@@ -674,7 +691,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       const result = await GAS.updateInstallationSheet(project.code, xlsxBase64, rowsPayload);
       if (!result?.saved) throw new Error(result?.error ?? "Brak potwierdzenia");
       if (result.type === "sheets") {
-        toast.success(`Zaktualizowano ${result.updated ?? sorted.length} punktów w Google Sheets (formatowanie zachowane)`);
+        toast.success(`Zaktualizowano ${result.updated ?? rows.length} punktów w Google Sheets (formatowanie zachowane)`);
       } else {
         toast.warning("Wysłano do XLSX na Drive — formatowanie zostało zastąpione. Skonwertuj plik na Google Sheets aby zachować kolory i style.");
       }
@@ -743,14 +760,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         return true;
       })
       .sort((a, b) => {
-        if (sortKey === "default") {
-          const keys = ["typ", "tag", "rola"];
-          for (const k of keys) {
-            const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
-            if (cmp !== 0) return cmp;
-          }
-          return 0;
-        }
+        if (sortKey === "default") return 0; // zachowaj kolejność z rows (drag-and-drop)
         const av = (a[sortKey] ?? "").toString().toLowerCase();
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv, "pl") : bv.localeCompare(av, "pl");
@@ -766,8 +776,25 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     setRows(prev => prev.map(r => r._id === id ? (typeof updater === "function" ? updater(r) : { ...r, ...updater }) : r));
   }, []);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const handleDragEnd = useCallback(({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    setRows(prev => {
+      const oldIndex = prev.findIndex(r => r._id === active.id);
+      const newIndex = prev.findIndex(r => r._id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }, []);
+
+  const lpMap = useMemo(() => Object.fromEntries(rows.map((r, i) => [r._id, i + 1])), [rows]);
+
   const activeCols = COLS.filter(c => visibleCols.has(c.key));
-  const totalColSpan = activeCols.length + 3; // +3: Uwaga, El.sterujący, I/O
+  const totalColSpan = activeCols.length + 5; // +5: drag, Lp, Uwaga, El.sterujący, I/O
 
   const SortIcon = ({ col }) => {
     if (!col.sortable) return null;
@@ -998,6 +1025,8 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               <table className="w-full text-sm" style={{ minWidth: "760px" }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
+                    <th className="w-6 px-2 py-1.5" title="Kolejność (drag-and-drop)" />
+                    <th className="text-center px-2 py-1.5 w-10">Lp</th>
                     {activeCols.map(col => (
                       <th
                         key={col.key}
@@ -1014,60 +1043,67 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                     <th className="text-center px-3 py-1.5 w-14">I/O</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredRows.length === 0 ? (
-                    <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
-                  ) : filteredRows.map(row => (
-                    <tr key={row._id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
-                      {activeCols.map(col => (
-                        <td key={col.key} className="px-3 py-0.5">
-                          {col.key === "kolor" ? (
-                            <div className="flex items-center gap-1.5">
-                              {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
-                              <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
-                            </div>
-                          ) : col.key === "typ" ? (
-                            <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
-                          ) : (
-                            <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
-                          )}
-                        </td>
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                  <SortableContext items={filteredRows.map(r => r._id)} strategy={verticalListSortingStrategy}>
+                    <tbody>
+                      {filteredRows.length === 0 ? (
+                        <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
+                      ) : filteredRows.map(row => (
+                        <SortableTableRow key={row._id} id={row._id}>
+                          {/* Lp */}
+                          <td className="px-2 py-0.5 text-xs text-slate-400 tabular-nums text-center w-10">{lpMap[row._id]}</td>
+
+                          {activeCols.map(col => (
+                            <td key={col.key} className="px-3 py-0.5">
+                              {col.key === "kolor" ? (
+                                <div className="flex items-center gap-1.5">
+                                  {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
+                                  <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
+                                </div>
+                              ) : col.key === "typ" ? (
+                                <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
+                              ) : (
+                                <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
+                              )}
+                            </td>
+                          ))}
+
+                          {/* Wymaga uwagi */}
+                          <td className="px-3 py-0.5 text-center">
+                            <input
+                              type="checkbox"
+                              checked={row.requiresAttention ?? false}
+                              onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
+                              className="rounded accent-amber-500 cursor-pointer w-4 h-4"
+                              title="Wymaga uwagi"
+                            />
+                          </td>
+
+                          {/* Element sterujący */}
+                          <td className="px-3 py-0.5 min-w-[200px]">
+                            <ControlDevicePicker
+                              value={row.controlDevice ?? "uncontrolled"}
+                              catalog={catalog}
+                              matOptions={matOptions}
+                              onChange={v => updateRow(row._id, { controlDevice: v })}
+                            />
+                          </td>
+
+                          {/* I/O */}
+                          <td className="px-3 py-0.5 text-center">
+                            {row.controlDevice !== "uncontrolled" ? (
+                              <input
+                                type="number" min="1" max="32" value={row.ioCount ?? 1}
+                                onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                                className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
+                              />
+                            ) : <span className="text-slate-300 text-xs">—</span>}
+                          </td>
+                        </SortableTableRow>
                       ))}
-
-                      {/* Wymaga uwagi */}
-                      <td className="px-3 py-0.5 text-center">
-                        <input
-                          type="checkbox"
-                          checked={row.requiresAttention ?? false}
-                          onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
-                          className="rounded accent-amber-500 cursor-pointer w-4 h-4"
-                          title="Wymaga uwagi"
-                        />
-                      </td>
-
-                      {/* Element sterujący */}
-                      <td className="px-3 py-0.5 min-w-[200px]">
-                        <ControlDevicePicker
-                          value={row.controlDevice ?? "uncontrolled"}
-                          catalog={catalog}
-                          matOptions={matOptions}
-                          onChange={v => updateRow(row._id, { controlDevice: v })}
-                        />
-                      </td>
-
-                      {/* I/O */}
-                      <td className="px-3 py-0.5 text-center">
-                        {row.controlDevice !== "uncontrolled" ? (
-                          <input
-                            type="number" min="1" max="32" value={row.ioCount ?? 1}
-                            onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
-                            className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
-                          />
-                        ) : <span className="text-slate-300 text-xs">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                    </tbody>
+                  </SortableContext>
+                </DndContext>
               </table>
             </div>
           </div>
