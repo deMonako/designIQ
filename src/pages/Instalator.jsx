@@ -5,7 +5,11 @@ import {
   Radio, Blocks, ShieldCheck, Heart, Power
 } from "lucide-react";
 
-const GAS_URL = process.env.REACT_APP_GAS_LOXONE_URL;
+import { GAS_CONFIG } from "../admin/api/gasConfig";
+
+const GAS_URL = GAS_CONFIG.scriptUrl
+  ? `${GAS_CONFIG.scriptUrl}?action=zirytujMnie&key=zirytuj_mnie`
+  : null;
 
 export default function Instalator() {
   const [particles, setParticles] = useState([]);

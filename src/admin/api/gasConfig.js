@@ -4,7 +4,10 @@ export const GAS_CONFIG = {
   /** Przełącznik: false = mockData lokalnie, true = dane z GAS */
   enabled: true,
 
-  /** URL deployment Google Apps Script */
+  /**
+   * URL deployment Google Apps Script — JEDYNE MIEJSCE DO ZMIANY przy nowym wdrożeniu.
+   * Obsługuje: admin CRUD, formularze kontaktowe, panel klienta, irytacja/Loxone.
+   */
   scriptUrl: "https://script.google.com/macros/s/AKfycbx1kFuHS9xmE_JDOtwqmeGUPI0RwP9fVlLmbx7phLNWxTu5Oa7YHbh8jDaq-56aTcNUFA/exec",
 
   /** ID arkusza Google Sheets */
