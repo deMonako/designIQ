@@ -761,15 +761,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         return true;
       })
       .sort((a, b) => {
-        if (sortKey === "default") {
-          // Typ → Symbol → Rola → Piętro → Pomieszczenie
-          const keys = ["typ", "tag", "rola", "kondygnacja", "pomieszczenie"];
-          for (const k of keys) {
-            const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
-            if (cmp !== 0) return cmp;
-          }
-          return (lpMap[a._id] ?? 0) - (lpMap[b._id] ?? 0);
-        }
+        if (sortKey === "default") return 0; // zachowaj kolejność z rows (nadaną przy załadowaniu)
         const av = (a[sortKey] ?? "").toString().toLowerCase();
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
         return sortDir === "asc" ? av.localeCompare(bv, "pl") : bv.localeCompare(av, "pl");
