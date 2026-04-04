@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ZoomIn, ZoomOut, Maximize2, X, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { getDwgViewerContent } from "../../admin/api/gasApi";
@@ -153,7 +153,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
   // Blokujemy tylko konkretne elementy rysunkowe; circle.hit pozostaje klikalny.
   const styleEl = document.createElementNS(NS, "style");
   styleEl.textContent = [
-    "g > circle:not(.hit), g > text { pointer-events: none; }",
+    "g > circle:not(.hit), g > text, g > .c-height { pointer-events: none; }",
     "circle.hit { pointer-events: auto; cursor: pointer; }",
     // Hover – każdy element skaluje się wokół własnego fill-box (bounding-boxa).
     // Dla circle fill-box = środek w (cx,cy) → kółko nie przesuwa się.
@@ -213,6 +213,20 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         label.setAttribute("stroke-linejoin", "round");
         label.textContent = el.tag ?? key;
 
+        // Wysokość montażu — pod symbolem, w kolorze grupy
+        const hVal = String(el.wysokość || "").trim();
+        const heightTxt = document.createElementNS(NS, "text");
+        heightTxt.setAttribute("x", svgX + 2.2); heightTxt.setAttribute("y", svgY + 1.3);
+        heightTxt.classList.add("c-height");
+        heightTxt.setAttribute("font-size", "2.4"); heightTxt.setAttribute("fill", color);
+        heightTxt.setAttribute("font-family", "sans-serif"); heightTxt.setAttribute("font-weight", "500");
+        heightTxt.setAttribute("paint-order", "stroke");
+        heightTxt.setAttribute("stroke", "white"); heightTxt.setAttribute("stroke-width", "0.7");
+        heightTxt.setAttribute("stroke-linejoin", "round");
+        heightTxt.setAttribute("data-has-height", hVal ? "1" : "0");
+        heightTxt.textContent = hVal;
+        if (!hVal) heightTxt.style.display = "none";
+
         const hit = document.createElementNS(NS, "circle");
         hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
         hit.setAttribute("r", "5"); hit.setAttribute("fill", "transparent");
@@ -224,7 +238,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
 
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", el.typ || "");
-        g.appendChild(dotGroup); g.appendChild(label); g.appendChild(hit);
+        g.appendChild(dotGroup); g.appendChild(label); g.appendChild(heightTxt); g.appendChild(hit);
         svgEl.appendChild(g);
 
       } else {
@@ -294,15 +308,37 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         hit.addEventListener("click", onClick);
         listeners.push({ hit, onClick });
 
+        // Wysokości klastra — tspany w kolorach odpowiednich grup
+        const clusterHeightTxt = document.createElementNS(NS, "text");
+        clusterHeightTxt.setAttribute("x", cx + 3.5); clusterHeightTxt.setAttribute("y", cy + 1.5);
+        clusterHeightTxt.classList.add("c-height");
+        clusterHeightTxt.setAttribute("font-size", "2.4");
+        clusterHeightTxt.setAttribute("font-family", "sans-serif"); clusterHeightTxt.setAttribute("font-weight", "500");
+        clusterHeightTxt.setAttribute("paint-order", "stroke");
+        clusterHeightTxt.setAttribute("stroke", "white"); clusterHeightTxt.setAttribute("stroke-width", "0.7");
+        clusterHeightTxt.setAttribute("stroke-linejoin", "round");
+        let clusterHasHeight = false;
+        cluster.forEach((p, idx) => {
+          const h = String(p.el.wysokość || "").trim();
+          if (!h) return;
+          const span = document.createElementNS(NS, "tspan");
+          span.setAttribute("fill", dotColor(p.el.typ));
+          span.textContent = (clusterHasHeight ? ", " : "") + h;
+          clusterHeightTxt.appendChild(span);
+          clusterHasHeight = true;
+        });
+        clusterHeightTxt.setAttribute("data-has-height", clusterHasHeight ? "1" : "0");
+        if (!clusterHasHeight) clusterHeightTxt.style.display = "none";
+
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", cluster[0].el.typ || "");
         g.setAttribute("data-typs", cluster.map(p => p.el.typ || "").join(","));
-        // Pełne dane klastra — używane przez filtr do dynamicznej aktualizacji koloru/odznaki
+        // Pełne dane klastra — używane przez filtr do dynamicznej aktualizacji koloru/odznaki/wysokości
         g.setAttribute("data-cluster-json", JSON.stringify(
-          cluster.map(p => ({ typ: p.el.typ || "", tag: p.el.tag ?? p.key }))
+          cluster.map(p => ({ typ: p.el.typ || "", tag: p.el.tag ?? p.key, wysk: String(p.el.wysokość || "").trim() }))
         ));
         g.appendChild(dotGroup); g.appendChild(badgeBg);
-        g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(hit);
+        g.appendChild(badgeTxt); g.appendChild(label); g.appendChild(clusterHeightTxt); g.appendChild(hit);
         svgEl.appendChild(g);
       }
     });
@@ -540,8 +576,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
 
   const [floorDates,  setFloorDates]  = useState([]);    // daty plików JSON per piętro
   const [currentDate, setCurrentDate] = useState(null);  // data aktywnego piętra
-  const [showDim,     setShowDim]     = useState(false); // toggle warstwy wymiarów
-  const [hasDimSvg,   setHasDimSvg]  = useState(false); // czy aktywne piętro ma plik _dim
+  const [showDim,      setShowDim]      = useState(false); // toggle warstwy wymiarów
+  const [hasDimSvg,    setHasDimSvg]   = useState(false); // czy aktywne piętro ma plik _dim
+  const [showHeights,  setShowHeights] = useState(true);  // pokaż wysokości montażu przy punktach
 
   const tRef         = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef      = useRef(null);
@@ -551,10 +588,16 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const overlayElRef = useRef(null);   // referencja do overlay SVG (filtrowanie typów)
   const dimOverlayRef = useRef(null);  // referencja do overlay SVG z wymiarami
   const dimSvgRef    = useRef(null);   // SVG string wymiarów dla aktywnego piętra
-  const showDimRef   = useRef(false);  // synchronizacja showDim bez dep w mountView
+  const showDimRef     = useRef(false); // synchronizacja showDim bez dep w mountView
+  const showHeightsRef = useRef(true);  // synchronizacja showHeights bez dep w efektach
   const floorsDataRef = useRef([]);    // pełne dane wszystkich pięter [{ name, svg, attribs }]
   const loadIdRef    = useRef(0);      // guard przed podwójnym ładowaniem
   const hasScrolledRef = useRef(false); // scroll do widoku tylko przy pierwszym załadowaniu
+
+  const hasAnyHeight = useMemo(
+    () => Object.values(elements).some(e => String(e.wysokość || "").trim()),
+    [elements]
+  );
 
   // ── Direct DOM transform (bez React re-render) ────────────────────────────
   const flushTransform = useCallback(() => {
@@ -617,6 +660,24 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         const label = g.querySelector(".c-label");
         if (label) { label.setAttribute("fill", newColor); label.textContent = visible.map(it => it.tag).join(", "); }
 
+        // Zaktualizuj wysokości — tspany w kolorach odpowiednich grup
+        const heightEl = g.querySelector(".c-height");
+        if (heightEl) {
+          const visWithHeight = visible.filter(it => it.wysk);
+          const hasH = visWithHeight.length > 0;
+          heightEl.setAttribute("data-has-height", hasH ? "1" : "0");
+          heightEl.style.display = (showHeightsRef.current && hasH) ? "" : "none";
+          if (hasH) {
+            while (heightEl.firstChild) heightEl.removeChild(heightEl.firstChild);
+            visWithHeight.forEach((it, idx) => {
+              const span = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
+              span.setAttribute("fill", dotColor(it.typ));
+              span.textContent = (idx > 0 ? ", " : "") + it.wysk;
+              heightEl.appendChild(span);
+            });
+          }
+        }
+
       } else {
         // ── Pojedynczy punkt: pokaż/ukryj ──
         if (!activeTypes || activeTypes.size === 0) { g.style.display = ""; return; }
@@ -642,6 +703,16 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       dimOverlayRef.current.style.display = showDim ? "" : "none";
     }
   }, [showDim]);
+
+  // ── Toggle wysokości montażu przy punktach ────────────────────────────────
+  useEffect(() => {
+    showHeightsRef.current = showHeights;
+    const overlay = overlayElRef.current;
+    if (!overlay) return;
+    overlay.querySelectorAll(".c-height").forEach(el => {
+      el.style.display = (showHeights && el.getAttribute("data-has-height") === "1") ? "" : "none";
+    });
+  }, [showHeights]);
 
   // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
   const mountView = useCallback(async () => {
@@ -1079,18 +1150,33 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           </div>
         )}
 
-        {/* Przycisk warstwy wymiarów – widoczny gdy piętro ma plik _dim.svg */}
-        {hasDimSvg && isLoaded && (
-          <button
-            onClick={() => setShowDim(d => !d)}
-            className={`absolute top-14 right-3 px-2.5 py-1 text-[11px] font-semibold rounded-lg border shadow-sm z-40 transition-colors ${
-              showDim
-                ? "bg-orange-600 border-orange-600 text-white"
-                : "bg-white/90 backdrop-blur border-slate-200 text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Wymiary
-          </button>
+        {/* Przyciski i opcje – prawy panel (Wymiary + Pokaż wysokości) */}
+        {isLoaded && (hasDimSvg || hasAnyHeight) && (
+          <div className="absolute top-14 right-3 flex flex-col items-end gap-1.5 z-40">
+            {hasDimSvg && (
+              <button
+                onClick={() => setShowDim(d => !d)}
+                className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border shadow-sm transition-colors ${
+                  showDim
+                    ? "bg-orange-600 border-orange-600 text-white"
+                    : "bg-white/90 backdrop-blur border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Wymiary
+              </button>
+            )}
+            {hasAnyHeight && (
+              <label className="flex items-center gap-1.5 bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-2.5 py-1 shadow-sm cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={showHeights}
+                  onChange={e => setShowHeights(e.target.checked)}
+                  className="accent-orange-500 w-3 h-3"
+                />
+                <span className="text-[11px] font-medium text-slate-600">Pokaż wysokości</span>
+              </label>
+            )}
+          </div>
         )}
 
         {isLoaded && (
