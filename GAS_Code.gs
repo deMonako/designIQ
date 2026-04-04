@@ -704,7 +704,8 @@ function doGet(e) {
         var ixBlob;
         try {
           if (ixFile.getMimeType() === MimeType.GOOGLE_SHEETS) {
-            var ixExportUrl = "https://docs.google.com/spreadsheets/d/" + ixFile.getId() + "/export?format=xlsx";
+            // Dodajemy timestamp żeby wymusić świeży eksport (bez cache)
+            var ixExportUrl = "https://docs.google.com/spreadsheets/d/" + ixFile.getId() + "/export?format=xlsx&t=" + new Date().getTime();
             var ixResp = UrlFetchApp.fetch(ixExportUrl, {
               headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
               muteHttpExceptions: true,
@@ -1303,13 +1304,20 @@ function doPost(e) {
       case "updateInstallationSheet": {
         if (!body.projectCode || !body.rows) return err("Brak danych");
         var usFolder = getProjectFolder(body.projectCode);
-        if (!usFolder) return err("Brak folderu projektu");
+        if (!usFolder) return err("Brak folderu projektu: " + body.projectCode);
 
-        // Znajdź plik Google Sheets (instalacja_<code> bez rozszerzenia)
-        var usIter = usFolder.getFilesByName("instalacja_" + body.projectCode);
-        if (!usIter.hasNext()) return err("Nie znaleziono pliku Google Sheets instalacja_" + body.projectCode + " w folderze projektu");
-        var usFile = usIter.next();
-        if (usFile.getMimeType() !== MimeType.GOOGLE_SHEETS) return err("Plik nie jest Google Sheets (MIME: " + usFile.getMimeType() + ")");
+        // Szukaj pliku Google Sheets — próbuj obie nazwy (z i bez .xlsx)
+        // Drive zachowuje nazwę instalacja_CODE.xlsx nawet po konwersji do Sheets
+        var usFile = null;
+        var usTry = ["instalacja_" + body.projectCode, "instalacja_" + body.projectCode + ".xlsx"];
+        for (var uti = 0; uti < usTry.length && !usFile; uti++) {
+          var usIter = usFolder.getFilesByName(usTry[uti]);
+          while (usIter.hasNext()) {
+            var usCandidate = usIter.next();
+            if (usCandidate.getMimeType() === MimeType.GOOGLE_SHEETS) { usFile = usCandidate; break; }
+          }
+        }
+        if (!usFile) return err("Nie znaleziono pliku Google Sheets w folderze projektu (szukano: " + usTry.join(", ") + ")");
 
         var usSS = SpreadsheetApp.openById(usFile.getId());
 
@@ -1329,16 +1337,16 @@ function doPost(e) {
           var ur = usRows[ri];
           usData.push([
             ri + 1,
-            ur.tag    ?? "",
-            ur.typ    ?? "",
-            ur.rola   ?? "",
-            ur.kondygnacja  ?? "",
-            ur.pomieszczenie ?? "",
-            ur.przewód  ?? "",
-            ur.wysokość ?? "",
-            ur.wariant  ?? "",
-            ur.kolor    ?? "",
-            ur.uwagi    ?? "",
+            ur.tag           || "",
+            ur.typ           || "",
+            ur.rola          || "",
+            ur.kondygnacja   || "",
+            ur.pomieszczenie || "",
+            ur.przewód       || "",
+            ur.wysokość      || "",
+            ur.wariant       || "",
+            ur.kolor         || "",
+            ur.uwagi         || "",
           ]);
         }
         usSheet.getRange(1, 1, usData.length, usHeaders.length).setValues(usData);

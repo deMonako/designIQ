@@ -8,7 +8,7 @@ export const GAS_CONFIG = {
    * URL deployment Google Apps Script — JEDYNE MIEJSCE DO ZMIANY przy nowym wdrożeniu.
    * Obsługuje: admin CRUD, formularze kontaktowe, panel klienta, irytacja/Loxone.
    */
-  scriptUrl: "https://script.google.com/macros/s/AKfycbx1kFuHS9xmE_JDOtwqmeGUPI0RwP9fVlLmbx7phLNWxTu5Oa7YHbh8jDaq-56aTcNUFA/exec",
+  scriptUrl: "https://script.google.com/macros/s/AKfycbxtJWevH3o9TfNHWKQh_FvjlpDCWzcrVe23VHpRvLBVEPLY8CXvgR7Y4KBJ8No6KvcBEw/exec",
 
   /** ID arkusza Google Sheets */
   sheetId: "1aq3kmpw5mOGcy7JHB29C0s6OiR3evdEWY1gS08EE2FU",
