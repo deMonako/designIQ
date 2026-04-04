@@ -1390,9 +1390,9 @@ function doPost(e) {
                 ]]);
                 usUpdated++;
               }
-              return ok({ saved: true, updated: usUpdated, total: body.rows.length, type: "sheets" });
+              return ok({ saved: true, updated: usUpdated, total: body.rows.length, type: "sheets", modifiedAt: usFile.getLastUpdated().toISOString() });
             }
-            return ok({ saved: true, type: "sheets" });
+            return ok({ saved: true, type: "sheets", modifiedAt: usFile.getLastUpdated().toISOString() });
           } else {
             // Natywny XLSX — nadpisz zawartość przez Drive API PATCH (ten sam fileId, bez kosza)
             // Uwaga: zastępuje całą zawartość (formatowanie zostaje utracone)
@@ -1411,7 +1411,9 @@ function doPost(e) {
             if (usPatchResp.getResponseCode() !== 200) {
               return err("Drive API PATCH błąd HTTP " + usPatchResp.getResponseCode() + ": " + usPatchResp.getContentText().substring(0, 300));
             }
-            return ok({ saved: true, type: "xlsx" });
+            // Drive API PATCH response zawiera modifiedTime zaktualizowanego pliku
+            var usPatchJson = JSON.parse(usPatchResp.getContentText());
+            return ok({ saved: true, type: "xlsx", modifiedAt: usPatchJson.modifiedTime || usFile.getLastUpdated().toISOString() });
           }
         } catch(usEx) {
           return err("Błąd zapisu: " + usEx.message);

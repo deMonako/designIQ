@@ -412,6 +412,14 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     return makeSnap(rows) !== savedSnap;
   }, [rows, savedSnap]);
 
+  // Auto-wyczyść "Zapisano" po 2 sekundach
+  useEffect(() => {
+    if (configSaveResult === "ok") {
+      const t = setTimeout(() => setConfigSaveResult(null), 2000);
+      return () => clearTimeout(t);
+    }
+  }, [configSaveResult]);
+
   const project = projects.find(p => p.id === selectedProjectId) ?? null;
 
   const effectiveMappings = useMemo(
@@ -662,7 +670,9 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       } else {
         toast.warning("Wysłano do XLSX na Drive — formatowanie zostało zastąpione. Skonwertuj plik na Google Sheets aby zachować kolory i style.");
       }
-      setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : d);
+      // Użyj rzeczywistej daty Drive z odpowiedzi GAS; importedAt = teraz (właśnie wysłaliśmy)
+      const newModified = result.modifiedAt || new Date().toISOString();
+      setXlsxDrive(d => d ? { ...d, modifiedAt: newModified, importedAt: newModified } : d);
     } catch (e) {
       toast.error("Błąd wysyłania do Drive: " + (e?.message ?? "nieznany"));
     } finally {
@@ -896,10 +906,15 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               disabled={xlsxLoading || !xlsxDrive?.found}
               className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg disabled:opacity-40 transition-colors ${
                 xlsxDrive?.found
-                  ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 animate-pulse hover:animate-none"
+                  ? `border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:animate-none ${
+                      !xlsxDrive.importedAt || new Date(xlsxDrive.modifiedAt) > new Date(xlsxDrive.importedAt)
+                        ? "animate-pulse" : ""
+                    }`
                   : "border-slate-200 text-slate-400"
               }`}
-              title={xlsxDrive?.found ? `Sheets na Drive: ${new Date(xlsxDrive.modifiedAt).toLocaleString("pl")}` : "Brak pliku instalacja w folderze projektu na Drive"}
+              title={xlsxDrive?.found
+                ? `Na Drive: ${new Date(xlsxDrive.modifiedAt).toLocaleString("pl")}${xlsxDrive.importedAt ? ` | Wczytano: ${new Date(xlsxDrive.importedAt).toLocaleString("pl")}` : " | Nie wczytano"}`
+                : "Brak pliku instalacja w folderze projektu na Drive"}
             >
               {xlsxLoading
                 ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wczytuję…</>
@@ -928,17 +943,21 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
             {/* Separator */}
             <div className="w-px h-5 bg-slate-200 mx-1" />
 
-            {/* Zapisz / Reset */}
-            <AnimatePresence>
-              {configSaveResult === "ok" && (
-                <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600 whitespace-nowrap">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Zapisano
-                </motion.span>
-              )}
-              {configSaveResult === "err" && (
-                <span className="flex items-center gap-1 text-xs text-red-500 whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" /> Błąd</span>
-              )}
-            </AnimatePresence>
+            {/* Zapisz / Reset — fixed-width slot na status żeby nie przesuwał przycisków */}
+            <div className="w-16 flex items-center justify-end flex-shrink-0">
+              <AnimatePresence>
+                {configSaveResult === "ok" && (
+                  <motion.span key="ok" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-green-600 whitespace-nowrap">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Zapisano
+                  </motion.span>
+                )}
+                {configSaveResult === "err" && (
+                  <motion.span key="err" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex items-center gap-1 text-xs text-red-500 whitespace-nowrap">
+                    <AlertCircle className="w-3.5 h-3.5" /> Błąd
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
             <button
               onClick={() => setResetConfirmOpen(true)}
               disabled={!project}

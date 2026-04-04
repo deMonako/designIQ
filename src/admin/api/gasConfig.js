@@ -26,8 +26,8 @@ export const GAS_CONFIG = {
    */
   driveFolderId: "1tSaZwW144N9qiPyLPffd_mgj0f9jZtT6",
 
-  /** Limit czasu żądania w ms */
-  requestTimeout: 30000,
+  /** Limit czasu żądania w ms (Drive ops mogą trwać długo — SpreadsheetApp, eksport) */
+  requestTimeout: 60000,
 
   /** Wersja API */
   apiVersion: "1",
