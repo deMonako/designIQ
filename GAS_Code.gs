@@ -1372,68 +1372,33 @@ function doPost(e) {
             if (!body.rows) return err("Brak rows dla pliku Sheets");
             var usSS = SpreadsheetApp.openById(usFile.getId());
             var usSheet = usSS.getSheetByName("Instalacja");
-
+            // Utwórz zakładkę jeśli nie istnieje
             if (!usSheet) {
-              // Pierwsza inicjalizacja zakładki — pełny zapis (brak istniejącego formatowania)
               usSheet = usSS.insertSheet("Instalacja");
-              var usHeaders = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
-              var usInitData = [usHeaders];
-              for (var ri0 = 0; ri0 < body.rows.length; ri0++) {
-                var ur0 = body.rows[ri0];
-                usInitData.push([ri0+1, ur0.tag||"", ur0.typ||"", ur0.rola||"", ur0.kondygnacja||"", ur0.pomieszczenie||"", ur0.przewód||"", ur0.wysokość||"", ur0.wariant||"", ur0.kolor||"", ur0.uwagi||""]);
-              }
-              usSheet.getRange(1,1,usInitData.length,usHeaders.length).setValues(usInitData);
-              usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
-            } else {
-              // Zakładka istnieje — aktualizuj komórki bez czyszczenia (formatowanie zostaje)
-              // Identyfikacja: Symbol (tag) pierwsza, Lp jako tiebreaker dla duplikatów.
-              // Stary kod (composite key) nadpisywał mapę przy duplikatach → oba trafiały w jeden wiersz.
-              var usLastRow = usSheet.getLastRow();
-              // Czytaj kolumny A(Lp) i B(Symbol/Nazwa) naraz
-              var usBySymbol = {}; // tag → [{rowNum, sheetLp}]
-              if (usLastRow >= 2) {
-                var usIdentCols = usSheet.getRange(2, 1, usLastRow - 1, 2).getValues(); // A:B
-                for (var ti = 0; ti < usIdentCols.length; ti++) {
-                  var iLp  = parseInt(String(usIdentCols[ti][0] || "")) || 0; // col A (Lp)
-                  var iTag = String(usIdentCols[ti][1] || "").trim();          // col B (Symbol)
-                  if (!iTag) continue;
-                  if (!usBySymbol[iTag]) usBySymbol[iTag] = [];
-                  usBySymbol[iTag].push({ rowNum: ti + 2, sheetLp: iLp });
-                }
-              }
-              var usUpdated = 0;
-              for (var ri1 = 0; ri1 < body.rows.length; ri1++) {
-                var ur1 = body.rows[ri1];
-                var payloadTag = String(ur1.tag || "").trim();
-                var payloadLp  = parseInt(ur1.lp || 0) || (ri1 + 1); // fallback: pozycja w tablicy
-                var candidates = usBySymbol[payloadTag] || [];
-                if (candidates.length === 0) continue;
-                var rowNum;
-                if (candidates.length === 1) {
-                  rowNum = candidates[0].rowNum; // unikalny symbol
-                } else {
-                  // Duplikaty — znajdź sheet-wiersz o Lp najbliższym payloadLp
-                  var best = candidates[0];
-                  for (var ci = 1; ci < candidates.length; ci++) {
-                    if (Math.abs(candidates[ci].sheetLp - payloadLp) < Math.abs(best.sheetLp - payloadLp)) {
-                      best = candidates[ci];
-                    }
-                  }
-                  rowNum = best.rowNum;
-                }
-                // Zaktualizuj Lp (col A) + dane (cols C–K)
-                usSheet.getRange(rowNum, 1, 1, 1).setValue(payloadLp);
-                // Kolumny C–K: Grupa(3), Rola(4), Piętro(5), Pomieszczenie(6),
-                //              Przewód(7), Wysokość(8), Opis(9), Kolor(10), Komentarz(11)
-                usSheet.getRange(rowNum, 3, 1, 9).setValues([[
-                  ur1.typ||"", ur1.rola||"", ur1.kondygnacja||"", ur1.pomieszczenie||"",
-                  ur1.przewód||"", ur1.wysokość||"", ur1.wariant||"", ur1.kolor||"", ur1.uwagi||""
-                ]]);
-                usUpdated++;
-              }
-              return ok({ saved: true, updated: usUpdated, total: body.rows.length, type: "sheets", modifiedAt: usFile.getLastUpdated().toISOString() });
+              var usHeaders = ["ID","Symbol","Typ","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
+              usSheet.getRange(1, 1, 1, usHeaders.length).setValues([usHeaders]).setFontWeight("bold");
             }
-            return ok({ saved: true, type: "sheets", modifiedAt: usFile.getLastUpdated().toISOString() });
+            // Brute-force write — wiersz i → row i+2 (po nagłówku)
+            // Kolejność jest ważna, nie dopasowujemy po kluczu
+            var usLastRow = usSheet.getLastRow();
+            var usPayload = [];
+            for (var ri1 = 0; ri1 < body.rows.length; ri1++) {
+              var ur1 = body.rows[ri1];
+              usPayload.push([
+                parseInt(ur1.lp||0)||(ri1+1),
+                ur1.tag||"", ur1.typ||"", ur1.rola||"",
+                ur1.kondygnacja||"", ur1.pomieszczenie||"",
+                ur1.przewód||"", ur1.wysokość||"", ur1.wariant||"", ur1.kolor||"", ur1.uwagi||""
+              ]);
+            }
+            if (usPayload.length > 0) {
+              usSheet.getRange(2, 1, usPayload.length, 11).setValues(usPayload);
+            }
+            // Wyczyść nadmiarowe wiersze (poprzednie dane dłuższe niż obecne)
+            if (usLastRow > usPayload.length + 1) {
+              usSheet.getRange(usPayload.length + 2, 1, usLastRow - usPayload.length - 1, 11).clearContent();
+            }
+            return ok({ saved: true, updated: usPayload.length, total: body.rows.length, type: "sheets", modifiedAt: usFile.getLastUpdated().toISOString() });
           } else {
             // Natywny XLSX — nadpisz zawartość przez Drive API PATCH (ten sam fileId, bez kosza)
             // Uwaga: zastępuje całą zawartość (formatowanie zostaje utracone)

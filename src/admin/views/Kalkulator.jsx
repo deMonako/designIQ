@@ -763,18 +763,12 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       .sort((a, b) => {
         if (sortKey === "default") {
           // Typ → Symbol → Rola → Piętro → Pomieszczenie
-          // Dla tego samego symbolu tiebreaker = Lp (kolejność drag-and-drop)
           const keys = ["typ", "tag", "rola", "kondygnacja", "pomieszczenie"];
           for (const k of keys) {
             const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
             if (cmp !== 0) return cmp;
           }
           return (lpMap[a._id] ?? 0) - (lpMap[b._id] ?? 0);
-        }
-        if (sortKey === "lp") {
-          const al = lpMap[a._id] ?? 0;
-          const bl = lpMap[b._id] ?? 0;
-          return sortDir === "asc" ? al - bl : bl - al;
         }
         const av = (a[sortKey] ?? "").toString().toLowerCase();
         const bv = (b[sortKey] ?? "").toString().toLowerCase();
@@ -783,8 +777,13 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   }, [rows, deferredSearch, filterTyp, filterFloor, filterRoom, filterMasterOnly, filterNeedsAttention, sortKey, sortDir]);
 
   const handleSort = (key) => {
-    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey("default"); setSortDir("asc"); } // 3. klik = reset
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
   };
 
   const updateRow = useCallback((id, updater) => {
@@ -1024,7 +1023,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               <table className="w-full text-sm" style={{ minWidth: "760px" }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
-                    <th className="text-center px-2 py-1.5 w-10">Lp</th>
+                    <th className="text-center px-2 py-1.5 w-10">ID</th>
                     {activeCols.map(col => (
                       <th
                         key={col.key}
