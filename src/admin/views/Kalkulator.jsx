@@ -395,7 +395,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [configSaveResult, setConfigSaveResult] = useState(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [savedSnap, setSavedSnap] = useState(null);
-  const [xlsxDrive, setXlsxDrive] = useState(null); // { found, modifiedAt } — info o XLSX na Drive
+  const [xlsxDrive, setXlsxDrive] = useState(null); // { found, modifiedAt, mime } — info o pliku na Drive
   const [xlsxLoading, setXlsxLoading] = useState(false);
   const [sheetsSending, setSheetsSending] = useState(false);
 
@@ -512,7 +512,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         setXlsxDrive(null);
         if (GAS_ON) {
           GAS.getInstallationXlsx(project.code)
-            .then(r => setXlsxDrive(r?.found ? { found: true, modifiedAt: r.modifiedAt } : null))
+            .then(r => setXlsxDrive(r?.found ? { found: true, modifiedAt: r.modifiedAt, mime: r.mime } : null))
             .catch(() => {});
         }
       }
@@ -657,7 +657,11 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       }));
       const result = await GAS.updateInstallationSheet(project.code, xlsxBase64, rowsPayload);
       if (!result?.saved) throw new Error(result?.error ?? "Brak potwierdzenia");
-      toast.success(`Wysłano ${sorted.length} punktów na Drive (${result.type === "sheets" ? "Google Sheets" : "XLSX"})`);
+      if (result.type === "sheets") {
+        toast.success(`Zaktualizowano ${result.updated ?? sorted.length} punktów w Google Sheets (formatowanie zachowane)`);
+      } else {
+        toast.warning("Wysłano do XLSX na Drive — formatowanie zostało zastąpione. Skonwertuj plik na Google Sheets aby zachować kolory i style.");
+      }
       setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : d);
     } catch (e) {
       toast.error("Błąd wysyłania do Drive: " + (e?.message ?? "nieznany"));
@@ -904,8 +908,17 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
             <button
               onClick={handleExportToSheets}
               disabled={sheetsSending || !xlsxDrive?.found}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-40 transition-colors"
-              title={xlsxDrive?.found ? "Wyślij aktualne dane z panelu do zakładki Instalacja w Google Sheets" : "Brak pliku instalacja w folderze projektu na Drive"}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg disabled:opacity-40 transition-colors ${
+                xlsxDrive?.found && xlsxDrive.mime !== "application/vnd.google-apps.spreadsheet"
+                  ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                  : "border-slate-200 text-slate-500 hover:border-emerald-400 hover:text-emerald-700"
+              }`}
+              title={
+                !xlsxDrive?.found ? "Brak pliku instalacja w folderze projektu na Drive"
+                : xlsxDrive.mime !== "application/vnd.google-apps.spreadsheet"
+                  ? "Plik XLSX — zapis zastąpi formatowanie. Skonwertuj na Google Sheets (prawym przyciskiem w Drive → Otwórz za pomocą → Google Sheets → Plik → Zapisz jako Google Sheets)"
+                  : "Wyślij aktualne dane z panelu — zaktualizuje tylko dane, formatowanie zostaje"
+              }
             >
               {sheetsSending
                 ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wysyłam…</>

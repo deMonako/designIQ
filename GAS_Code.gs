@@ -722,6 +722,8 @@ function doGet(e) {
           found: true,
           xlsxBase64: Utilities.base64Encode(ixBlob.getBytes()),
           modifiedAt: ixFile.getLastUpdated().toISOString(),
+          mime: ixFile.getMimeType(),
+          fileId: ixFile.getId(),
         });
       }
 
@@ -1347,23 +1349,53 @@ function doPost(e) {
         var usMime = usFile.getMimeType();
         try {
           if (usMime === MimeType.GOOGLE_SHEETS) {
-            // Google Sheets — zapisuj komórkami przez SpreadsheetApp
+            // Google Sheets — aktualizuj komórkami bez czyszczenia arkusza (zachowuje formatowanie)
             if (!body.rows) return err("Brak rows dla pliku Sheets");
             var usSS = SpreadsheetApp.openById(usFile.getId());
             var usSheet = usSS.getSheetByName("Instalacja");
-            if (!usSheet) { usSheet = usSS.insertSheet("Instalacja"); } else { usSheet.clearContents(); }
-            var usHeaders = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
-            var usData = [usHeaders];
-            var usRows = body.rows;
-            for (var ri = 0; ri < usRows.length; ri++) {
-              var ur = usRows[ri];
-              usData.push([ri+1, ur.tag||"", ur.typ||"", ur.rola||"", ur.kondygnacja||"", ur.pomieszczenie||"", ur.przewód||"", ur.wysokość||"", ur.wariant||"", ur.kolor||"", ur.uwagi||""]);
+
+            if (!usSheet) {
+              // Pierwsza inicjalizacja zakładki — pełny zapis (brak istniejącego formatowania)
+              usSheet = usSS.insertSheet("Instalacja");
+              var usHeaders = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
+              var usInitData = [usHeaders];
+              for (var ri0 = 0; ri0 < body.rows.length; ri0++) {
+                var ur0 = body.rows[ri0];
+                usInitData.push([ri0+1, ur0.tag||"", ur0.typ||"", ur0.rola||"", ur0.kondygnacja||"", ur0.pomieszczenie||"", ur0.przewód||"", ur0.wysokość||"", ur0.wariant||"", ur0.kolor||"", ur0.uwagi||""]);
+              }
+              usSheet.getRange(1,1,usInitData.length,usHeaders.length).setValues(usInitData);
+              usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
+            } else {
+              // Zakładka istnieje — aktualizuj tylko komórki pasujące po tagu (col B = Nazwa)
+              // Nie używamy clearContents — formatowanie, kolory, style zostają nienaruszone
+              var usLastRow = usSheet.getLastRow();
+              var usCellTagToRow = {};
+              if (usLastRow >= 2) {
+                var usTagVals = usSheet.getRange(2, 2, usLastRow - 1, 1).getValues();
+                for (var ti = 0; ti < usTagVals.length; ti++) {
+                  var tVal = String(usTagVals[ti][0]).trim();
+                  if (tVal) usCellTagToRow[tVal] = ti + 2; // wiersz 1-indexed
+                }
+              }
+              var usUpdated = 0;
+              for (var ri1 = 0; ri1 < body.rows.length; ri1++) {
+                var ur1 = body.rows[ri1];
+                var rowNum = usCellTagToRow[ur1.tag || ""];
+                if (!rowNum) continue;
+                // Kolumny C–K: Grupa(3), Rola(4), Piętro(5), Pomieszczenie(6),
+                //              Przewód(7), Wysokość(8), Opis(9), Kolor(10), Komentarz(11)
+                usSheet.getRange(rowNum, 3, 1, 9).setValues([[
+                  ur1.typ||"", ur1.rola||"", ur1.kondygnacja||"", ur1.pomieszczenie||"",
+                  ur1.przewód||"", ur1.wysokość||"", ur1.wariant||"", ur1.kolor||"", ur1.uwagi||""
+                ]]);
+                usUpdated++;
+              }
+              return ok({ saved: true, updated: usUpdated, total: body.rows.length, type: "sheets" });
             }
-            usSheet.getRange(1,1,usData.length,usHeaders.length).setValues(usData);
-            usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
-            return ok({ saved: true, rows: usRows.length, type: "sheets" });
+            return ok({ saved: true, type: "sheets" });
           } else {
-            // Natywny XLSX — nadpisz zawartość przez Drive API PATCH (bez kasowania, ten sam fileId)
+            // Natywny XLSX — nadpisz zawartość przez Drive API PATCH (ten sam fileId, bez kosza)
+            // Uwaga: zastępuje całą zawartość (formatowanie zostaje utracone)
             if (!body.xlsxBase64) return err("Brak xlsxBase64 dla pliku XLSX");
             var usBytes = Utilities.base64Decode(body.xlsxBase64);
             var usPatchUrl = "https://www.googleapis.com/upload/drive/v3/files/" + usFile.getId() + "?uploadType=media";
