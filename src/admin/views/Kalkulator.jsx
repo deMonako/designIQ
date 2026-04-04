@@ -83,7 +83,7 @@ function attribsToRows(attribs, floorName, typMappings) {
 // ── XLSX export ───────────────────────────────────────────────────────────────
 
 function defaultSortRows(rows) {
-  const keys = ["typ", "tag", "rola"];
+  const keys = ["typ", "tag", "rola", "kondygnacja", "pomieszczenie"];
   return [...rows].sort((a, b) => {
     for (const k of keys) {
       const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
@@ -546,11 +546,16 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         }
         // Przywróć kolejność z config.rowOrder (drag-and-drop)
         if (cfg?.rowOrder?.length > 0 && finalRows.length > 0) {
+          // Przywróć kolejność zapisaną przez drag-and-drop
           const idMap = Object.fromEntries(finalRows.map(r => [r._id, r]));
           const ordered = cfg.rowOrder.map(id => idMap[id]).filter(Boolean);
           const orderedSet = new Set(cfg.rowOrder);
           const remainder = finalRows.filter(r => !orderedSet.has(r._id));
           finalRows = [...ordered, ...remainder];
+        } else {
+          // Brak zapisanej kolejności → sortuj domyślnie (Typ→Symbol→Rola→…)
+          // żeby Lp 1..N odpowiadało widokowi domyślnemu
+          finalRows = defaultSortRows(finalRows);
         }
         setRows(finalRows);
         setSavedSnap(makeSnap(finalRows));
@@ -746,9 +751,10 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
           loaded.push(...attribsToRows(floor.attribs, floor.name, effectiveMappingsRef.current.typMappings));
         }
       }
-      setRows(loaded);
-      setSavedSnap(makeSnap(loaded));
-      if (loaded.length === 0) setLoadError("Brak danych instalacyjnych.");
+      const sorted = defaultSortRows(loaded);
+      setRows(sorted);
+      setSavedSnap(makeSnap(sorted));
+      if (sorted.length === 0) setLoadError("Brak danych instalacyjnych.");
     } catch (e) {
       setLoadError("Błąd ładowania: " + (e?.message ?? "nieznany"));
     } finally {
