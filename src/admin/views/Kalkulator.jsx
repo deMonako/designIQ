@@ -666,24 +666,36 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         if (!bySymbol[tag]) bySymbol[tag] = [];
         bySymbol[tag].push({ lp: isNaN(lp) ? 0 : lp, val });
       }
-      let updated = 0;
-      setRows(prev => prev.map((r, i) => {
-        const panelLp = i + 1;
-        const candidates = bySymbol[r.tag] || [];
-        if (candidates.length === 0) return r;
-        let xl;
-        if (candidates.length === 1) {
-          xl = candidates[0].val; // jednoznaczny symbol
-        } else {
-          // Duplikaty — wybierz kandydata o Lp najbliższym panelLp (preferuj dokładne trafienie)
-          xl = candidates.reduce((best, c) =>
-            Math.abs(c.lp - panelLp) < Math.abs(best.lp - panelLp) ? c : best
-          ).val;
-        }
-        updated++;
-        return { ...r, ...xl };
-      }));
-      toast.success(`Wczytano z Drive — zaktualizowano ${updated} punktów`);
+
+      // Dopasuj każdy wiersz panelu do wpisu w Drive (symbol first, Lp tiebreaker)
+      // i zbierz też driveLp żeby potem posortować rows zgodnie z kolejnością z Drive
+      setRows(prev => {
+        const matchedLp = {}; // _id → driveLp (do reorder)
+        const updatedData = {}; // _id → nowe pola
+
+        prev.forEach((r, i) => {
+          const panelLp = i + 1;
+          const candidates = bySymbol[r.tag] || [];
+          if (candidates.length === 0) return;
+          const match = candidates.length === 1
+            ? candidates[0]
+            : candidates.reduce((best, c) =>
+                Math.abs(c.lp - panelLp) < Math.abs(best.lp - panelLp) ? c : best
+              );
+          matchedLp[r._id] = match.lp;
+          updatedData[r._id] = match.val;
+        });
+
+        const updated = Object.keys(updatedData).length;
+        // Aktualizuj pola i posortuj według Lp z Drive (niezmatchowane lądują na końcu)
+        const result = prev
+          .map(r => updatedData[r._id] ? { ...r, ...updatedData[r._id] } : r)
+          .sort((a, b) => (matchedLp[a._id] ?? Infinity) - (matchedLp[b._id] ?? Infinity));
+
+        // toast musi wyjść poza setRows (render)
+        setTimeout(() => toast.success(`Wczytano z Drive — zaktualizowano ${updated} punktów`), 0);
+        return result;
+      });
       setXlsxDrive(d => ({ ...d, importedAt: new Date().toISOString() }));
     } catch (e) {
       toast.error("Błąd wczytywania XLSX: " + (e?.message ?? "nieznany"));
