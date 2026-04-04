@@ -725,6 +725,33 @@ function doGet(e) {
         });
       }
 
+      // Diagnostyka: listuje pliki w folderze projektu i testuje SpreadsheetApp
+      // GET ?action=diagInstallation&projectCode=DOKTOR
+      case "diagInstallation": {
+        var dCode = e.parameter.projectCode;
+        if (!dCode) return err("Brak projectCode");
+        var dFolder = getProjectFolder(dCode);
+        if (!dFolder) return err("Brak folderu projektu: " + dCode);
+        var dFiles = [];
+        var dIter = dFolder.getFiles();
+        while (dIter.hasNext()) {
+          var df = dIter.next();
+          dFiles.push({ name: df.getName(), mime: df.getMimeType(), id: df.getId() });
+        }
+        // Próbuj otworzyć jako Spreadsheet
+        var dSheetsFile = dFiles.find(function(f) { return f.mime === MimeType.GOOGLE_SHEETS; });
+        var dSheetTest = null;
+        if (dSheetsFile) {
+          try {
+            var dSS = SpreadsheetApp.openById(dSheetsFile.id);
+            dSheetTest = "OK — arkusze: " + dSS.getSheets().map(function(s) { return s.getName(); }).join(", ");
+          } catch(dEx) {
+            dSheetTest = "BŁĄD: " + dEx.message;
+          }
+        }
+        return ok({ files: dFiles, spreadsheetTest: dSheetTest });
+      }
+
       // Odczytuje config.json z folderu projektu (konfiguracja kalkulatora)
       // GET ?action=getKalkulatorConfig&projectCode=KOW-2026-001
       case "getKalkulatorConfig": {
@@ -1307,7 +1334,6 @@ function doPost(e) {
         if (!usFolder) return err("Brak folderu projektu: " + body.projectCode);
 
         // Szukaj pliku Google Sheets — próbuj obie nazwy (z i bez .xlsx)
-        // Drive zachowuje nazwę instalacja_CODE.xlsx nawet po konwersji do Sheets
         var usFile = null;
         var usTry = ["instalacja_" + body.projectCode, "instalacja_" + body.projectCode + ".xlsx"];
         for (var uti = 0; uti < usTry.length && !usFile; uti++) {
@@ -1319,40 +1345,42 @@ function doPost(e) {
         }
         if (!usFile) return err("Nie znaleziono pliku Google Sheets w folderze projektu (szukano: " + usTry.join(", ") + ")");
 
-        var usSS = SpreadsheetApp.openById(usFile.getId());
+        try {
+          var usSS = SpreadsheetApp.openById(usFile.getId());
 
-        // Znajdź lub utwórz zakładkę "Instalacja"
-        var usSheet = usSS.getSheetByName("Instalacja");
-        if (!usSheet) {
-          usSheet = usSS.insertSheet("Instalacja");
-        } else {
-          usSheet.clearContents();
+          // Znajdź lub utwórz zakładkę "Instalacja"
+          var usSheet = usSS.getSheetByName("Instalacja");
+          if (!usSheet) {
+            usSheet = usSS.insertSheet("Instalacja");
+          } else {
+            usSheet.clearContents();
+          }
+
+          // Nagłówki zgodne z kolejnością eksportu XLSX
+          var usHeaders = ["Lp", "Nazwa", "Grupa", "Rola", "Piętro", "Pomieszczenie", "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz"];
+          var usData = [usHeaders];
+          var usRows = body.rows;
+          for (var ri = 0; ri < usRows.length; ri++) {
+            var ur = usRows[ri];
+            usData.push([
+              ri + 1,
+              ur.tag           || "",
+              ur.typ           || "",
+              ur.rola          || "",
+              ur.kondygnacja   || "",
+              ur.pomieszczenie || "",
+              ur.przewód       || "",
+              ur.wysokość      || "",
+              ur.wariant       || "",
+              ur.kolor         || "",
+              ur.uwagi         || "",
+            ]);
+          }
+          usSheet.getRange(1, 1, usData.length, usHeaders.length).setValues(usData);
+          usSheet.getRange(1, 1, 1, usHeaders.length).setFontWeight("bold");
+        } catch(usEx) {
+          return err("Błąd SpreadsheetApp: " + usEx.message);
         }
-
-        // Nagłówki zgodne z kolejnością eksportu XLSX
-        var usHeaders = ["Lp", "Nazwa", "Grupa", "Rola", "Piętro", "Pomieszczenie", "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz"];
-        var usData = [usHeaders];
-        var usRows = body.rows;
-        for (var ri = 0; ri < usRows.length; ri++) {
-          var ur = usRows[ri];
-          usData.push([
-            ri + 1,
-            ur.tag           || "",
-            ur.typ           || "",
-            ur.rola          || "",
-            ur.kondygnacja   || "",
-            ur.pomieszczenie || "",
-            ur.przewód       || "",
-            ur.wysokość      || "",
-            ur.wariant       || "",
-            ur.kolor         || "",
-            ur.uwagi         || "",
-          ]);
-        }
-        usSheet.getRange(1, 1, usData.length, usHeaders.length).setValues(usData);
-
-        // Pogrub wiersz nagłówka
-        usSheet.getRange(1, 1, 1, usHeaders.length).setFontWeight("bold");
 
         return ok({ saved: true, rows: usRows.length });
       }
