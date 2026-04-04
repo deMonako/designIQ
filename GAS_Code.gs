@@ -422,21 +422,27 @@ function getDriveFiles(folderName) {
   var folder = getProjectFolder(folderName);
   if (!folder) return [];
   try {
-    var files  = folder.getFiles();
-    var result = [];
-    while (files.hasNext()) {
-      var f = files.next();
-      result.push({
-        id:             f.getId(),
-        name:           f.getName(),
-        mimeType:       f.getMimeType(),
-        size:           f.getSize(),
-        modifiedTime:   f.getLastUpdated().toISOString(),
-        webViewLink:    f.getUrl(),
-        webContentLink: "https://drive.google.com/uc?id=" + f.getId() + "&export=download"
-      });
-    }
-    return result;
+    // Drive REST API — zwraca createdTime i modifiedTime bez efektów ubocznych
+    var q = encodeURIComponent("'" + folder.getId() + "' in parents and trashed=false");
+    var fields = "files(id,name,mimeType,size,modifiedTime,createdTime,webViewLink)";
+    var resp = UrlFetchApp.fetch(
+      "https://www.googleapis.com/drive/v3/files?q=" + q + "&fields=" + fields + "&pageSize=200",
+      { headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() }, muteHttpExceptions: true }
+    );
+    if (resp.getResponseCode() !== 200) return [];
+    var data = JSON.parse(resp.getContentText());
+    return (data.files || []).map(function(f) {
+      return {
+        id:             f.id,
+        name:           f.name,
+        mimeType:       f.mimeType,
+        size:           f.size || 0,
+        modifiedTime:   f.modifiedTime || "",
+        createdTime:    f.createdTime  || f.modifiedTime || "",
+        webViewLink:    f.webViewLink  || "",
+        webContentLink: "https://drive.google.com/uc?id=" + f.id + "&export=download"
+      };
+    });
   } catch(e) { return []; }
 }
 
@@ -1285,7 +1291,7 @@ function doPost(e) {
             description:   snap ? snap.description : "",
             url:           f.webViewLink,
             driveId:       f.id,
-            date:          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd"),
+            date:          (f.createdTime || f.modifiedTime || "").substring(0, 10),
             clientVisible: isSystem ? false : (snap ? snap.clientVisible : true),
             uploadedBy:    snap ? snap.uploadedBy : "designIQ",
           });
