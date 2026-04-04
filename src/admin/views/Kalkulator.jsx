@@ -599,32 +599,40 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       }
       const ws = wb.Sheets[bestSheet];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      // Buduj słownik tag → wartości (pomijamy header row)
+      // Buduj słownik kluczem złożonym Nazwa|Piętro|Pomieszczenie (obsługa duplikatów tagów)
+      // Fallback do samego tagu gdy klucz złożony nie trafi
+      const byKey = {};
       const byTag = {};
       for (const row of data.slice(1)) {
         const tag = String(row[1] || "").trim();
         if (!tag) continue;
-        byTag[tag] = {
+        const kondygnacja = String(row[4] || "").trim();
+        const pomieszczenie = String(row[5] || "").trim();
+        const val = {
           typ: String(row[2] || "").trim(),
           rola: String(row[3] || "").trim(),
-          kondygnacja: String(row[4] || "").trim(),
-          pomieszczenie: String(row[5] || "").trim(),
+          kondygnacja,
+          pomieszczenie,
           przewód: String(row[6] || "").trim(),
           wysokość: String(row[7] || "").trim(),
           wariant: String(row[8] || "").trim(),
           kolor: String(row[9] || "").trim(),
           uwagi: String(row[10] || "").trim(),
         };
+        byKey[`${tag}|${kondygnacja}|${pomieszczenie}`] = val;
+        byTag[tag] = val; // fallback (nadpisywany, ale używany tylko gdy klucz złożony nie pasuje)
       }
       let updated = 0;
       setRows(prev => {
-        const knownTags = new Set(prev.map(r => r.tag));
-        const unknownTags = Object.keys(byTag).filter(t => !knownTags.has(t));
-        if (unknownTags.length > 0) {
-          toast.warning(`Pominięto ${unknownTags.length} nieznanych punktów z Sheets (brak współrzędnych): ${unknownTags.slice(0, 5).join(", ")}${unknownTags.length > 5 ? "…" : ""}`);
+        const knownKeys = new Set(prev.map(r => `${r.tag}|${r.kondygnacja || ""}|${r.pomieszczenie || ""}`));
+        const unknownKeys = Object.keys(byKey).filter(k => !knownKeys.has(k));
+        if (unknownKeys.length > 0) {
+          const unknownNames = [...new Set(unknownKeys.map(k => k.split("|")[0]))];
+          toast.warning(`Pominięto ${unknownKeys.length} nieznanych punktów z Sheets: ${unknownNames.slice(0, 5).join(", ")}${unknownNames.length > 5 ? "…" : ""}`);
         }
         return prev.map(r => {
-          const xl = byTag[r.tag];
+          const compositeKey = `${r.tag}|${r.kondygnacja || ""}|${r.pomieszczenie || ""}`;
+          const xl = byKey[compositeKey] ?? byTag[r.tag];
           if (!xl) return r;
           updated++;
           return { ...r, ...xl };

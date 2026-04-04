@@ -1385,21 +1385,28 @@ function doPost(e) {
               usSheet.getRange(1,1,usInitData.length,usHeaders.length).setValues(usInitData);
               usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
             } else {
-              // Zakładka istnieje — aktualizuj tylko komórki pasujące po tagu (col B = Nazwa)
+              // Zakładka istnieje — aktualizuj komórki kluczem złożonym Nazwa|Piętro|Pomieszczenie
               // Nie używamy clearContents — formatowanie, kolory, style zostają nienaruszone
               var usLastRow = usSheet.getLastRow();
-              var usCellTagToRow = {};
+              // Czytaj kolumny B(Nazwa), E(Piętro), F(Pomieszczenie) naraz
+              var usKeyToRow = {};  // "tag|kondygnacja|pomieszczenie" → numer wiersza
+              var usTagToRow = {};  // fallback: sam tag → ostatni wiersz (dla unikalnych tagów)
               if (usLastRow >= 2) {
-                var usTagVals = usSheet.getRange(2, 2, usLastRow - 1, 1).getValues();
-                for (var ti = 0; ti < usTagVals.length; ti++) {
-                  var tVal = String(usTagVals[ti][0]).trim();
-                  if (tVal) usCellTagToRow[tVal] = ti + 2; // wiersz 1-indexed
+                var usIdentCols = usSheet.getRange(2, 2, usLastRow - 1, 5).getValues(); // B:F
+                for (var ti = 0; ti < usIdentCols.length; ti++) {
+                  var iTag  = String(usIdentCols[ti][0] || "").trim(); // col B
+                  var iPiet = String(usIdentCols[ti][3] || "").trim(); // col E
+                  var iPom  = String(usIdentCols[ti][4] || "").trim(); // col F
+                  if (!iTag) continue;
+                  usKeyToRow[iTag + "|" + iPiet + "|" + iPom] = ti + 2;
+                  usTagToRow[iTag] = ti + 2;
                 }
               }
               var usUpdated = 0;
               for (var ri1 = 0; ri1 < body.rows.length; ri1++) {
                 var ur1 = body.rows[ri1];
-                var rowNum = usCellTagToRow[ur1.tag || ""];
+                var compositeKey = (ur1.tag||"") + "|" + (ur1.kondygnacja||"") + "|" + (ur1.pomieszczenie||"");
+                var rowNum = usKeyToRow[compositeKey] || usTagToRow[ur1.tag || ""];
                 if (!rowNum) continue;
                 // Kolumny C–K: Grupa(3), Rola(4), Piętro(5), Pomieszczenie(6),
                 //              Przewód(7), Wysokość(8), Opis(9), Kolor(10), Komentarz(11)
