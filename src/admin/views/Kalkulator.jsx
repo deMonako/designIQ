@@ -155,7 +155,7 @@ function toDxfUnicode(str) {
 }
 
 function exportCDF(rows, projectName = "projekt") {
-  const q = (v) => `'${toDxfUnicode(v ?? "")}'`;
+  const q = (v) => `'${toDxfUnicode((v ?? "").trim())}'`;
 
   const noCoords = rows.filter(r => r.X == null || r.Y == null);
   if (noCoords.length > 0) {
