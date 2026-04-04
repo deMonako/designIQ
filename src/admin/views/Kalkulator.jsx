@@ -597,7 +597,19 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       const result = await GAS.getInstallationXlsx(project.code);
       if (!result?.found || !result.xlsxBase64) { toast.error("Brak XLSX w Drive"); return; }
       const wb = XLSX.read(result.xlsxBase64, { type: "base64" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
+      // Znajdź zakładkę z najlepszym dopasowaniem tagów (col 1 = Nazwa/tag)
+      // Priorytet: "Instalacja" → zakładka z największą liczbą dopasowań → pierwsza
+      const currentTags = new Set(rows.map(r => r.tag).filter(Boolean));
+      let bestSheet = wb.SheetNames[0];
+      let bestScore = -1;
+      for (const name of wb.SheetNames) {
+        const s = wb.Sheets[name];
+        const d = XLSX.utils.sheet_to_json(s, { header: 1, defval: "" });
+        if (name === "Instalacja") { bestSheet = name; break; }
+        const score = d.slice(1).filter(r => currentTags.has(String(r[1] || "").trim())).length;
+        if (score > bestScore) { bestScore = score; bestSheet = name; }
+      }
+      const ws = wb.Sheets[bestSheet];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
       // Buduj słownik tag → wartości (pomijamy header row)
       const byTag = {};

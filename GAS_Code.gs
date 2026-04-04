@@ -687,11 +687,11 @@ function doGet(e) {
         var ixFolder = getProjectFolder(ixCode);
         if (!ixFolder) return ok({ found: false });
 
-        // Szukaj pliku: najpierw .xlsx, potem Google Sheets (bez rozszerzenia)
+        // Szukaj pliku: najpierw Google Sheets (edytowany przez użytkownika), potem .xlsx jako fallback
         var ixFile = null;
         var ixTry = [
-          "instalacja_" + ixCode + ".xlsx",
           "instalacja_" + ixCode,
+          "instalacja_" + ixCode + ".xlsx",
         ];
         for (var ni = 0; ni < ixTry.length && !ixFile; ni++) {
           var ixIter = ixFolder.getFilesByName(ixTry[ni]);
