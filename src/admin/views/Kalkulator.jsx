@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, SlidersHorizontal, Save, FolderOpen, RotateCcw, Upload, GripVertical,
+  X, SlidersHorizontal, Save, FolderOpen, RotateCcw, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as GAS from "../api/gasApi";
@@ -14,9 +14,6 @@ import { GAS_CONFIG } from "../api/gasConfig";
 import { TODAY } from "../mockData";
 import { buildCatalogFromCennikWithSpecs } from "../../lib/shoppingList/productCatalog";
 import { buildEffectiveMappings, EMPTY_KALKULATOR_SETTINGS } from "../../lib/shoppingList/kalkulatorDefaults";
-import { DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { CSS as DndCSS } from "@dnd-kit/utilities";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
@@ -341,34 +338,6 @@ function ControlDevicePicker({ value, catalog, matOptions, onChange }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SortableTableRow — wiersz tabeli z drag-and-drop
-// ─────────────────────────────────────────────────────────────────────────────
-
-function SortableTableRow({ id, children }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  return (
-    <tr
-      ref={setNodeRef}
-      style={{
-        // translate-only — DndCSS.Transform.toString dodaje scale który psuje szerokości kolumn w tabelach
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        transition: transition ?? "transform 200ms cubic-bezier(0.25, 1, 0.5, 1)",
-        opacity: isDragging ? 0.45 : 1,
-        background: isDragging ? "rgb(255 247 237)" : undefined,
-        position: "relative",
-        zIndex: isDragging ? 10 : "auto",
-      }}
-      className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors select-none"
-    >
-      <td className="px-2 py-0.5 cursor-grab active:cursor-grabbing touch-none" {...attributes} {...listeners}>
-        <GripVertical className="w-3.5 h-3.5 text-slate-300 hover:text-slate-500 transition-colors" />
-      </td>
-      {children}
-    </tr>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // EditableCell — komórka z edycją inline
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -544,19 +513,8 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         } else {
           finalRows = loaded;
         }
-        // Przywróć kolejność z config.rowOrder (drag-and-drop)
-        if (cfg?.rowOrder?.length > 0 && finalRows.length > 0) {
-          // Przywróć kolejność zapisaną przez drag-and-drop
-          const idMap = Object.fromEntries(finalRows.map(r => [r._id, r]));
-          const ordered = cfg.rowOrder.map(id => idMap[id]).filter(Boolean);
-          const orderedSet = new Set(cfg.rowOrder);
-          const remainder = finalRows.filter(r => !orderedSet.has(r._id));
-          finalRows = [...ordered, ...remainder];
-        } else {
-          // Brak zapisanej kolejności → sortuj domyślnie (Typ→Symbol→Rola→…)
-          // żeby Lp 1..N odpowiadało widokowi domyślnemu
-          finalRows = defaultSortRows(finalRows);
-        }
+        // Sortuj domyślnie (Typ→Symbol→Rola→…) — Lp 1..N odpowiada widokowi domyślnemu
+        finalRows = defaultSortRows(finalRows);
         setRows(finalRows);
         setSavedSnap(makeSnap(finalRows));
         // Sprawdź czy XLSX istnieje na Drive
@@ -604,7 +562,6 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         version: 1,
         savedAt: TODAY,
         rows: rowOverrides,
-        rowOrder: rows.map(r => r._id),
         ...(szafaData ? { szafa: szafaData } : {}),
       };
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
@@ -721,7 +678,8 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       XLSX.utils.book_append_sheet(wb, ws, "Instalacja");
       const xlsxBase64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
       // Rows JSON (dla plików Google Sheets na Drive)
-      const rowsPayload = rows.map(r => ({
+      const rowsPayload = rows.map((r, i) => ({
+        lp: i + 1,
         tag: r.tag || "", typ: r.typ || "", rola: r.rola || "",
         kondygnacja: r.kondygnacja || "", pomieszczenie: r.pomieszczenie || "",
         przewód: r.przewód || "", wysokość: r.wysokość || "",
@@ -833,23 +791,9 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     setRows(prev => prev.map(r => r._id === id ? (typeof updater === "function" ? updater(r) : { ...r, ...updater }) : r));
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const handleDragEnd = useCallback(({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    setRows(prev => {
-      const oldIndex = prev.findIndex(r => r._id === active.id);
-      const newIndex = prev.findIndex(r => r._id === over.id);
-      if (oldIndex === -1 || newIndex === -1) return prev;
-      return arrayMove(prev, oldIndex, newIndex);
-    });
-  }, []);
 
   const activeCols = COLS.filter(c => visibleCols.has(c.key));
-  const totalColSpan = activeCols.length + 5; // +5: drag, Lp, Uwaga, El.sterujący, I/O
+  const totalColSpan = activeCols.length + 4; // +4: Lp, Uwaga, El.sterujący, I/O
 
   const SortIcon = ({ col }) => {
     if (!col.sortable) return null;
@@ -1080,19 +1024,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               <table className="w-full text-sm" style={{ minWidth: "760px" }}>
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 text-xs text-slate-500 font-semibold uppercase tracking-wide border-b border-slate-200">
-                    <th className="w-6 px-2 py-1.5" title="Przeciągnij aby zmienić kolejność (Lp)" />
-                    <th
-                      className="text-center px-2 py-1.5 w-10 cursor-pointer select-none hover:text-slate-700"
-                      onClick={() => handleSort("lp")}
-                      title="Sortuj po Lp (kolejność w eksporcie)"
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        Lp
-                        {sortKey === "lp"
-                          ? sortDir === "asc" ? <ChevronUp className="w-3 h-3 text-orange-500 shrink-0" /> : <ChevronDown className="w-3 h-3 text-orange-500 shrink-0" />
-                          : <ChevronDown className="w-3 h-3 text-slate-300 shrink-0" />}
-                      </div>
-                    </th>
+                    <th className="text-center px-2 py-1.5 w-10">Lp</th>
                     {activeCols.map(col => (
                       <th
                         key={col.key}
@@ -1109,67 +1041,59 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                     <th className="text-center px-3 py-1.5 w-14">I/O</th>
                   </tr>
                 </thead>
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={filteredRows.map(r => r._id)} strategy={verticalListSortingStrategy}>
-                    <tbody>
-                      {filteredRows.length === 0 ? (
-                        <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
-                      ) : filteredRows.map(row => (
-                        <SortableTableRow key={row._id} id={row._id}>
-                          {/* Lp */}
-                          <td className="px-2 py-0.5 text-xs text-slate-400 tabular-nums text-center w-10">{lpMap[row._id]}</td>
+                <tbody>
+                  {filteredRows.length === 0 ? (
+                    <tr><td colSpan={totalColSpan} className="text-center py-8 text-slate-300 text-sm">Brak wyników dla aktywnych filtrów</td></tr>
+                  ) : filteredRows.map(row => (
+                    <tr key={row._id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-colors">
+                      <td className="px-2 py-0.5 text-xs text-slate-400 tabular-nums text-center">{lpMap[row._id]}</td>
 
-                          {activeCols.map(col => (
-                            <td key={col.key} className="px-3 py-0.5">
-                              {col.key === "kolor" ? (
-                                <div className="flex items-center gap-1.5">
-                                  {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
-                                  <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
-                                </div>
-                              ) : col.key === "typ" ? (
-                                <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
-                              ) : (
-                                <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
-                              )}
-                            </td>
-                          ))}
-
-                          {/* Wymaga uwagi */}
-                          <td className="px-3 py-0.5 text-center">
-                            <input
-                              type="checkbox"
-                              checked={row.requiresAttention ?? false}
-                              onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
-                              className="rounded accent-amber-500 cursor-pointer w-4 h-4"
-                              title="Wymaga uwagi"
-                            />
-                          </td>
-
-                          {/* Element sterujący */}
-                          <td className="px-3 py-0.5 min-w-[200px]">
-                            <ControlDevicePicker
-                              value={row.controlDevice ?? "uncontrolled"}
-                              catalog={catalog}
-                              matOptions={matOptions}
-                              onChange={v => updateRow(row._id, { controlDevice: v })}
-                            />
-                          </td>
-
-                          {/* I/O */}
-                          <td className="px-3 py-0.5 text-center">
-                            {row.controlDevice !== "uncontrolled" ? (
-                              <input
-                                type="number" min="1" max="32" value={row.ioCount ?? 1}
-                                onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
-                                className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
-                              />
-                            ) : <span className="text-slate-300 text-xs">—</span>}
-                          </td>
-                        </SortableTableRow>
+                      {activeCols.map(col => (
+                        <td key={col.key} className="px-3 py-0.5">
+                          {col.key === "kolor" ? (
+                            <div className="flex items-center gap-1.5">
+                              {row.kolor && <span className="w-4 h-4 rounded border border-slate-200 shrink-0" style={{ backgroundColor: row.kolor }} />}
+                              <EditableCell value={row.kolor} onChange={v => updateRow(row._id, { kolor: v })} placeholder="#ffffff" />
+                            </div>
+                          ) : col.key === "typ" ? (
+                            <EditableCell value={row.typ} onChange={v => updateRow(row._id, { typ: v, rawTyp: v })} />
+                          ) : (
+                            <EditableCell value={row[col.key]} onChange={v => updateRow(row._id, { [col.key]: v })} />
+                          )}
+                        </td>
                       ))}
-                    </tbody>
-                  </SortableContext>
-                </DndContext>
+
+                      <td className="px-3 py-0.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={row.requiresAttention ?? false}
+                          onChange={e => updateRow(row._id, { requiresAttention: e.target.checked })}
+                          className="rounded accent-amber-500 cursor-pointer w-4 h-4"
+                          title="Wymaga uwagi"
+                        />
+                      </td>
+
+                      <td className="px-3 py-0.5 min-w-[200px]">
+                        <ControlDevicePicker
+                          value={row.controlDevice ?? "uncontrolled"}
+                          catalog={catalog}
+                          matOptions={matOptions}
+                          onChange={v => updateRow(row._id, { controlDevice: v })}
+                        />
+                      </td>
+
+                      <td className="px-3 py-0.5 text-center">
+                        {row.controlDevice !== "uncontrolled" ? (
+                          <input
+                            type="number" min="1" max="32" value={row.ioCount ?? 1}
+                            onChange={e => updateRow(row._id, { ioCount: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-12 text-center border border-slate-200 rounded px-1 py-1 text-xs outline-none focus:ring-1 focus:ring-orange-400 tabular-nums"
+                          />
+                        ) : <span className="text-slate-300 text-xs">—</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             </div>
           </div>

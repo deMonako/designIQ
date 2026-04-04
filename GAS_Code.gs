@@ -1385,29 +1385,44 @@ function doPost(e) {
               usSheet.getRange(1,1,usInitData.length,usHeaders.length).setValues(usInitData);
               usSheet.getRange(1,1,1,usHeaders.length).setFontWeight("bold");
             } else {
-              // Zakładka istnieje — aktualizuj komórki kluczem złożonym Nazwa|Piętro|Pomieszczenie
-              // Nie używamy clearContents — formatowanie, kolory, style zostają nienaruszone
+              // Zakładka istnieje — aktualizuj komórki bez czyszczenia (formatowanie zostaje)
+              // Identyfikacja: Symbol (tag) pierwsza, Lp jako tiebreaker dla duplikatów.
+              // Stary kod (composite key) nadpisywał mapę przy duplikatach → oba trafiały w jeden wiersz.
               var usLastRow = usSheet.getLastRow();
-              // Czytaj kolumny B(Nazwa), E(Piętro), F(Pomieszczenie) naraz
-              var usKeyToRow = {};  // "tag|kondygnacja|pomieszczenie" → numer wiersza
-              var usTagToRow = {};  // fallback: sam tag → ostatni wiersz (dla unikalnych tagów)
+              // Czytaj kolumny A(Lp) i B(Symbol/Nazwa) naraz
+              var usBySymbol = {}; // tag → [{rowNum, sheetLp}]
               if (usLastRow >= 2) {
-                var usIdentCols = usSheet.getRange(2, 2, usLastRow - 1, 5).getValues(); // B:F
+                var usIdentCols = usSheet.getRange(2, 1, usLastRow - 1, 2).getValues(); // A:B
                 for (var ti = 0; ti < usIdentCols.length; ti++) {
-                  var iTag  = String(usIdentCols[ti][0] || "").trim(); // col B
-                  var iPiet = String(usIdentCols[ti][3] || "").trim(); // col E
-                  var iPom  = String(usIdentCols[ti][4] || "").trim(); // col F
+                  var iLp  = parseInt(String(usIdentCols[ti][0] || "")) || 0; // col A (Lp)
+                  var iTag = String(usIdentCols[ti][1] || "").trim();          // col B (Symbol)
                   if (!iTag) continue;
-                  usKeyToRow[iTag + "|" + iPiet + "|" + iPom] = ti + 2;
-                  usTagToRow[iTag] = ti + 2;
+                  if (!usBySymbol[iTag]) usBySymbol[iTag] = [];
+                  usBySymbol[iTag].push({ rowNum: ti + 2, sheetLp: iLp });
                 }
               }
               var usUpdated = 0;
               for (var ri1 = 0; ri1 < body.rows.length; ri1++) {
                 var ur1 = body.rows[ri1];
-                var compositeKey = (ur1.tag||"") + "|" + (ur1.kondygnacja||"") + "|" + (ur1.pomieszczenie||"");
-                var rowNum = usKeyToRow[compositeKey] || usTagToRow[ur1.tag || ""];
-                if (!rowNum) continue;
+                var payloadTag = String(ur1.tag || "").trim();
+                var payloadLp  = parseInt(ur1.lp || 0) || (ri1 + 1); // fallback: pozycja w tablicy
+                var candidates = usBySymbol[payloadTag] || [];
+                if (candidates.length === 0) continue;
+                var rowNum;
+                if (candidates.length === 1) {
+                  rowNum = candidates[0].rowNum; // unikalny symbol
+                } else {
+                  // Duplikaty — znajdź sheet-wiersz o Lp najbliższym payloadLp
+                  var best = candidates[0];
+                  for (var ci = 1; ci < candidates.length; ci++) {
+                    if (Math.abs(candidates[ci].sheetLp - payloadLp) < Math.abs(best.sheetLp - payloadLp)) {
+                      best = candidates[ci];
+                    }
+                  }
+                  rowNum = best.rowNum;
+                }
+                // Zaktualizuj Lp (col A) + dane (cols C–K)
+                usSheet.getRange(rowNum, 1, 1, 1).setValue(payloadLp);
                 // Kolumny C–K: Grupa(3), Rola(4), Piętro(5), Pomieszczenie(6),
                 //              Przewód(7), Wysokość(8), Opis(9), Kolor(10), Komentarz(11)
                 usSheet.getRange(rowNum, 3, 1, 9).setValues([[
