@@ -638,13 +638,16 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       }
       const ws = wb.Sheets[bestSheet];
       const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-      // Dopasowanie po Lp (kolumna 0) — pozycja w tablicy rows (1-based)
-      // Lp jest jednoznaczne nawet dla duplikatów tagów
-      const byLp = {};
+      // Algorytm dopasowania: Symbol (tag) pierwszy — jednoznaczne symbole trafiają bez Lp.
+      // Dla duplikatów (kilka wierszy w Drive o tym samym symbolu) tiebreaker = Lp (pozycja).
+      // Dzięki temu zamiana kolejności AUD1↔AUD2 w panelu NIE resetuje ich przy imporcie,
+      // ale 6x OS14 jest dopasowanych pozycyjnie.
+      const bySymbol = {}; // tag → [{lp, val}]
       for (const row of data.slice(1)) {
         const lp = parseInt(String(row[0] || "").trim());
-        if (!lp || isNaN(lp)) continue;
-        byLp[lp] = {
+        const tag = String(row[1] || "").trim();
+        if (!tag) continue;
+        const val = {
           typ: String(row[2] || "").trim(),
           rola: String(row[3] || "").trim(),
           kondygnacja: String(row[4] || "").trim(),
@@ -655,12 +658,23 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
           kolor: String(row[9] || "").trim(),
           uwagi: String(row[10] || "").trim(),
         };
+        if (!bySymbol[tag]) bySymbol[tag] = [];
+        bySymbol[tag].push({ lp: isNaN(lp) ? 0 : lp, val });
       }
       let updated = 0;
       setRows(prev => prev.map((r, i) => {
-        const lp = i + 1;
-        const xl = byLp[lp];
-        if (!xl) return r;
+        const panelLp = i + 1;
+        const candidates = bySymbol[r.tag] || [];
+        if (candidates.length === 0) return r;
+        let xl;
+        if (candidates.length === 1) {
+          xl = candidates[0].val; // jednoznaczny symbol
+        } else {
+          // Duplikaty — wybierz kandydata o Lp najbliższym panelLp (preferuj dokładne trafienie)
+          xl = candidates.reduce((best, c) =>
+            Math.abs(c.lp - panelLp) < Math.abs(best.lp - panelLp) ? c : best
+          ).val;
+        }
         updated++;
         return { ...r, ...xl };
       }));
@@ -772,9 +786,13 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       })
       .sort((a, b) => {
         if (sortKey === "default") {
-          // Symbol → Lp (jeśli ten sam symbol, używaj kolejności drag-and-drop)
-          const tagCmp = (a.tag ?? "").toString().localeCompare((b.tag ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
-          if (tagCmp !== 0) return tagCmp;
+          // Typ → Symbol → Rola → Piętro → Pomieszczenie
+          // Dla tego samego symbolu tiebreaker = Lp (kolejność drag-and-drop)
+          const keys = ["typ", "tag", "rola", "kondygnacja", "pomieszczenie"];
+          for (const k of keys) {
+            const cmp = (a[k] ?? "").toString().localeCompare((b[k] ?? "").toString(), "pl", { numeric: true, sensitivity: "base" });
+            if (cmp !== 0) return cmp;
+          }
           return (lpMap[a._id] ?? 0) - (lpMap[b._id] ?? 0);
         }
         if (sortKey === "lp") {
