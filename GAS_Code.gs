@@ -679,19 +679,38 @@ function doGet(e) {
       }
 
       // Odczytuje instalacja_<code>.xlsx z folderu projektu
+      // Obsługuje zarówno pliki XLSX jak i Google Sheets (skonwertowane przez Drive)
       // GET ?action=getInstallationXlsx&projectCode=KOW-2026-001
       case "getInstallationXlsx": {
         var ixCode = e.parameter.projectCode;
         if (!ixCode) return err("Brak parametru projectCode");
         var ixFolder = getProjectFolder(ixCode);
         if (!ixFolder) return ok({ found: false });
-        var ixName = "instalacja_" + ixCode + ".xlsx";
-        var ixFiles = ixFolder.getFilesByName(ixName);
-        if (!ixFiles.hasNext()) return ok({ found: false });
-        var ixFile = ixFiles.next();
+
+        // Szukaj pliku: najpierw .xlsx, potem Google Sheets (bez rozszerzenia)
+        var ixFile = null;
+        var ixTry = [
+          "instalacja_" + ixCode + ".xlsx",
+          "instalacja_" + ixCode,
+        ];
+        for (var ni = 0; ni < ixTry.length && !ixFile; ni++) {
+          var ixIter = ixFolder.getFilesByName(ixTry[ni]);
+          if (ixIter.hasNext()) ixFile = ixIter.next();
+        }
+        if (!ixFile) return ok({ found: false });
+
+        // Eksportuj jako XLSX niezależnie od formatu (XLSX lub Google Sheets)
+        var ixBlob;
+        try {
+          ixBlob = ixFile.getMimeType() === MimeType.GOOGLE_SHEETS
+            ? ixFile.getAs(MimeType.MICROSOFT_EXCEL)
+            : ixFile.getBlob();
+        } catch(ex) {
+          return err("Błąd odczytu pliku: " + ex.message);
+        }
         return ok({
           found: true,
-          xlsxBase64: Utilities.base64Encode(ixFile.getBlob().getBytes()),
+          xlsxBase64: Utilities.base64Encode(ixBlob.getBytes()),
           modifiedAt: ixFile.getLastUpdated().toISOString(),
         });
       }
