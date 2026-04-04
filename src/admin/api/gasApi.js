@@ -303,6 +303,16 @@ export async function saveKalkulatorConfig(projectCode, config) {
   return gasPost("saveKalkulatorConfig", { projectCode, config });
 }
 
+/** Odczytuje instalacja_<code>.xlsx z folderu projektu na Drive */
+export async function getInstallationXlsx(projectCode) {
+  return gasGet("getInstallationXlsx", { projectCode });
+}
+
+/** Zapisuje/aktualizuje instalacja_<code>.xlsx w folderze projektu na Drive */
+export async function saveInstallationXlsx(projectCode, xlsxBase64) {
+  return gasPost("saveInstallationXlsx", { projectCode, xlsxBase64 });
+}
+
 
 // ────────────────────────────────────────────────────────────────────────────────
 // LOGI AKTYWNOŚCI

@@ -678,6 +678,24 @@ function doGet(e) {
         return err("Plik cennik.json nie znaleziony w folderze Materiały");
       }
 
+      // Odczytuje instalacja_<code>.xlsx z folderu projektu
+      // GET ?action=getInstallationXlsx&projectCode=KOW-2026-001
+      case "getInstallationXlsx": {
+        var ixCode = e.parameter.projectCode;
+        if (!ixCode) return err("Brak parametru projectCode");
+        var ixFolder = getProjectFolder(ixCode);
+        if (!ixFolder) return ok({ found: false });
+        var ixName = "instalacja_" + ixCode + ".xlsx";
+        var ixFiles = ixFolder.getFilesByName(ixName);
+        if (!ixFiles.hasNext()) return ok({ found: false });
+        var ixFile = ixFiles.next();
+        return ok({
+          found: true,
+          xlsxBase64: Utilities.base64Encode(ixFile.getBlob().getBytes()),
+          modifiedAt: ixFile.getLastUpdated().toISOString(),
+        });
+      }
+
       // Odczytuje config.json z folderu projektu (konfiguracja kalkulatora)
       // GET ?action=getKalkulatorConfig&projectCode=KOW-2026-001
       case "getKalkulatorConfig": {
@@ -1236,6 +1254,20 @@ function doPost(e) {
         // Zapisz nowy
         saveMatFolder.createFile("materialy.json", JSON.stringify(body.items, null, 2), "application/json");
         return ok({ saved: true, count: body.items.length });
+      }
+
+      // Zapisuje instalacja_<code>.xlsx do folderu projektu (XLSX sync)
+      case "saveInstallationXlsx": {
+        if (!body.projectCode || !body.xlsxBase64) return err("Brak danych");
+        var sxFolder = getOrCreateProjectFolder(body.projectCode);
+        if (!sxFolder) return err("Brak folderu projektu");
+        var sxName = "instalacja_" + body.projectCode + ".xlsx";
+        var sxOld = sxFolder.getFilesByName(sxName);
+        while (sxOld.hasNext()) { sxOld.next().setTrashed(true); }
+        var sxBytes = Utilities.base64Decode(body.xlsxBase64);
+        var sxBlob = Utilities.newBlob(sxBytes, MimeType.MICROSOFT_EXCEL, sxName);
+        sxFolder.createFile(sxBlob);
+        return ok({ saved: true });
       }
 
       // Zapisuje config.json do folderu projektu (konfiguracja kalkulatora)

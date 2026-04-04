@@ -394,9 +394,16 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [configSaveResult, setConfigSaveResult] = useState(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const [savedSnap, setSavedSnap] = useState(null);
+  const [xlsxDrive, setXlsxDrive] = useState(null); // { found, modifiedAt } — info o XLSX na Drive
+  const [xlsxLoading, setXlsxLoading] = useState(false);
 
   const makeSnap = (r) => JSON.stringify(
-    r.map(x => ({ _id: x._id, controlDevice: x.controlDevice, ioCount: x.ioCount, requiresAttention: x.requiresAttention }))
+    r.map(x => ({
+      _id: x._id,
+      controlDevice: x.controlDevice, ioCount: x.ioCount, requiresAttention: x.requiresAttention,
+      rola: x.rola, kondygnacja: x.kondygnacja, pomieszczenie: x.pomieszczenie,
+      uwagi: x.uwagi, przewód: x.przewód, wysokość: x.wysokość, wariant: x.wariant, kolor: x.kolor,
+    }))
   );
   const isDirty = useMemo(() => {
     if (!savedSnap || rows.length === 0) return false;
@@ -444,11 +451,20 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     return baseRows.map(r => {
       const override = cfg.rows[r._id];
       if (!override) return r;
+      const txt = (key) => override[key] !== undefined ? override[key] : r[key];
       return {
         ...r,
         controlDevice:     override.controlDevice     ?? r.controlDevice,
         ioCount:           override.ioCount           ?? r.ioCount,
         requiresAttention: override.requiresAttention ?? r.requiresAttention,
+        rola:         txt("rola"),
+        kondygnacja:  txt("kondygnacja"),
+        pomieszczenie:txt("pomieszczenie"),
+        uwagi:        txt("uwagi"),
+        przewód:      txt("przewód"),
+        wysokość:     txt("wysokość"),
+        wariant:      txt("wariant"),
+        kolor:        txt("kolor"),
       };
     });
   }, []);
@@ -490,6 +506,13 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         }
         setRows(finalRows);
         setSavedSnap(makeSnap(finalRows));
+        // Sprawdź czy XLSX istnieje na Drive
+        setXlsxDrive(null);
+        if (GAS_ON) {
+          GAS.getInstallationXlsx(project.code)
+            .then(r => setXlsxDrive(r?.found ? { found: true, modifiedAt: r.modifiedAt } : null))
+            .catch(() => {});
+        }
       }
 
       if (loaded.length === 0) {
@@ -510,15 +533,19 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     try {
       const rowOverrides = {};
       for (const r of rows) {
-        const defaultIo = effectiveMappingsRef.current.typMappings[r.rawTyp]?.ioCount ?? 1;
-        const hasOverride = r.controlDevice !== "uncontrolled" || r.ioCount !== defaultIo || r.requiresAttention;
-        if (hasOverride) {
-          rowOverrides[r._id] = {
-            controlDevice:     r.controlDevice,
-            ioCount:           r.ioCount,
-            requiresAttention: r.requiresAttention,
-          };
-        }
+        rowOverrides[r._id] = {
+          controlDevice:     r.controlDevice,
+          ioCount:           r.ioCount,
+          requiresAttention: r.requiresAttention,
+          rola:         r.rola,
+          kondygnacja:  r.kondygnacja,
+          pomieszczenie:r.pomieszczenie,
+          uwagi:        r.uwagi,
+          przewód:      r.przewód,
+          wysokość:     r.wysokość,
+          wariant:      r.wariant,
+          kolor:        r.kolor,
+        };
       }
       const config = {
         version: 1,
@@ -529,6 +556,13 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
       if (GAS_ON) await GAS.saveKalkulatorConfig(project.code, config);
       setConfigSaveResult("ok");
       setSavedSnap(makeSnap(rows));
+      // Async upload XLSX do Drive (nie blokuje zapisu)
+      if (GAS_ON) {
+        const xlsxB64 = buildXlsxBase64(rows);
+        GAS.saveInstallationXlsx(project.code, xlsxB64)
+          .then(() => setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : null))
+          .catch(() => {});
+      }
     } catch { setConfigSaveResult("err"); }
     finally { setConfigSaving(false); }
   }, [project, rows, szafaData]);
@@ -539,6 +573,63 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     if (!selectedProjectId || rows.length > 0) return;
     handleLoadPoints();
   }, [selectedProjectId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Generuje XLSX base64 z aktualnych rows (do Drive sync)
+  const buildXlsxBase64 = useCallback((r) => {
+    const headers = ["Lp","Nazwa","Grupa","Rola","Piętro","Pomieszczenie","Przewód","Wysokość","Opis","Kolor","Komentarz"];
+    const data = defaultSortRows(r).map((row, i) => [
+      i + 1, row.tag, row.typ, row.rola, row.kondygnacja, row.pomieszczenie,
+      row.przewód, row.wysokość, row.wariant, row.kolor, row.uwagi,
+    ]);
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+    ws["!cols"] = [5,20,16,14,14,20,20,10,24,10,24].map(wch => ({ wch }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Instalacja");
+    return XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+  }, []);
+
+  // Wczytaj XLSX z Drive i zastosuj zmiany do rows
+  const handleImportFromDriveXlsx = useCallback(async () => {
+    if (!project) return;
+    setXlsxLoading(true);
+    try {
+      const result = await GAS.getInstallationXlsx(project.code);
+      if (!result?.found || !result.xlsxBase64) { toast.error("Brak XLSX w Drive"); return; }
+      const wb = XLSX.read(result.xlsxBase64, { type: "base64" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      // Buduj słownik tag → wartości (pomijamy header row)
+      const byTag = {};
+      for (const row of data.slice(1)) {
+        const tag = String(row[1] || "").trim();
+        if (!tag) continue;
+        byTag[tag] = {
+          typ: String(row[2] || "").trim(),
+          rola: String(row[3] || "").trim(),
+          kondygnacja: String(row[4] || "").trim(),
+          pomieszczenie: String(row[5] || "").trim(),
+          przewód: String(row[6] || "").trim(),
+          wysokość: String(row[7] || "").trim(),
+          wariant: String(row[8] || "").trim(),
+          kolor: String(row[9] || "").trim(),
+          uwagi: String(row[10] || "").trim(),
+        };
+      }
+      let updated = 0;
+      setRows(prev => prev.map(r => {
+        const xl = byTag[r.tag];
+        if (!xl) return r;
+        updated++;
+        return { ...r, ...xl };
+      }));
+      toast.success(`Wczytano XLSX z Drive — zaktualizowano ${updated} punktów`);
+      setXlsxDrive(d => ({ ...d, importedAt: new Date().toISOString() }));
+    } catch (e) {
+      toast.error("Błąd wczytywania XLSX: " + (e?.message ?? "nieznany"));
+    } finally {
+      setXlsxLoading(false);
+    }
+  }, [project]);
 
   // Reset konfiguracji — wczytuje punkty bez zapisanego config.json
   const handleResetConfig = useCallback(async () => {
@@ -767,6 +858,20 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               title="Pobierz TXT do importu w NanoCAD (ATTIN_SYMBOL)"
             >
               <Download className="w-3.5 h-3.5" /> Pobierz TXT
+            </button>
+            <button
+              onClick={handleImportFromDriveXlsx}
+              disabled={xlsxLoading || !xlsxDrive?.found}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-2 border rounded-lg disabled:opacity-40 transition-colors ${
+                xlsxDrive?.found
+                  ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 animate-pulse hover:animate-none"
+                  : "border-slate-200 text-slate-400"
+              }`}
+              title={xlsxDrive?.found ? `XLSX na Drive: ${new Date(xlsxDrive.modifiedAt).toLocaleString("pl")}` : "Brak XLSX w folderze projektu na Drive"}
+            >
+              {xlsxLoading
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wczytuję…</>
+                : <><FolderOpen className="w-3.5 h-3.5" /> XLSX z Drive</>}
             </button>
 
             {/* Separator */}
