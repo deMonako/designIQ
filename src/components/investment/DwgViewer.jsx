@@ -666,7 +666,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           const visWithHeight = visible.filter(it => it.wysk);
           const hasH = visWithHeight.length > 0;
           heightEl.setAttribute("data-has-height", hasH ? "1" : "0");
-          heightEl.style.display = (showHeightsRef.current && hasH) ? "" : "none";
+          heightEl.style.display = (showDimRef.current && showHeightsRef.current && hasH) ? "" : "none";
           if (hasH) {
             while (heightEl.firstChild) heightEl.removeChild(heightEl.firstChild);
             visWithHeight.forEach((it, idx) => {
@@ -702,6 +702,12 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (dimOverlayRef.current) {
       dimOverlayRef.current.style.display = showDim ? "" : "none";
     }
+    // Wysokości są widoczne tylko gdy wymiary są włączone
+    const overlay = overlayElRef.current;
+    if (!overlay) return;
+    overlay.querySelectorAll(".c-height").forEach(el => {
+      el.style.display = (showDim && showHeightsRef.current && el.getAttribute("data-has-height") === "1") ? "" : "none";
+    });
   }, [showDim]);
 
   // ── Toggle wysokości montażu przy punktach ────────────────────────────────
@@ -710,7 +716,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const overlay = overlayElRef.current;
     if (!overlay) return;
     overlay.querySelectorAll(".c-height").forEach(el => {
-      el.style.display = (showHeights && el.getAttribute("data-has-height") === "1") ? "" : "none";
+      el.style.display = (showDimRef.current && showHeights && el.getAttribute("data-has-height") === "1") ? "" : "none";
     });
   }, [showHeights]);
 
@@ -1165,7 +1171,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
                 Wymiary
               </button>
             )}
-            {hasAnyHeight && (
+            {hasAnyHeight && showDim && (
               <label className="flex items-center gap-1.5 bg-white/90 backdrop-blur border border-slate-200 rounded-lg px-2.5 py-1 shadow-sm cursor-pointer select-none">
                 <input
                   type="checkbox"
