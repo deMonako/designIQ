@@ -313,6 +313,11 @@ export async function saveInstallationXlsx(projectCode, xlsxBase64) {
   return gasPost("saveInstallationXlsx", { projectCode, xlsxBase64 });
 }
 
+/** Zapisuje rows z panelu admina do zakładki "Instalacja" w Google Sheets na Drive */
+export async function updateInstallationSheet(projectCode, rows) {
+  return gasPost("updateInstallationSheet", { projectCode, rows });
+}
+
 
 // ────────────────────────────────────────────────────────────────────────────────
 // LOGI AKTYWNOŚCI

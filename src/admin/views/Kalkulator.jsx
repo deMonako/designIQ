@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   Calculator, FolderKanban, RefreshCw, Download, Search,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
-  X, SlidersHorizontal, Save, FolderOpen, RotateCcw,
+  X, SlidersHorizontal, Save, FolderOpen, RotateCcw, Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import * as GAS from "../api/gasApi";
@@ -397,6 +397,7 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
   const [savedSnap, setSavedSnap] = useState(null);
   const [xlsxDrive, setXlsxDrive] = useState(null); // { found, modifiedAt } — info o XLSX na Drive
   const [xlsxLoading, setXlsxLoading] = useState(false);
+  const [sheetsSending, setSheetsSending] = useState(false);
 
   const makeSnap = (r) => JSON.stringify(
     r.map(x => ({
@@ -651,6 +652,34 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
     }
   }, [project]);
 
+  // Wyślij aktualne rows do zakładki "Instalacja" w Google Sheets na Drive
+  const handleExportToSheets = useCallback(async () => {
+    if (!project) return;
+    setSheetsSending(true);
+    try {
+      const payload = defaultSortRows(rows).map(r => ({
+        tag: r.tag,
+        typ: r.typ ?? "",
+        rola: r.rola ?? "",
+        kondygnacja: r.kondygnacja ?? "",
+        pomieszczenie: r.pomieszczenie ?? "",
+        przewód: r.przewód ?? "",
+        wysokość: r.wysokość ?? "",
+        wariant: r.wariant ?? "",
+        kolor: r.kolor ?? "",
+        uwagi: r.uwagi ?? "",
+      }));
+      const result = await GAS.updateInstallationSheet(project.code, payload);
+      if (!result?.saved) throw new Error(result?.error ?? "Brak potwierdzenia");
+      toast.success(`Wysłano ${result.rows} punktów do Google Sheets na Drive`);
+      setXlsxDrive(d => d ? { ...d, modifiedAt: new Date().toISOString() } : d);
+    } catch (e) {
+      toast.error("Błąd wysyłania do Drive: " + (e?.message ?? "nieznany"));
+    } finally {
+      setSheetsSending(false);
+    }
+  }, [project, rows]);
+
   // Reset konfiguracji — wczytuje punkty bez zapisanego config.json
   const handleResetConfig = useCallback(async () => {
     if (!project) return;
@@ -880,11 +909,21 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
                   ? "border-emerald-400 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 animate-pulse hover:animate-none"
                   : "border-slate-200 text-slate-400"
               }`}
-              title={xlsxDrive?.found ? `XLSX na Drive: ${new Date(xlsxDrive.modifiedAt).toLocaleString("pl")}` : "Brak XLSX w folderze projektu na Drive"}
+              title={xlsxDrive?.found ? `Sheets na Drive: ${new Date(xlsxDrive.modifiedAt).toLocaleString("pl")}` : "Brak pliku instalacja w folderze projektu na Drive"}
             >
               {xlsxLoading
                 ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wczytuję…</>
-                : <><FolderOpen className="w-3.5 h-3.5" /> XLSX z Drive</>}
+                : <><FolderOpen className="w-3.5 h-3.5" /> Pobierz z Drive</>}
+            </button>
+            <button
+              onClick={handleExportToSheets}
+              disabled={sheetsSending || !xlsxDrive?.found}
+              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-emerald-400 hover:text-emerald-700 disabled:opacity-40 transition-colors"
+              title={xlsxDrive?.found ? "Wyślij aktualne dane z panelu do zakładki Instalacja w Google Sheets" : "Brak pliku instalacja w folderze projektu na Drive"}
+            >
+              {sheetsSending
+                ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Wysyłam…</>
+                : <><Upload className="w-3.5 h-3.5" /> Wyślij na Drive</>}
             </button>
 
             {/* Separator */}

@@ -1298,6 +1298,57 @@ function doPost(e) {
         return ok({ saved: true });
       }
 
+      // Zapisuje rows z panelu admina do zakładki "Instalacja" w Google Sheets na Drive
+      // POST { action: "updateInstallationSheet", projectCode, rows: [{tag, typ, rola, ...}] }
+      case "updateInstallationSheet": {
+        if (!body.projectCode || !body.rows) return err("Brak danych");
+        var usFolder = getProjectFolder(body.projectCode);
+        if (!usFolder) return err("Brak folderu projektu");
+
+        // Znajdź plik Google Sheets (instalacja_<code> bez rozszerzenia)
+        var usIter = usFolder.getFilesByName("instalacja_" + body.projectCode);
+        if (!usIter.hasNext()) return err("Nie znaleziono pliku Google Sheets instalacja_" + body.projectCode + " w folderze projektu");
+        var usFile = usIter.next();
+        if (usFile.getMimeType() !== MimeType.GOOGLE_SHEETS) return err("Plik nie jest Google Sheets (MIME: " + usFile.getMimeType() + ")");
+
+        var usSS = SpreadsheetApp.openById(usFile.getId());
+
+        // Znajdź lub utwórz zakładkę "Instalacja"
+        var usSheet = usSS.getSheetByName("Instalacja");
+        if (!usSheet) {
+          usSheet = usSS.insertSheet("Instalacja");
+        } else {
+          usSheet.clearContents();
+        }
+
+        // Nagłówki zgodne z kolejnością eksportu XLSX
+        var usHeaders = ["Lp", "Nazwa", "Grupa", "Rola", "Piętro", "Pomieszczenie", "Przewód", "Wysokość", "Opis", "Kolor", "Komentarz"];
+        var usData = [usHeaders];
+        var usRows = body.rows;
+        for (var ri = 0; ri < usRows.length; ri++) {
+          var ur = usRows[ri];
+          usData.push([
+            ri + 1,
+            ur.tag    ?? "",
+            ur.typ    ?? "",
+            ur.rola   ?? "",
+            ur.kondygnacja  ?? "",
+            ur.pomieszczenie ?? "",
+            ur.przewód  ?? "",
+            ur.wysokość ?? "",
+            ur.wariant  ?? "",
+            ur.kolor    ?? "",
+            ur.uwagi    ?? "",
+          ]);
+        }
+        usSheet.getRange(1, 1, usData.length, usHeaders.length).setValues(usData);
+
+        // Pogrub wiersz nagłówka
+        usSheet.getRange(1, 1, 1, usHeaders.length).setFontWeight("bold");
+
+        return ok({ saved: true, rows: usRows.length });
+      }
+
       // Zapisuje config.json do folderu projektu (konfiguracja kalkulatora)
       case "saveKalkulatorConfig": {
         if (!body.projectCode || !body.config) return err("Brak danych");
