@@ -700,11 +700,20 @@ function doGet(e) {
         if (!ixFile) return ok({ found: false });
 
         // Eksportuj jako XLSX niezależnie od formatu (XLSX lub Google Sheets)
+        // Używamy UrlFetchApp zamiast getAs() — getAs() jest cache'owane przez GAS
         var ixBlob;
         try {
-          ixBlob = ixFile.getMimeType() === MimeType.GOOGLE_SHEETS
-            ? ixFile.getAs(MimeType.MICROSOFT_EXCEL)
-            : ixFile.getBlob();
+          if (ixFile.getMimeType() === MimeType.GOOGLE_SHEETS) {
+            var ixExportUrl = "https://docs.google.com/spreadsheets/d/" + ixFile.getId() + "/export?format=xlsx";
+            var ixResp = UrlFetchApp.fetch(ixExportUrl, {
+              headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() },
+              muteHttpExceptions: true,
+            });
+            if (ixResp.getResponseCode() !== 200) return err("Błąd eksportu Sheets: HTTP " + ixResp.getResponseCode());
+            ixBlob = ixResp.getBlob();
+          } else {
+            ixBlob = ixFile.getBlob();
+          }
         } catch(ex) {
           return err("Błąd odczytu pliku: " + ex.message);
         }

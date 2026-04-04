@@ -629,13 +629,20 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
         };
       }
       let updated = 0;
-      setRows(prev => prev.map(r => {
-        const xl = byTag[r.tag];
-        if (!xl) return r;
-        updated++;
-        return { ...r, ...xl };
-      }));
-      toast.success(`Wczytano XLSX z Drive — zaktualizowano ${updated} punktów`);
+      setRows(prev => {
+        const knownTags = new Set(prev.map(r => r.tag));
+        const unknownTags = Object.keys(byTag).filter(t => !knownTags.has(t));
+        if (unknownTags.length > 0) {
+          toast.warning(`Pominięto ${unknownTags.length} nieznanych punktów z Sheets (brak współrzędnych): ${unknownTags.slice(0, 5).join(", ")}${unknownTags.length > 5 ? "…" : ""}`);
+        }
+        return prev.map(r => {
+          const xl = byTag[r.tag];
+          if (!xl) return r;
+          updated++;
+          return { ...r, ...xl };
+        });
+      });
+      toast.success(`Wczytano z Drive — zaktualizowano ${updated} punktów`);
       setXlsxDrive(d => ({ ...d, importedAt: new Date().toISOString() }));
     } catch (e) {
       toast.error("Błąd wczytywania XLSX: " + (e?.message ?? "nieznany"));
@@ -858,13 +865,6 @@ function PointCalculator({ projects, kalkulatorSettings = EMPTY_KALKULATOR_SETTI
               )}
             </div>
 
-            {/* Eksport */}
-            <button
-              onClick={() => exportXLSX(rows, catalog, project?.code ?? "projekt")}
-              className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-orange-300 hover:text-orange-600 transition-colors"
-            >
-              <Download className="w-3.5 h-3.5" /> Eksport XLSX
-            </button>
             <button
               onClick={() => exportCDF(rows, project?.code ?? "projekt")}
               className="flex items-center gap-1.5 text-xs px-2.5 py-2 border border-slate-200 rounded-lg text-slate-500 hover:border-sky-400 hover:text-sky-700 transition-colors"
