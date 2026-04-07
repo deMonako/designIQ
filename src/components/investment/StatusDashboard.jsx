@@ -102,7 +102,8 @@ export default function StatusDashboard({ investment, onNavigate, onRefresh }) {
         {NAV_CARDS.map(({ key, icon: Icon, title, desc }) => {
           const isDisabled =
             (key === "wycena" && !investment.quotation) ||
-            (key === "zakupy" && !investment.zakupy);
+            (key === "zakupy" && !investment.zakupy) ||
+            (key === "dokumenty" && docCount === 0);
           const badge = key === "dokumenty" && docCount > 0 ? docCount : null;
           return (
           <Card

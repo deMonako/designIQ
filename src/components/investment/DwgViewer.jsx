@@ -1296,7 +1296,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
             </div>
             <h3 className="text-base font-semibold text-slate-800 mb-2">Projekt demonstracyjny</h3>
             <p className="text-sm text-slate-500 leading-relaxed mb-5">
-              Tak będzie wyglądał Twój projekt automatyki. Docelowy rzut instalacji zostanie udostępniony po zakończeniu dokumentacji.
+              Tak będzie wyglądał Twój projekt automatyki. Docelowy rzut instalacji pojawi się tutaj w momencie powstawania dokumentacji.
             </p>
             <button
               onClick={() => setShowDemoModal(false)}
