@@ -1,32 +1,34 @@
 import React, { useState, useEffect } from "react";
 import {
   X, Plus, Trash2, Save, Loader2, ChevronDown, ChevronUp,
-  ClipboardList, Copy, Check,
+  ClipboardList, Copy, Check, GripVertical, MessageSquare,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from "@dnd-kit/sortable";
 import { getWycena, upsertWycena } from "../api/gasApi";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { WYCENA_CATEGORIES as CATEGORIES, MATERIAL_CATEGORIES } from "../constants";
 
 const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
-
-function emptyItem() {
-  return {
-    id:         `wi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name:       "",
-    category:   "materials",
-    quantity:   1,
-    unit_price: 0,
-    vat_rate:   8,
-  };
-}
-
 const PLN = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
 
 function round2(v) { return Math.round(v * 100) / 100; }
-
 function calcGross(item) {
   return round2((item.quantity || 0) * (item.unit_price || 0) * (1 + (item.vat_rate ?? 8) / 100));
+}
+function emptyItem(category = "materials") {
+  return {
+    id: `wi-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    name: "", category, quantity: 1, unit_price: 0, vat_rate: 8, note: "",
+  };
+}
+function emptyRoom() {
+  return { name: "", area: 0, presence: 0, switch: 0, lightRelay: 0, lightDim: 0, shading: 0, heating: 0, audio: 0 };
 }
 
 // ── Modal: lista materiałów dla technika ────────────────────────────────────
@@ -35,32 +37,20 @@ function TechListModal({ items, project, onClose }) {
 
   const materialItems = CATEGORIES
     .filter(cat => MATERIAL_CATEGORIES.has(cat.key))
-    .map(cat => ({
-      ...cat,
-      items: items.filter(i => i.category === cat.key && i.name?.trim()),
-    }))
+    .map(cat => ({ ...cat, items: items.filter(i => i.category === cat.key && i.name?.trim()) }))
     .filter(cat => cat.items.length > 0);
 
   const totalItems = materialItems.reduce((s, cat) => s + cat.items.length, 0);
   const date = new Date().toLocaleDateString("pl-PL", { day: "2-digit", month: "long", year: "numeric" });
 
   const copyToClipboard = () => {
-    const lines = [
-      `LISTA MATERIAŁÓW DLA TECHNIKA`,
-      `Projekt: ${project.name}`,
-      `Kod: ${project.code || "—"}`,
-      `Data: ${date}`,
-      "",
-    ];
+    const lines = [`LISTA MATERIAŁÓW DLA TECHNIKA`, `Projekt: ${project.name}`, `Kod: ${project.code || "—"}`, `Data: ${date}`, ""];
     materialItems.forEach(cat => {
       lines.push(`── ${cat.label.toUpperCase()} ──`);
-      cat.items.forEach((item, i) => {
-        lines.push(`  ${i + 1}. ${item.name}  ×${item.quantity}`);
-      });
+      cat.items.forEach((item, i) => { lines.push(`  ${i + 1}. ${item.name}  ×${item.quantity}`); });
       lines.push("");
     });
     lines.push(`Łącznie: ${totalItems} pozycji`);
-
     navigator.clipboard.writeText(lines.join("\n")).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -71,7 +61,6 @@ function TechListModal({ items, project, onClose }) {
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 flex-shrink-0">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-5 h-5 text-orange-500" />
@@ -83,11 +72,7 @@ function TechListModal({ items, project, onClose }) {
           <div className="flex items-center gap-2">
             <button
               onClick={copyToClipboard}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                copied
-                  ? "bg-green-500 text-white"
-                  : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${copied ? "bg-green-500 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
             >
               {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
               {copied ? "Skopiowano!" : "Kopiuj"}
@@ -97,49 +82,33 @@ function TechListModal({ items, project, onClose }) {
             </button>
           </div>
         </div>
-
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {materialItems.length === 0 ? (
             <div className="text-center py-8 text-slate-400">
               <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-40" />
               <p className="text-sm">Brak pozycji materiałowych w wycenie.</p>
-              <p className="text-xs mt-1">Dodaj pozycje z kategorii: Sprzęt, Okablowanie, Szafa, Audio lub Bezpieczeństwo.</p>
             </div>
-          ) : (
-            materialItems.map(cat => (
-              <div key={cat.key}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-1 h-4 rounded-full bg-orange-400 flex-shrink-0" />
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{cat.label}</p>
-                  <span className="text-[10px] text-slate-300 font-medium">{cat.items.length} szt.</span>
-                </div>
-                <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
-                  {cat.items.map((item, idx) => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center justify-between px-3 py-2 text-sm ${
-                        idx > 0 ? "border-t border-slate-100" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                          {idx + 1}
-                        </span>
-                        <span className="text-slate-800 font-medium truncate">{item.name}</span>
-                      </div>
-                      <span className="font-bold text-orange-600 flex-shrink-0 ml-3 tabular-nums">
-                        ×{item.quantity}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+          ) : materialItems.map(cat => (
+            <div key={cat.key}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-1 h-4 rounded-full bg-orange-400 flex-shrink-0" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">{cat.label}</p>
+                <span className="text-[10px] text-slate-300 font-medium">{cat.items.length} szt.</span>
               </div>
-            ))
-          )}
+              <div className="bg-slate-50 rounded-xl overflow-hidden border border-slate-100">
+                {cat.items.map((item, idx) => (
+                  <div key={item.id} className={`flex items-center justify-between px-3 py-2 text-sm ${idx > 0 ? "border-t border-slate-100" : ""}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center flex-shrink-0">{idx + 1}</span>
+                      <span className="text-slate-800 font-medium truncate">{item.name}</span>
+                    </div>
+                    <span className="font-bold text-orange-600 flex-shrink-0 ml-3 tabular-nums">×{item.quantity}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
-
-        {/* Footer */}
         {totalItems > 0 && (
           <div className="flex-shrink-0 border-t border-slate-100 bg-slate-50 px-5 py-3 text-xs text-slate-500 rounded-b-2xl">
             Łącznie <span className="font-bold text-slate-700">{totalItems}</span> pozycji materiałowych
@@ -150,65 +119,274 @@ function TechListModal({ items, project, onClose }) {
   );
 }
 
-function emptyRoom() {
-  return { name: "", area: 0, presence: 0, switch: 0, lightRelay: 0, lightDim: 0, shading: 0, heating: 0, audio: 0 };
+// ── Wiersz tabeli z DnD ────────────────────────────────────────────────────
+function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
+
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px,${transform.y}px,0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  return (
+    <>
+      <tr ref={setNodeRef} style={style} className="hover:bg-slate-50/50">
+        <td className="p-2 w-7">
+          <button
+            {...attributes} {...listeners}
+            className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 touch-none flex items-center justify-center w-full"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        </td>
+        <td className="p-2">
+          <div className="flex items-center gap-1">
+            <input
+              value={item.name}
+              onChange={e => updateItem(item.id, "name", e.target.value)}
+              placeholder="Nazwa pozycji"
+              className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+            />
+            <button
+              onClick={() => onToggleNote(item.id)}
+              title={noteExpanded ? "Ukryj komentarz" : "Dodaj komentarz dla klienta"}
+              className={`p-1 rounded transition-colors flex-shrink-0 ${
+                noteExpanded || item.note ? "text-orange-500 bg-orange-50" : "text-slate-300 hover:text-slate-500"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </td>
+        <td className="p-2">
+          <input
+            type="number" min="0" step="1"
+            value={item.quantity}
+            onChange={e => updateItem(item.id, "quantity", e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+          />
+        </td>
+        <td className="p-2">
+          <div className="flex flex-col gap-1">
+            <input
+              type="number" min="0" step="0.01"
+              value={item.unit_price}
+              onChange={e => updateItem(item.id, "unit_price", e.target.value)}
+              title="Cena netto"
+              className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+            />
+            <input
+              key={`g-${item.id}-${item.unit_price}-${item.vat_rate}`}
+              type="number" min="0" step="0.01"
+              defaultValue={round2(item.unit_price * (1 + (item.vat_rate ?? 8) / 100))}
+              onBlur={e => {
+                const g = parseFloat(e.target.value) || 0;
+                updateItem(item.id, "unit_price", round2(g / (1 + (item.vat_rate ?? 8) / 100)));
+              }}
+              title="Cena brutto — wpisz aby przeliczyć netto"
+              className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-blue-50/50 text-slate-600"
+            />
+          </div>
+        </td>
+        <td className="p-2">
+          <select
+            value={item.vat_rate}
+            onChange={e => updateItem(item.id, "vat_rate", e.target.value)}
+            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 bg-white"
+          >
+            <option value={0}>0%</option>
+            <option value={8}>8%</option>
+            <option value={23}>23%</option>
+          </select>
+        </td>
+        <td className="p-2 text-right font-semibold text-slate-900 whitespace-nowrap">
+          {calcGross(item).toLocaleString("pl-PL", PLN)} zł
+        </td>
+        <td className="p-2">
+          <button onClick={() => removeItem(item.id)} className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded">
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </td>
+      </tr>
+      {noteExpanded && (
+        <tr className="bg-orange-50/20">
+          <td />
+          <td colSpan={6} className="px-2 pb-2 pt-0.5">
+            <textarea
+              value={item.note || ""}
+              onChange={e => updateItem(item.id, "note", e.target.value)}
+              placeholder="Komentarz widoczny dla klienta w panelu inwestycji..."
+              rows={2}
+              className="w-full border border-orange-200 rounded-lg px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 resize-none bg-white"
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
 }
 
-export default function WycenaEditor({ project, onClose }) {
-  const [items, setItems]     = useState([]);
-  const [rooms, setRooms]     = useState([]);
-  const [status, setStatus]   = useState("Czeka na akceptację");
-  const [wycenaId, setId]     = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [collapsed, setCollapsed] = useState({});
-  const [roomsCollapsed, setRoomsCollapsed] = useState(false);
-  const [showTechList, setShowTechList] = useState(false);
+// ── Sekcja kategorii ──────────────────────────────────────────────────────
+function CategorySection({ cat, catItems, updateItem, removeItem, addItem, reorder, expandedNotes, onToggleNote, collapsed, onCollapse }) {
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const catGross = catItems.reduce((s, i) => s + calcGross(i), 0);
 
-  // Załaduj istniejącą wycenę
+  return (
+    <div className="border border-slate-200 rounded-xl overflow-hidden">
+      <button
+        onClick={onCollapse}
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-800">{cat.label}</span>
+          {catItems.length > 0 && (
+            <span className="text-xs bg-orange-100 text-orange-700 font-medium px-1.5 py-0.5 rounded-full">
+              {catItems.length}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {catGross > 0 && (
+            <span className="text-sm font-bold text-orange-600">
+              {catGross.toLocaleString("pl-PL", PLN)} zł
+            </span>
+          )}
+          {collapsed
+            ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            : <ChevronUp   className="w-3.5 h-3.5 text-slate-400" />}
+        </div>
+      </button>
+
+      {!collapsed && (
+        <>
+          {catItems.length > 0 && (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={({ active, over }) => {
+                if (over && active.id !== over.id) reorder(active.id, over.id);
+              }}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead className="bg-slate-50/70 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200 border-t border-t-slate-100">
+                    <tr>
+                      <th className="w-7 p-2" />
+                      <th className="text-left p-2 font-semibold">Pozycja</th>
+                      <th className="text-right p-2 font-semibold w-20">Ilość</th>
+                      <th className="text-right p-2 font-semibold w-36">
+                        Cena jedn.
+                        <div className="text-[10px] font-normal text-slate-400 normal-case tracking-normal">netto / brutto</div>
+                      </th>
+                      <th className="text-right p-2 font-semibold w-20">VAT %</th>
+                      <th className="text-right p-2 font-semibold w-28">Suma brutto</th>
+                      <th className="w-8 p-2" />
+                    </tr>
+                  </thead>
+                  <SortableContext items={catItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                    <tbody className="divide-y divide-slate-100">
+                      {catItems.map(item => (
+                        <SortableRow
+                          key={item.id}
+                          item={item}
+                          updateItem={updateItem}
+                          removeItem={removeItem}
+                          noteExpanded={expandedNotes.has(item.id)}
+                          onToggleNote={onToggleNote}
+                        />
+                      ))}
+                    </tbody>
+                  </SortableContext>
+                </table>
+              </div>
+            </DndContext>
+          )}
+          <div className={`p-3 ${catItems.length > 0 ? "border-t border-slate-100" : ""}`}>
+            <button
+              onClick={() => addItem(cat.key)}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-orange-400 hover:text-orange-600 text-xs font-medium w-full justify-center transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Dodaj pozycję
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Główny edytor ─────────────────────────────────────────────────────────
+export default function WycenaEditor({ project, onClose }) {
+  const [items,   setItems]   = useState([]);
+  const [rooms,   setRooms]   = useState([]);
+  const [status,  setStatus]  = useState("Czeka na akceptację");
+  const [wycenaId, setId]     = useState(null);
+  const [loading,  setLoading] = useState(true);
+  const [saving,   setSaving]  = useState(false);
+  const [collapsed, setCollapsed] = useState(() =>
+    Object.fromEntries(CATEGORIES.map(c => [c.key, false]))
+  );
+  const [roomsCollapsed,  setRoomsCollapsed]  = useState(false);
+  const [showTechList,    setShowTechList]    = useState(false);
+  const [expandedNotes,   setExpandedNotes]   = useState(new Set());
+
   useEffect(() => {
     if (!GAS_ON) { setLoading(false); return; }
     getWycena(project.id)
       .then(w => {
         if (w && w.id) {
           setId(w.id);
-          setItems(Array.isArray(w.items) ? w.items : []);
+          const loadedItems = Array.isArray(w.items) ? w.items : [];
+          setItems(loadedItems);
           setRooms(Array.isArray(w.rooms) ? w.rooms : []);
           setStatus(w.status || "Czeka na akceptację");
+          // Auto-expand notes for items that already have a note
+          const withNotes = new Set(loadedItems.filter(i => i.note).map(i => i.id));
+          if (withNotes.size > 0) setExpandedNotes(withNotes);
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [project.id]);
 
-  const addItem = () => setItems(prev => [...prev, emptyItem()]);
+  const addItem    = (category) => setItems(prev => [...prev, emptyItem(category)]);
+  const removeItem = (id)       => setItems(prev => prev.filter(it => it.id !== id));
+  const updateItem = (id, field, value) => setItems(prev =>
+    prev.map(it => it.id === id
+      ? { ...it, [field]: ["quantity", "unit_price", "vat_rate"].includes(field) ? Number(value) : value }
+      : it
+    )
+  );
 
-  const addRoom    = () => setRooms(prev => [...prev, emptyRoom()]);
-  const removeRoom = (idx) => setRooms(prev => prev.filter((_, i) => i !== idx));
-  const updateRoom = (idx, field, value) =>
-    setRooms(prev => prev.map((r, i) =>
-      i === idx ? { ...r, [field]: field === "name" ? value : (parseFloat(value) || 0) } : r
-    ));
-
-  const updateItem = (id, field, value) => {
-    setItems(prev => prev.map(it =>
-      it.id === id ? { ...it, [field]: field === "quantity" || field === "unit_price" || field === "vat_rate" ? Number(value) : value } : it
-    ));
+  const reorderCategory = (catKey, activeId, overId) => {
+    setItems(prev => {
+      const catItems = prev.filter(i => i.category === catKey);
+      const reordered = arrayMove(catItems,
+        catItems.findIndex(i => i.id === activeId),
+        catItems.findIndex(i => i.id === overId),
+      );
+      let ri = 0;
+      return prev.map(i => i.category === catKey ? reordered[ri++] : i);
+    });
   };
 
-  const removeItem = (id) => setItems(prev => prev.filter(it => it.id !== id));
+  const toggleNote = (id) => setExpandedNotes(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const addRoom    = ()          => setRooms(prev => [...prev, emptyRoom()]);
+  const removeRoom = (idx)       => setRooms(prev => prev.filter((_, i) => i !== idx));
+  const updateRoom = (idx, field, value) => setRooms(prev =>
+    prev.map((r, i) => i === idx ? { ...r, [field]: field === "name" ? value : (parseFloat(value) || 0) } : r)
+  );
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const wycena = {
-        id:        wycenaId || undefined,
-        projectId: project.id,
-        items,
-        rooms,
-        status,
-      };
-      const saved = await upsertWycena(wycena);
+      const saved = await upsertWycena({ id: wycenaId || undefined, projectId: project.id, items, rooms, status });
       if (saved && saved.id) setId(saved.id);
       toast.success("Wycena zapisana");
     } catch (e) {
@@ -218,15 +396,8 @@ export default function WycenaEditor({ project, onClose }) {
     }
   };
 
-  // Sumy
   const totalNet   = items.reduce((s, i) => s + round2((i.quantity || 0) * (i.unit_price || 0)), 0);
   const totalGross = items.reduce((s, i) => s + calcGross(i), 0);
-
-  // Pogrupuj pozycje wg kategorii
-  const byCategory = CATEGORIES.map(cat => ({
-    ...cat,
-    items: items.filter(i => i.category === cat.key),
-  })).filter(cat => cat.items.length > 0);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-stretch justify-end">
@@ -272,164 +443,30 @@ export default function WycenaEditor({ project, onClose }) {
         </div>
 
         {/* Treść */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
             </div>
           ) : (
             <>
-              {/* Tabela pozycji */}
-              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
-                <div className="overflow-x-auto">
-                <table className="w-full text-sm min-w-[600px]">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="text-left p-3 font-semibold">Pozycja</th>
-                      <th className="text-left p-3 font-semibold w-44">Kategoria</th>
-                      <th className="text-right p-3 font-semibold w-20">Ilość</th>
-                      <th className="text-right p-3 font-semibold w-36">
-                        Cena jedn.
-                        <div className="text-[10px] font-normal text-slate-400 normal-case tracking-normal">netto / brutto</div>
-                      </th>
-                      <th className="text-right p-3 font-semibold w-20">VAT %</th>
-                      <th className="text-right p-3 font-semibold w-28">Suma brutto</th>
-                      <th className="p-3 w-8"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="text-center py-8 text-slate-400 text-sm">
-                          Brak pozycji — kliknij „Dodaj pozycję"
-                        </td>
-                      </tr>
-                    )}
-                    {items.map(item => (
-                      <tr key={item.id} className="hover:bg-slate-50/50">
-                        <td className="p-2">
-                          <input
-                            value={item.name}
-                            onChange={e => updateItem(item.id, "name", e.target.value)}
-                            placeholder="Nazwa pozycji"
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <select
-                            value={item.category}
-                            onChange={e => updateItem(item.id, "category", e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 bg-white"
-                          >
-                            {CATEGORIES.map(c => (
-                              <option key={c.key} value={c.key}>{c.label}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="p-2">
-                          <input
-                            type="number" min="0" step="1"
-                            value={item.quantity}
-                            onChange={e => updateItem(item.id, "quantity", e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <div className="flex flex-col gap-1">
-                            <input
-                              type="number" min="0" step="0.01"
-                              value={item.unit_price}
-                              onChange={e => updateItem(item.id, "unit_price", e.target.value)}
-                              title="Cena netto"
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                            />
-                            <input
-                              key={`gross-${item.id}-${item.unit_price}-${item.vat_rate}`}
-                              type="number" min="0" step="0.01"
-                              defaultValue={round2(item.unit_price * (1 + (item.vat_rate ?? 8) / 100))}
-                              onBlur={e => {
-                                const gross = parseFloat(e.target.value) || 0;
-                                updateItem(item.id, "unit_price", round2(gross / (1 + (item.vat_rate ?? 8) / 100)));
-                              }}
-                              title="Cena brutto — wpisz aby przeliczyć netto"
-                              className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-blue-50/50 text-slate-600"
-                            />
-                          </div>
-                        </td>
-                        <td className="p-2">
-                          <select
-                            value={item.vat_rate}
-                            onChange={e => updateItem(item.id, "vat_rate", e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 bg-white"
-                          >
-                            <option value={0}>0%</option>
-                            <option value={8}>8%</option>
-                            <option value={23}>23%</option>
-                          </select>
-                        </td>
-                        <td className="p-2 text-right font-semibold text-slate-900 whitespace-nowrap">
-                          {calcGross(item).toLocaleString("pl-PL", PLN)} zł
-                        </td>
-                        <td className="p-2">
-                          <button
-                            onClick={() => removeItem(item.id)}
-                            className="p-1 text-slate-300 hover:text-red-500 transition-colors rounded"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                </div>
-              </div>
+              {/* Sekcje kategorii */}
+              {CATEGORIES.map(cat => (
+                <CategorySection
+                  key={cat.key}
+                  cat={cat}
+                  catItems={items.filter(i => i.category === cat.key)}
+                  updateItem={updateItem}
+                  removeItem={removeItem}
+                  addItem={addItem}
+                  reorder={(aId, oId) => reorderCategory(cat.key, aId, oId)}
+                  expandedNotes={expandedNotes}
+                  onToggleNote={toggleNote}
+                  collapsed={collapsed[cat.key]}
+                  onCollapse={() => setCollapsed(p => ({ ...p, [cat.key]: !p[cat.key] }))}
+                />
+              ))}
 
-              <button
-                onClick={addItem}
-                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-orange-400 hover:text-orange-600 text-sm font-medium w-full justify-center transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Dodaj pozycję
-              </button>
-
-              {/* Podgląd wg kategorii */}
-              {byCategory.length > 0 && (
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-                    <h3 className="text-sm font-semibold text-slate-700">Podgląd wg kategorii</h3>
-                  </div>
-                  {byCategory.map(cat => {
-                    const catGross = cat.items.reduce((s, i) => s + calcGross(i), 0);
-                    const isOpen   = !collapsed[cat.key];
-                    return (
-                      <div key={cat.key} className="border-b border-slate-100 last:border-0">
-                        <button
-                          className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-slate-50 text-left"
-                          onClick={() => setCollapsed(p => ({ ...p, [cat.key]: !p[cat.key] }))}
-                        >
-                          <span className="text-sm font-semibold text-slate-800">{cat.label}</span>
-                          <div className="flex items-center gap-3">
-                            <span className="text-sm font-bold text-orange-600">
-                              {catGross.toLocaleString("pl-PL", PLN)} zł
-                            </span>
-                            {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
-                          </div>
-                        </button>
-                        {isOpen && (
-                          <div className="px-4 pb-2 space-y-1">
-                            {cat.items.map(i => (
-                              <div key={i.id} className="flex justify-between text-xs text-slate-600 py-0.5">
-                                <span>{i.name || <em className="text-slate-400">bez nazwy</em>} × {i.quantity}</span>
-                                <span>{calcGross(i).toLocaleString("pl-PL", PLN)} zł</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
               {/* Analiza techniczna pomieszczeń */}
               <div className="border border-slate-200 rounded-xl overflow-hidden">
                 <button
@@ -439,7 +476,9 @@ export default function WycenaEditor({ project, onClose }) {
                   <h3 className="text-sm font-semibold text-slate-700">Analiza techniczna pomieszczeń</h3>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-400">{rooms.length} pom.</span>
-                    {roomsCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronUp className="w-3.5 h-3.5 text-slate-400" />}
+                    {roomsCollapsed
+                      ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      : <ChevronUp   className="w-3.5 h-3.5 text-slate-400" />}
                   </div>
                 </button>
                 {!roomsCollapsed && (
@@ -518,13 +557,8 @@ export default function WycenaEditor({ project, onClose }) {
         </div>
       </div>
 
-      {/* Modal: lista dla technika */}
       {showTechList && (
-        <TechListModal
-          items={items}
-          project={project}
-          onClose={() => setShowTechList(false)}
-        />
+        <TechListModal items={items} project={project} onClose={() => setShowTechList(false)} />
       )}
     </div>
   );

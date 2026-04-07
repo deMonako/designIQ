@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { logger } from "../../logger";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
-import { 
+import {
   ArrowLeft, FileText, ChevronDown, ChevronUp, Music,
   Smartphone, Zap, Shield, Camera, Lightbulb, Home, PenTool, LifeBuoy,
-  Download, CheckCircle, Calendar, AlertTriangle, XCircle, Loader2, ClipboardList, LayoutList
+  Download, CheckCircle, Calendar, AlertTriangle, XCircle, Loader2, ClipboardList, LayoutList, MessageSquare
 } from "lucide-react";
 import { toast } from "sonner";
 import ProjectTimeline from "../quotation/ProjectTimeline";
@@ -32,7 +32,8 @@ const roomAnalysis = [
 
 export default function ClientWycenaView({ investment, quotation, onBack, onRefresh }) {
   const [expandedCategories, setExpandedCategories] = useState({});
-  const [showModal, setShowModal] = useState(null); 
+  const [showModal, setShowModal] = useState(null);
+  const [activeNote, setActiveNote] = useState(null); // item id with open note tooltip
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittingType, setSubmittingType] = useState(null);
 
@@ -562,7 +563,28 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                             return (
                               <tr key={i} className="text-slate-700 hover:bg-slate-50/50">
                                 <td className="p-2 sm:p-3 font-medium leading-tight break-words">
-                                  {item.name}
+                                  <div className="flex items-start gap-1.5">
+                                    <span>{item.name}</span>
+                                    {item.note && (
+                                      <div className="relative flex-shrink-0 mt-0.5">
+                                        <button
+                                          onClick={() => setActiveNote(activeNote === `${key}-${i}` ? null : `${key}-${i}`)}
+                                          className="text-orange-400 hover:text-orange-600 transition-colors"
+                                          title="Komentarz"
+                                        >
+                                          <MessageSquare className="w-3.5 h-3.5" />
+                                        </button>
+                                        {activeNote === `${key}-${i}` && (
+                                          <div className="absolute left-0 top-6 z-30 bg-white border border-orange-200 rounded-xl shadow-lg p-3 text-xs text-slate-600 leading-relaxed min-w-[200px] max-w-[260px]">
+                                            <div className="flex items-center gap-1.5 mb-1.5 text-orange-600 font-semibold">
+                                              <MessageSquare className="w-3 h-3" /> Adnotacja
+                                            </div>
+                                            {item.note}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-2 sm:p-3 text-center text-slate-400">
                                   {item.quantity}
