@@ -21,8 +21,12 @@ function emptyItem() {
   };
 }
 
+const PLN = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
 function calcGross(item) {
-  return (item.quantity || 0) * (item.unit_price || 0) * (1 + (item.vat_rate ?? 8) / 100);
+  return round2((item.quantity || 0) * (item.unit_price || 0) * (1 + (item.vat_rate ?? 8) / 100));
 }
 
 // ── Modal: lista materiałów dla technika ────────────────────────────────────
@@ -215,7 +219,7 @@ export default function WycenaEditor({ project, onClose }) {
   };
 
   // Sumy
-  const totalNet   = items.reduce((s, i) => s + (i.quantity || 0) * (i.unit_price || 0), 0);
+  const totalNet   = items.reduce((s, i) => s + round2((i.quantity || 0) * (i.unit_price || 0)), 0);
   const totalGross = items.reduce((s, i) => s + calcGross(i), 0);
 
   // Pogrupuj pozycje wg kategorii
@@ -284,7 +288,10 @@ export default function WycenaEditor({ project, onClose }) {
                       <th className="text-left p-3 font-semibold">Pozycja</th>
                       <th className="text-left p-3 font-semibold w-44">Kategoria</th>
                       <th className="text-right p-3 font-semibold w-20">Ilość</th>
-                      <th className="text-right p-3 font-semibold w-28">Cena netto</th>
+                      <th className="text-right p-3 font-semibold w-36">
+                        Cena jedn.
+                        <div className="text-[10px] font-normal text-slate-400 normal-case tracking-normal">netto / brutto</div>
+                      </th>
                       <th className="text-right p-3 font-semibold w-20">VAT %</th>
                       <th className="text-right p-3 font-semibold w-28">Suma brutto</th>
                       <th className="p-3 w-8"></th>
@@ -328,12 +335,26 @@ export default function WycenaEditor({ project, onClose }) {
                           />
                         </td>
                         <td className="p-2">
-                          <input
-                            type="number" min="0" step="0.01"
-                            value={item.unit_price}
-                            onChange={e => updateItem(item.id, "unit_price", e.target.value)}
-                            className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-                          />
+                          <div className="flex flex-col gap-1">
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={item.unit_price}
+                              onChange={e => updateItem(item.id, "unit_price", e.target.value)}
+                              title="Cena netto"
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm text-right outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+                            />
+                            <input
+                              key={`gross-${item.id}-${item.unit_price}-${item.vat_rate}`}
+                              type="number" min="0" step="0.01"
+                              defaultValue={round2(item.unit_price * (1 + (item.vat_rate ?? 8) / 100))}
+                              onBlur={e => {
+                                const gross = parseFloat(e.target.value) || 0;
+                                updateItem(item.id, "unit_price", round2(gross / (1 + (item.vat_rate ?? 8) / 100)));
+                              }}
+                              title="Cena brutto — wpisz aby przeliczyć netto"
+                              className="w-full border border-blue-200 rounded-lg px-2 py-1 text-xs text-right outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-blue-50/50 text-slate-600"
+                            />
+                          </div>
                         </td>
                         <td className="p-2">
                           <select
@@ -347,7 +368,7 @@ export default function WycenaEditor({ project, onClose }) {
                           </select>
                         </td>
                         <td className="p-2 text-right font-semibold text-slate-900 whitespace-nowrap">
-                          {calcGross(item).toLocaleString("pl-PL", { minimumFractionDigits: 2 })} zł
+                          {calcGross(item).toLocaleString("pl-PL", PLN)} zł
                         </td>
                         <td className="p-2">
                           <button
@@ -389,7 +410,7 @@ export default function WycenaEditor({ project, onClose }) {
                           <span className="text-sm font-semibold text-slate-800">{cat.label}</span>
                           <div className="flex items-center gap-3">
                             <span className="text-sm font-bold text-orange-600">
-                              {catGross.toLocaleString("pl-PL", { minimumFractionDigits: 2 })} zł
+                              {catGross.toLocaleString("pl-PL", PLN)} zł
                             </span>
                             {isOpen ? <ChevronUp className="w-3.5 h-3.5 text-slate-400" /> : <ChevronDown className="w-3.5 h-3.5 text-slate-400" />}
                           </div>
@@ -399,7 +420,7 @@ export default function WycenaEditor({ project, onClose }) {
                             {cat.items.map(i => (
                               <div key={i.id} className="flex justify-between text-xs text-slate-600 py-0.5">
                                 <span>{i.name || <em className="text-slate-400">bez nazwy</em>} × {i.quantity}</span>
-                                <span>{calcGross(i).toLocaleString("pl-PL", { minimumFractionDigits: 2 })} zł</span>
+                                <span>{calcGross(i).toLocaleString("pl-PL", PLN)} zł</span>
                               </div>
                             ))}
                           </div>
@@ -486,11 +507,11 @@ export default function WycenaEditor({ project, onClose }) {
           <div className="flex gap-8 text-sm">
             <div>
               <div className="text-slate-400 text-xs uppercase tracking-wider">Suma netto</div>
-              <div className="font-bold">{totalNet.toLocaleString("pl-PL", { minimumFractionDigits: 2 })} zł</div>
+              <div className="font-bold">{totalNet.toLocaleString("pl-PL", PLN)} zł</div>
             </div>
             <div>
               <div className="text-slate-400 text-xs uppercase tracking-wider">Suma brutto</div>
-              <div className="font-bold text-orange-400 text-lg">{totalGross.toLocaleString("pl-PL", { minimumFractionDigits: 2 })} zł</div>
+              <div className="font-bold text-orange-400 text-lg">{totalGross.toLocaleString("pl-PL", PLN)} zł</div>
             </div>
           </div>
           <div className="text-xs text-slate-500">{items.length} pozycji</div>
