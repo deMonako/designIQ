@@ -21,7 +21,7 @@ const navigation = [
       { name: "FAQ", href: createPageUrl("FAQ"), icon: Mail }
     ]
   },
-  // { name: "Realizacje", href: createPageUrl("Realizacje"), icon: Home }, // tymczasowo ukryte
+  { name: "Realizacje", href: createPageUrl("Realizacje"), icon: Home },
   { name: "Oferta", href: createPageUrl("Oferta"), icon: Package },
   { name: "O nas", href: createPageUrl("ONas"), icon: Users },
   { name: "Kontakt", href: createPageUrl("Kontakt"), icon: Mail },

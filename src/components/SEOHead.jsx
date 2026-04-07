@@ -146,15 +146,15 @@ const FAQ_SCHEMA = {
 
 const pageMetadata = {
   '/': {
-    title: 'Inteligentny Dom Bydgoszcz - Smart Home Loxone | designiQ',
-    description: 'Inteligentny Dom Bydgoszcz i kujawsko-pomorskie. Profesjonalne systemy Smart Home Loxone – automatyka budynkowa. Certyfikowany partner Loxone: projekty, instalacje, programowanie.',
+    title: 'Inteligentny Dom Bydgoszcz – Smart Home Loxone | designiQ',
+    description: 'Certyfikowany partner Loxone w Bydgoszczy i kujawsko-pomorskim. Profesjonalne systemy Smart Home – automatyka oświetlenia, ogrzewania, rolet, alarmu i audio.',
     keywords: 'inteligentny dom bydgoszcz, smart home bydgoszcz, automatyka budynkowa, loxone partner bydgoszcz, smart home kujawsko-pomorskie, projektowanie smart home, designiq',
     ogImage: OG_IMAGE_DEFAULT,
     schema: ORGANIZATION_SCHEMA,
   },
   '/Konfigurator': {
-    title: 'Wycena Smart Home Bydgoszcz - Konfigurator Inteligentnego Domu Online | designiQ',
-    description: 'Odbierz darmową wycenę Smart Home w Bydgoszczy. Stwórz konfigurację inteligentnego domu i otrzymaj kosztorys. Interaktywny konfigurator Loxone w 4 krokach.',
+    title: 'Konfigurator Smart Home – Bezpłatna Wycena Online | designiQ',
+    description: 'Stwórz konfigurację inteligentnego domu i odbierz darmową wycenę Smart Home. Interaktywny konfigurator Loxone w 4 krokach. Bydgoszcz i kujawsko-pomorskie.',
     keywords: 'konfigurator smart home, wycena smart home online, kalkulator smart home, konfigurator loxone, cena inteligentnego domu, darmowa wycena bydgoszcz',
     schema: {
       "@context": "https://schema.org",
@@ -170,7 +170,7 @@ const pageMetadata = {
     }
   },
   '/CoZyskasz': {
-    title: 'Korzyści Inteligentnego Domu (Smart Home) - Oszczędność, Bezpieczeństwo | designiQ',
+    title: 'Co Zyskasz z Smart Home Loxone? Oszczędność i Komfort | designiQ',
     description: 'Odkryj zalety inteligentnego domu Loxone: do 30% oszczędności energii, pełne bezpieczeństwo, komfort życia i wzrost wartości nieruchomości. ROI 2-4 lata.',
     keywords: 'korzyści smart home, oszczędność energii inteligentny dom, bezpieczeństwo domu, automatyzacja domu, zalety smart home, loxone korzyści, zarządzanie energią',
     schema: {
@@ -183,7 +183,7 @@ const pageMetadata = {
     }
   },
   '/Oferta': {
-    title: 'Pakiety Smart Home Loxone - Projekty i Instalacje | designiQ Bydgoszcz',
+    title: 'Oferta Smart Home Loxone – Projekty i Instalacje | designiQ',
     description: 'Wybierz pakiet Smart Home: Smart Design (projekt), Smart Design+ (prefabrykacja) lub Full House (pełne uruchomienie). Kompleksowe rozwiązania Loxone w Bydgoszczy i kujawsko-pomorskim.',
     keywords: 'oferta smart home, pakiety smart home, cena smart home, smart design, projektowanie smart home bydgoszcz, instalacja loxone, koszt inteligentnego domu',
     schema: {
@@ -207,7 +207,7 @@ const pageMetadata = {
     }
   },
   '/ONas': {
-    title: 'O Nas - Certyfikowani Eksperci Smart Home Loxone Bydgoszcz | designiQ',
+    title: 'O Nas – Certyfikowani Eksperci Smart Home Loxone | designiQ',
     description: 'designiQ – certyfikowany partner Loxone z Bydgoszczy. Eksperci Smart Home i automatyki budynkowej obsługujący kujawsko-pomorskie. Projekty, programowanie, integracja systemów.',
     keywords: 'partner loxone bydgoszcz, firma smart home kujawsko-pomorskie, inteligentny dom bydgoszcz, projektowanie automatyki, certyfikowany partner loxone',
     schema: {
@@ -245,7 +245,7 @@ const pageMetadata = {
     }
   },
   '/FAQ': {
-    title: 'FAQ Smart Home – Najczęstsze Pytania i Odpowiedzi | designiQ Bydgoszcz',
+    title: 'FAQ Smart Home – Najczęstsze Pytania i Odpowiedzi | designiQ',
     description: 'Odpowiedzi na 24 najczęstsze pytania o Smart Home: koszty, instalacja, technologia Loxone, pakiety usług i gwarancja. Dowiedz się wszystkiego przed zakupem systemu automatyki budynkowej.',
     keywords: 'faq smart home, pytania smart home, ile kosztuje smart home, jak działa smart home, instalacja smart home bydgoszcz, loxone pytania, automatyka budynkowa pytania',
     schema: FAQ_SCHEMA,
@@ -270,7 +270,7 @@ const pageMetadata = {
     }
   },
   '/Instalator': {
-    title: 'Integracja Loxone Smart Home – Pokaz Możliwości | designiQ Bydgoszcz',
+    title: 'Możliwości Loxone Smart Home – Pokaz Integracji | designiQ',
     description: 'Interaktywny pokaz możliwości systemu Loxone. Sterowanie fotowoltaiką, pompą ciepła, oświetleniem i klimatyzacją w czasie rzeczywistym. Automatyka budynkowa KNX, Modbus, DALI.',
     keywords: 'loxone integracja, smart home demo, loxone miniserver, automatyka budynkowa demo, knx modbus dali, fotowoltaika pompa ciepła automatyka, loxone bydgoszcz',
     schema: {
