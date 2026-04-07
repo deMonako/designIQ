@@ -258,7 +258,7 @@ function ProjectCard({ project, client, onClick }) {
           <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-800 truncate">{project.name}</div>
             <div
-              className="relative text-xs text-slate-400 truncate mt-0.5 cursor-default"
+              className="relative text-xs text-slate-400 truncate mt-0.5"
               onMouseEnter={() => setShowContact(true)}
               onMouseLeave={() => setShowContact(false)}
             >

@@ -102,7 +102,8 @@ function ProjectCard({ project, client, onClick, onDelete }) {
   return (
     <motion.div
       whileHover={{ y: -2 }}
-      className="relative group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200 transition-all p-5"
+      className="relative group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-orange-200 transition-all p-5 cursor-pointer"
+      onClick={() => onClick(project)}
     >
       {/* Delete confirm overlay */}
       <AnimatePresence>
@@ -144,7 +145,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
         </button>
       )}
 
-      <div className="flex items-start justify-between gap-2 mb-3 cursor-pointer" onClick={() => onClick(project)}>
+      <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0">
           <h3 className="font-semibold text-slate-900 truncate">{project.name}</h3>
           <div className="flex items-center gap-2 mt-0.5">
@@ -162,7 +163,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
         <StatusBadge status={project.status} />
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap cursor-pointer" onClick={() => onClick(project)}>
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <PackageBadge pkg={project.package} />
         <span className="text-xs text-slate-500 flex items-center gap-1">
           <MapPin className="w-3 h-3" />
@@ -170,7 +171,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
         </span>
       </div>
 
-      <div className="mb-3 cursor-pointer" onClick={() => onClick(project)}>
+      <div className="mb-3">
         <div className="flex justify-between text-xs text-slate-500 mb-1">
           <span>Postęp</span>
           <span className="font-semibold text-slate-700">{project.progress}%</span>
@@ -183,7 +184,7 @@ function ProjectCard({ project, client, onClick, onDelete }) {
         </div>
       </div>
 
-      <div className="flex items-center text-xs cursor-pointer" onClick={() => onClick(project)}>
+      <div className="flex items-center text-xs">
         <span className={`flex items-center gap-1 ${overdue ? "text-red-500 font-semibold" : "text-slate-400"}`}>
           {overdue ? <AlertTriangle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
           {overdue ? "Opóźniony" : project.deadline}
