@@ -1,0 +1,26 @@
+# Włącz mod_rewrite
+RewriteEngine On
+RewriteBase /
+
+# Wymuszenie HTTPS + www
+# 1. non-www (http lub https) → https://www
+RewriteCond %{HTTP_HOST} ^designiq\.pl$ [NC]
+RewriteRule ^(.*)$ https://www.designiq.pl/$1 [L,R=301]
+
+# 2. http://www → https://www
+RewriteCond %{HTTPS} off
+RewriteRule ^(.*)$ https://www.designiq.pl/$1 [L,R=301]
+
+# Przekierowania starych URL-i (301)
+RewriteRule ^onas\.html$ / [R=301,L]
+RewriteRule ^konfigurator\.html$ /Konfigurator [R=301,L]
+RewriteRule ^kontakt\.html$ /Kontakt [R=301,L]
+RewriteRule ^oferta\.html$ /Oferta [R=301,L]
+
+# Jeśli plik lub folder istnieje → wyświetl normalnie
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# React Router - wszystkie pozostałe ścieżki → index.html
+RewriteRule . /index.html [L]
