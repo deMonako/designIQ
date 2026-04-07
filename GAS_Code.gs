@@ -620,7 +620,51 @@ function doGet(e) {
         }
 
         // Tryb jednostronicowy (wsteczna kompatybilność)
-        if (!singleSvg) return ok({ floors: [] });
+        if (!singleSvg) {
+          // Brak plików rzutu — załaduj projekt demonstracyjny z folderu DEMO
+          var demoFolder = getProjectFolder("DEMO");
+          if (!demoFolder) return ok({ floors: [], isDemo: true });
+
+          var demoFloorMap = {};
+          var demoFiles = demoFolder.getFiles();
+          while (demoFiles.hasNext()) {
+            var ddf       = demoFiles.next();
+            var dOrigName = ddf.getName();
+            var dNameLow  = dOrigName.toLowerCase();
+
+            var dDimMatch  = dNameLow.match(/^projekt_(.+)_dim\.svg$/);
+            var dSvgMatch  = (!dDimMatch) && dNameLow.match(/^projekt_(.+)\.svg$/);
+            var dJsonMatch = dNameLow.match(/^projekt_(.+)\.json$/);
+
+            if (dDimMatch || dSvgMatch || dJsonMatch) {
+              var dDotIdx = dOrigName.lastIndexOf(".");
+              var dFloorKey;
+              if (dDimMatch) {
+                dFloorKey = dOrigName.slice(8, dOrigName.lastIndexOf("_dim."));
+              } else {
+                dFloorKey = dOrigName.slice(8, dDotIdx);
+              }
+              if (!demoFloorMap[dFloorKey]) demoFloorMap[dFloorKey] = { svg: null, json: null, jsonDate: null, dimSvg: null };
+              if (dDimMatch)  demoFloorMap[dFloorKey].dimSvg  = ddf.getBlob().getDataAsString("UTF-8");
+              if (dSvgMatch)  demoFloorMap[dFloorKey].svg     = ddf.getBlob().getDataAsString("UTF-8");
+              if (dJsonMatch) {
+                demoFloorMap[dFloorKey].json     = ddf.getBlob().getDataAsString("UTF-8");
+                demoFloorMap[dFloorKey].jsonDate = ddf.getDateCreated().toISOString();
+              }
+            }
+          }
+
+          var demoFloorKeys = Object.keys(demoFloorMap);
+          if (demoFloorKeys.length === 0) return ok({ floors: [], isDemo: true });
+
+          var demoFloors = demoFloorKeys.map(function(key) {
+            var dAtt = null;
+            if (demoFloorMap[key].json) { try { dAtt = JSON.parse(demoFloorMap[key].json); } catch(ex) {} }
+            return { name: key, svg: demoFloorMap[key].svg, attribs: dAtt, date: demoFloorMap[key].jsonDate ?? null, dimSvg: demoFloorMap[key].dimSvg ?? null };
+          });
+          return ok({ floors: demoFloors, isDemo: true });
+        }
+
         var singleAtt = null;
         if (singleJson) { try { singleAtt = JSON.parse(singleJson); } catch(ex) {} }
         return ok({ floors: [{ name: "Rzut", svg: singleSvg, attribs: singleAtt, date: singleJsonDate ?? null, dimSvg: singleDimSvg ?? null }] });

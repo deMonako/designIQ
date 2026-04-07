@@ -579,6 +579,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   const [showDim,      setShowDim]      = useState(false); // toggle warstwy wymiarów
   const [hasDimSvg,    setHasDimSvg]   = useState(false); // czy aktywne piętro ma plik _dim
   const [showHeights,  setShowHeights] = useState(true);  // pokaż wysokości montażu przy punktach
+  const [isDemo,       setIsDemo]       = useState(false); // czy załadowany projekt demonstracyjny
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const tRef         = useRef({ scale: 1, panX: 0, panY: 0 });
   const dragRef      = useRef(null);
@@ -871,6 +873,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const myId = ++loadIdRef.current;  // unikalny id tego ładowania
     setLoadState("loading");
     setLoadProg({ pct: 5, label: "Pobieranie…" });
+    setIsDemo(false);
+    setShowDemoModal(false);
     colorCache.clear();
     try {
       setLoadProg({ pct: 20, label: "Pobieranie…" });
@@ -888,7 +892,11 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       if (myId !== loadIdRef.current) return;  // przestarzałe ładowanie – porzuć
       setLoadProg({ pct: 40, label: "Pobieranie…" });
 
-      // GAS zwraca { floors: [...] }
+      // GAS zwraca { floors: [...], isDemo?: true }
+      if (res?.isDemo) {
+        setIsDemo(true);
+        if (clientMode) setShowDemoModal(true);
+      }
       const floorsRaw = res?.floors;
       if (!floorsRaw || floorsRaw.length === 0) { setLoadState("empty"); return; }
 
@@ -1249,6 +1257,29 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         )}
 
       </div>
+
+      {/* Modal: projekt demonstracyjny */}
+      {showDemoModal && clientMode && (
+        <div className="absolute inset-0 flex items-center justify-center z-50 bg-slate-900/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl p-6 mx-4 max-w-sm text-center pointer-events-auto">
+            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center mx-auto mb-3">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </div>
+            <h3 className="text-base font-semibold text-slate-800 mb-2">Projekt demonstracyjny</h3>
+            <p className="text-sm text-slate-500 leading-relaxed mb-5">
+              Tak będzie wyglądał Twój projekt automatyki. Docelowy rzut instalacji zostanie udostępniony po zakończeniu dokumentacji.
+            </p>
+            <button
+              onClick={() => setShowDemoModal(false)}
+              className="bg-blue-600 text-white text-sm font-medium px-5 py-2 rounded-lg hover:bg-blue-700 transition-colors w-full"
+            >
+              Rozumiem, pokaż demo
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
