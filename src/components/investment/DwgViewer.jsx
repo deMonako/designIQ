@@ -135,6 +135,36 @@ async function rasterizeSvg(svgEl, svgW, svgH) {
   });
 }
 
+// ── Pomocnik: rysuje tspany wysokości w elemencie <text> ────────────────────
+// Deduplikuje identyczne wartości; jeśli któraś > 10 znaków — każda w nowej linii.
+function renderClusterHeights(heightEl, items, baseX) {
+  const NS = "http://www.w3.org/2000/svg";
+  while (heightEl.firstChild) heightEl.removeChild(heightEl.firstChild);
+
+  // Dedup: zachowaj pierwsze wystąpienie każdej unikalnej wartości
+  const seen = new Set();
+  const unique = [];
+  for (const { h, typ } of items) {
+    if (seen.has(h)) continue;
+    seen.add(h);
+    unique.push({ h, typ });
+  }
+
+  const useLines = unique.some(u => u.h.length > 10);
+  unique.forEach((u, idx) => {
+    const span = document.createElementNS(NS, "tspan");
+    span.setAttribute("fill", dotColor(u.typ));
+    if (useLines) {
+      span.setAttribute("x", String(baseX));
+      span.setAttribute("dy", idx === 0 ? "0" : "2.8");
+      span.textContent = u.h;
+    } else {
+      span.textContent = (idx > 0 ? ", " : "") + u.h;
+    }
+    heightEl.appendChild(span);
+  });
+}
+
 // ── Budowanie nakładki SVG (oddzielna warstwa interaktywna) ───────────────────
 //
 // Oddzielny element SVG z kółkami – nie wpływa na repaint canvasa.
@@ -225,7 +255,7 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         heightTxt.setAttribute("stroke-linejoin", "round");
         heightTxt.setAttribute("data-has-height", hVal ? "1" : "0");
         heightTxt.textContent = hVal;
-        if (!hVal) heightTxt.style.display = "none";
+        heightTxt.style.display = "none"; // zawsze ukryte; showDim effect ustawia widoczność
 
         const hit = document.createElementNS(NS, "circle");
         hit.setAttribute("cx", svgX); hit.setAttribute("cy", svgY);
@@ -317,18 +347,15 @@ function buildOverlay(svgW, svgH, vbX, vbY, elements, meta, onSelectFn) {
         clusterHeightTxt.setAttribute("paint-order", "stroke");
         clusterHeightTxt.setAttribute("stroke", "white"); clusterHeightTxt.setAttribute("stroke-width", "0.7");
         clusterHeightTxt.setAttribute("stroke-linejoin", "round");
-        let clusterHasHeight = false;
-        cluster.forEach((p, idx) => {
+        const clusterHItems = [];
+        cluster.forEach(p => {
           const h = String(p.el.wysokość || "").trim();
-          if (!h) return;
-          const span = document.createElementNS(NS, "tspan");
-          span.setAttribute("fill", dotColor(p.el.typ));
-          span.textContent = (clusterHasHeight ? ", " : "") + h;
-          clusterHeightTxt.appendChild(span);
-          clusterHasHeight = true;
+          if (h) clusterHItems.push({ h, typ: p.el.typ });
         });
+        const clusterHasHeight = clusterHItems.length > 0;
         clusterHeightTxt.setAttribute("data-has-height", clusterHasHeight ? "1" : "0");
-        if (!clusterHasHeight) clusterHeightTxt.style.display = "none";
+        if (clusterHasHeight) renderClusterHeights(clusterHeightTxt, clusterHItems, cx + 3.5);
+        clusterHeightTxt.style.display = "none"; // zawsze ukryte; showDim effect ustawia widoczność
 
         const g = document.createElementNS(NS, "g");
         g.setAttribute("data-typ", cluster[0].el.typ || "");
@@ -670,13 +697,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           heightEl.setAttribute("data-has-height", hasH ? "1" : "0");
           heightEl.style.display = (showDimRef.current && showHeightsRef.current && hasH) ? "" : "none";
           if (hasH) {
-            while (heightEl.firstChild) heightEl.removeChild(heightEl.firstChild);
-            visWithHeight.forEach((it, idx) => {
-              const span = document.createElementNS("http://www.w3.org/2000/svg", "tspan");
-              span.setAttribute("fill", dotColor(it.typ));
-              span.textContent = (idx > 0 ? ", " : "") + it.wysk;
-              heightEl.appendChild(span);
-            });
+            const baseX = parseFloat(heightEl.getAttribute("x")) || 0;
+            renderClusterHeights(heightEl, visWithHeight.map(it => ({ h: it.wysk, typ: it.typ })), baseX);
           }
         }
 
@@ -825,6 +847,11 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       wrap.appendChild(overlayEl);
       overlayElRef.current = overlayEl;
       cleanupRef.current = () => { cleanup(); overlayEl.remove(); overlayElRef.current = null; };
+
+      // Zastosuj bieżący stan widoczności wysokości (showDim może być true przy zmianie piętra)
+      overlayEl.querySelectorAll(".c-height").forEach(el => {
+        el.style.display = (showDimRef.current && showHeightsRef.current && el.getAttribute("data-has-height") === "1") ? "" : "none";
+      });
     }
 
     // ── Krok 5: nakładka wymiarów (dim SVG) ──────────────────────────────────
