@@ -560,29 +560,22 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                             const vatRate   = item.vat_rate ?? 23;
                             const lineVat   = lineNet * vatRate / 100;
                             const lineGross = lineNet + lineVat;
+                            const noteKey = `${key}-${i}`;
+                            const noteOpen = activeNote === noteKey;
                             return (
-                              <tr key={i} className="text-slate-700 hover:bg-slate-50/50">
+                              <React.Fragment key={i}>
+                              <tr className="text-slate-700 hover:bg-slate-50/50">
                                 <td className="p-2 sm:p-3 font-medium leading-tight break-words">
                                   <div className="flex items-start gap-1.5">
                                     <span>{item.name}</span>
                                     {item.note && (
-                                      <div className="relative flex-shrink-0 mt-0.5">
-                                        <button
-                                          onClick={() => setActiveNote(activeNote === `${key}-${i}` ? null : `${key}-${i}`)}
-                                          className="text-orange-400 hover:text-orange-600 transition-colors"
-                                          title="Komentarz"
-                                        >
-                                          <MessageSquare className="w-3.5 h-3.5" />
-                                        </button>
-                                        {activeNote === `${key}-${i}` && (
-                                          <div className="absolute left-0 top-6 z-30 bg-white border border-orange-200 rounded-xl shadow-lg p-3 text-xs text-slate-600 leading-relaxed min-w-[200px] max-w-[260px]">
-                                            <div className="flex items-center gap-1.5 mb-1.5 text-orange-600 font-semibold">
-                                              <MessageSquare className="w-3 h-3" /> Adnotacja
-                                            </div>
-                                            {item.note}
-                                          </div>
-                                        )}
-                                      </div>
+                                      <button
+                                        onClick={() => setActiveNote(noteOpen ? null : noteKey)}
+                                        className={`flex-shrink-0 mt-0.5 transition-colors ${noteOpen ? "text-orange-500" : "text-orange-300 hover:text-orange-500"}`}
+                                        title="Komentarz"
+                                      >
+                                        <MessageSquare className="w-3.5 h-3.5" />
+                                      </button>
                                     )}
                                   </div>
                                 </td>
@@ -605,6 +598,17 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                                   {lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                                 </td>
                               </tr>
+                              {noteOpen && (
+                                <tr className="bg-orange-50/40">
+                                  <td colSpan={7} className="px-3 pb-2.5 pt-1.5">
+                                    <div className="flex items-start gap-2 text-xs text-slate-600 leading-relaxed">
+                                      <MessageSquare className="w-3 h-3 text-orange-400 flex-shrink-0 mt-0.5" />
+                                      <span>{item.note}</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                              </React.Fragment>
                             );
                           })}
                         </tbody>
