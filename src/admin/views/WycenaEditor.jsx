@@ -29,7 +29,7 @@ function emptyItem(category = "materials") {
   };
 }
 function emptyRoom() {
-  return { name: "", area: 0, presence: 0, switch: 0, lightRelay: 0, lightDim: 0, shading: 0, heating: 0, audio: 0 };
+  return { id: `rm-${Date.now()}-${Math.random().toString(36).slice(2,6)}`, name: "", area: 0, presence: 0, switch: 0, lightRelay: 0, lightDim: 0, shading: 0, heating: 0, audio: 0 };
 }
 
 // ── Modal: lista materiałów dla technika ────────────────────────────────────
@@ -257,6 +257,44 @@ function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote,
   );
 }
 
+// ── Wiersz pomieszczenia z DnD ────────────────────────────────────────────
+function SortableRoomRow({ room, updateRoom, removeRoom }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: room.id });
+  const style = {
+    transform: transform ? `translate3d(${transform.x}px,${transform.y}px,0)` : undefined,
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+  return (
+    <tr ref={setNodeRef} style={style} className="hover:bg-slate-50/50">
+      <td className="p-1.5 w-7">
+        <button
+          {...attributes} {...listeners}
+          className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-400 touch-none flex items-center justify-center w-full"
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
+      </td>
+      <td className="p-1.5">
+        <input type="text" value={room.name || ""} onChange={e => updateRoom(room.id, "name", e.target.value)}
+          placeholder="Nazwa..." className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-orange-400" />
+      </td>
+      {["area","presence","switch","lightRelay","lightDim","shading","heating","audio"].map(field => (
+        <td key={field} className="p-1.5">
+          <input type="number" min="0" step={field === "area" ? "0.01" : "1"}
+            value={room[field] ?? 0} onChange={e => updateRoom(room.id, field, e.target.value)}
+            className="w-full border border-slate-200 rounded px-1 py-1 text-xs text-center outline-none focus:border-orange-400" />
+        </td>
+      ))}
+      <td className="p-1.5">
+        <button onClick={() => removeRoom(room.id)} className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
 // ── Sekcja kategorii ──────────────────────────────────────────────────────
 function CategorySection({ cat, catItems, updateItem, removeItem, addItem, reorder, expandedNotes, onToggleNote, collapsed, onCollapse, onNameChange, onSelectSugg, sugg, suggPos, suggRefs }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -378,7 +416,7 @@ export default function WycenaEditor({ project, onClose }) {
           setId(w.id);
           const loadedItems = Array.isArray(w.items) ? w.items : [];
           setItems(loadedItems);
-          setRooms(Array.isArray(w.rooms) ? w.rooms : []);
+          setRooms(Array.isArray(w.rooms) ? w.rooms.map((r, i) => r.id ? r : { ...r, id: `rm-${i}-${Date.now()}` }) : []);
           setStatus(w.status || "Czeka na akceptację");
           // Auto-expand notes for items that already have a note
           const withNotes = new Set(loadedItems.filter(i => i.note).map(i => i.id));
@@ -471,10 +509,13 @@ export default function WycenaEditor({ project, onClose }) {
     setSugg(prev => ({ ...prev, [itemId]: { show: false, list: [] } }));
   }, []);
 
-  const addRoom    = ()          => setRooms(prev => [...prev, emptyRoom()]);
-  const removeRoom = (idx)       => setRooms(prev => prev.filter((_, i) => i !== idx));
-  const updateRoom = (idx, field, value) => setRooms(prev =>
-    prev.map((r, i) => i === idx ? { ...r, [field]: field === "name" ? value : (parseFloat(value) || 0) } : r)
+  const addRoom      = ()           => setRooms(prev => [...prev, emptyRoom()]);
+  const removeRoom   = (id)         => setRooms(prev => prev.filter(r => r.id !== id));
+  const updateRoom   = (id, field, value) => setRooms(prev =>
+    prev.map(r => r.id === id ? { ...r, [field]: field === "name" ? value : (parseFloat(value) || 0) } : r)
+  );
+  const reorderRooms = (activeId, overId) => setRooms(prev =>
+    arrayMove(prev, prev.findIndex(r => r.id === activeId), prev.findIndex(r => r.id === overId))
   );
 
   const handleSave = async () => {
@@ -582,10 +623,16 @@ export default function WycenaEditor({ project, onClose }) {
                 </button>
                 {!roomsCollapsed && (
                   <>
+                    <DndContext
+                      sensors={useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))}
+                      collisionDetection={closestCenter}
+                      onDragEnd={({ active, over }) => { if (over && active.id !== over.id) reorderRooms(active.id, over.id); }}
+                    >
                     <div className="overflow-x-auto">
-                      <table className="w-full text-xs min-w-[760px]">
+                      <table className="w-full text-xs min-w-[800px]">
                         <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider border-b border-slate-100">
                           <tr>
+                            <th className="p-2 w-7" />
                             <th className="text-left p-2 font-semibold">Pomieszczenie</th>
                             <th className="text-center p-2 w-14">m²</th>
                             <th className="text-center p-2 w-16">Obecność</th>
@@ -598,35 +645,26 @@ export default function WycenaEditor({ project, onClose }) {
                             <th className="p-2 w-8"></th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {rooms.length === 0 && (
-                            <tr>
-                              <td colSpan={10} className="p-4 text-center text-slate-400">Brak pomieszczeń — dodaj pierwsze</td>
-                            </tr>
-                          )}
-                          {rooms.map((room, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="p-1.5">
-                                <input type="text" value={room.name || ""} onChange={e => updateRoom(idx, "name", e.target.value)}
-                                  placeholder="Nazwa..." className="w-full border border-slate-200 rounded px-2 py-1 text-xs outline-none focus:border-orange-400" />
-                              </td>
-                              {["area","presence","switch","lightRelay","lightDim","shading","heating","audio"].map(field => (
-                                <td key={field} className="p-1.5">
-                                  <input type="number" min="0" step={field === "area" ? "0.01" : "1"}
-                                    value={room[field] ?? 0} onChange={e => updateRoom(idx, field, e.target.value)}
-                                    className="w-full border border-slate-200 rounded px-1 py-1 text-xs text-center outline-none focus:border-orange-400" />
-                                </td>
-                              ))}
-                              <td className="p-1.5">
-                                <button onClick={() => removeRoom(idx)} className="p-1 text-slate-300 hover:text-red-500 rounded transition-colors">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
+                        <SortableContext items={rooms.map(r => r.id)} strategy={verticalListSortingStrategy}>
+                          <tbody className="divide-y divide-slate-50">
+                            {rooms.length === 0 && (
+                              <tr>
+                                <td colSpan={11} className="p-4 text-center text-slate-400">Brak pomieszczeń — dodaj pierwsze</td>
+                              </tr>
+                            )}
+                            {rooms.map(room => (
+                              <SortableRoomRow
+                                key={room.id}
+                                room={room}
+                                updateRoom={updateRoom}
+                                removeRoom={removeRoom}
+                              />
+                            ))}
+                          </tbody>
+                        </SortableContext>
                       </table>
                     </div>
+                    </DndContext>
                     <div className="p-3 border-t border-slate-100">
                       <button onClick={addRoom}
                         className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 rounded-xl text-slate-500 hover:border-orange-400 hover:text-orange-600 text-xs font-medium w-full justify-center transition-colors">
