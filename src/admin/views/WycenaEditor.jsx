@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   X, Plus, Trash2, Save, Loader2, ChevronDown, ChevronUp,
   ClipboardList, Copy, Check, GripVertical, MessageSquare,
@@ -11,6 +11,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from "@dnd-kit/sortable";
 import { getWycena, upsertWycena } from "../api/gasApi";
+import { gasGet } from "../api/gasClient";
 import { GAS_CONFIG } from "../api/gasConfig";
 import { WYCENA_CATEGORIES as CATEGORIES, MATERIAL_CATEGORIES } from "../constants";
 
@@ -120,7 +121,7 @@ function TechListModal({ items, project, onClose }) {
 }
 
 // ── Wiersz tabeli z DnD ────────────────────────────────────────────────────
-function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote }) {
+function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote, onNameChange, onSelectSugg, sugg, suggPos, suggRefs }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
 
   const style = {
@@ -142,12 +143,41 @@ function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote 
         </td>
         <td className="p-2">
           <div className="flex items-center gap-1">
-            <input
-              value={item.name}
-              onChange={e => updateItem(item.id, "name", e.target.value)}
-              placeholder="Nazwa pozycji"
-              className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
-            />
+            <div
+              className="relative flex-1"
+              ref={el => { if (suggRefs) suggRefs.current[item.id] = el; }}
+            >
+              <input
+                value={item.name}
+                onChange={e => (onNameChange ? onNameChange(item.id, e.target.value) : updateItem(item.id, "name", e.target.value))}
+                placeholder="Nazwa pozycji (min. 3 znaki dla podpowiedzi)"
+                className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400"
+              />
+              {sugg?.show && suggPos && (
+                <ul
+                  style={{ position: 'fixed', top: suggPos.top + 2, left: suggPos.left, width: Math.max(suggPos.width, 280), zIndex: 9999 }}
+                  className="bg-white border border-slate-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm"
+                >
+                  {sugg.list.map(c => (
+                    <li
+                      key={c.sku ?? c.name}
+                      onMouseDown={() => onSelectSugg(item.id, c)}
+                      className="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-orange-50 gap-2"
+                    >
+                      <span className="flex-1 truncate">{c.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {c.sku && <span className="text-xs text-slate-400 font-mono">{c.sku}</span>}
+                        {c.price_pln != null && (
+                          <span className="text-xs font-semibold text-orange-600">
+                            {c.price_pln.toLocaleString("pl-PL")} zł
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <button
               onClick={() => onToggleNote(item.id)}
               title={noteExpanded ? "Ukryj komentarz" : "Dodaj komentarz dla klienta"}
@@ -228,7 +258,7 @@ function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote 
 }
 
 // ── Sekcja kategorii ──────────────────────────────────────────────────────
-function CategorySection({ cat, catItems, updateItem, removeItem, addItem, reorder, expandedNotes, onToggleNote, collapsed, onCollapse }) {
+function CategorySection({ cat, catItems, updateItem, removeItem, addItem, reorder, expandedNotes, onToggleNote, collapsed, onCollapse, onNameChange, onSelectSugg, sugg, suggPos, suggRefs }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const catGross = catItems.reduce((s, i) => s + calcGross(i), 0);
 
@@ -294,6 +324,11 @@ function CategorySection({ cat, catItems, updateItem, removeItem, addItem, reord
                           removeItem={removeItem}
                           noteExpanded={expandedNotes.has(item.id)}
                           onToggleNote={onToggleNote}
+                          onNameChange={onNameChange}
+                          onSelectSugg={onSelectSugg}
+                          sugg={sugg[item.id]}
+                          suggPos={suggPos[item.id]}
+                          suggRefs={suggRefs}
                         />
                       ))}
                     </tbody>
@@ -330,6 +365,10 @@ export default function WycenaEditor({ project, onClose }) {
   const [roomsCollapsed,  setRoomsCollapsed]  = useState(false);
   const [showTechList,    setShowTechList]    = useState(false);
   const [expandedNotes,   setExpandedNotes]   = useState(new Set());
+  const [cennik,   setCennik]  = useState([]);
+  const [sugg,     setSugg]    = useState({});
+  const [suggPos,  setSuggPos] = useState({});
+  const suggRefs = useRef({});
 
   useEffect(() => {
     if (!GAS_ON) { setLoading(false); return; }
@@ -348,7 +387,36 @@ export default function WycenaEditor({ project, onClose }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+
+    // Wczytaj cennik + materiały do autouzupełniania nazw pozycji
+    Promise.all([
+      gasGet("getCennik").catch(() => []),
+      gasGet("getMaterialyJson").catch(() => []),
+    ]).then(([cennikData, matData]) => {
+      const merged = [
+        ...(Array.isArray(cennikData) ? cennikData : []),
+        ...(Array.isArray(matData) ? matData.map(m => ({ name: m.name, price_pln: m.price_pln, sku: null, link: m.link })) : []),
+      ];
+      setCennik(merged);
+    });
   }, [project.id]);
+
+  // Zamknij podpowiedzi po kliknięciu poza
+  useEffect(() => {
+    const handler = (e) => {
+      setSugg(prev => {
+        const next = { ...prev };
+        Object.keys(suggRefs.current).forEach(id => {
+          if (suggRefs.current[id] && !suggRefs.current[id].contains(e.target)) {
+            if (next[id]) next[id] = { ...next[id], show: false };
+          }
+        });
+        return next;
+      });
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const addItem    = (category) => setItems(prev => [...prev, emptyItem(category)]);
   const removeItem = (id)       => setItems(prev => prev.filter(it => it.id !== id));
@@ -376,6 +444,32 @@ export default function WycenaEditor({ project, onClose }) {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
+
+  const handleNameChange = useCallback((id, value) => {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, name: value } : it));
+    if (value.length >= 3 && cennik.length > 0) {
+      const q = value.toLowerCase();
+      const matches = cennik
+        .filter(c => (c.name != null && c.name.toLowerCase().includes(q)) || (c.sku != null && String(c.sku).toLowerCase().includes(q)))
+        .slice(0, 8);
+      if (matches.length > 0 && suggRefs.current[id]) {
+        const rect = suggRefs.current[id].getBoundingClientRect();
+        setSuggPos(prev => ({ ...prev, [id]: { top: rect.bottom, left: rect.left, width: rect.width } }));
+      }
+      setSugg(prev => ({ ...prev, [id]: { show: matches.length > 0, list: matches } }));
+    } else {
+      setSugg(prev => ({ ...prev, [id]: { show: false, list: [] } }));
+    }
+  }, [cennik]);
+
+  const selectSugg = useCallback((itemId, cennikItem) => {
+    setItems(prev => prev.map(it =>
+      it.id === itemId
+        ? { ...it, name: cennikItem.name, unit_price: cennikItem.price_pln ?? it.unit_price }
+        : it
+    ));
+    setSugg(prev => ({ ...prev, [itemId]: { show: false, list: [] } }));
+  }, []);
 
   const addRoom    = ()          => setRooms(prev => [...prev, emptyRoom()]);
   const removeRoom = (idx)       => setRooms(prev => prev.filter((_, i) => i !== idx));
@@ -464,6 +558,11 @@ export default function WycenaEditor({ project, onClose }) {
                   onToggleNote={toggleNote}
                   collapsed={collapsed[cat.key]}
                   onCollapse={() => setCollapsed(p => ({ ...p, [cat.key]: !p[cat.key] }))}
+                  onNameChange={handleNameChange}
+                  onSelectSugg={selectSugg}
+                  sugg={sugg}
+                  suggPos={suggPos}
+                  suggRefs={suggRefs}
                 />
               ))}
 
