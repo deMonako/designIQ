@@ -241,7 +241,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     programming: { label: "Programowanie i logika systemu", description: "automatyzacje, scenariusze, testy", icon: <Lightbulb className="text-orange-600" /> },
     commissioning: { label: "Uruchomienie i szkolenie", description: "testy końcowe, przekazanie systemu", icon: <Home className="text-orange-600" /> },
     project: { label: "Projekt i dokumentacja", description: "schematy, dokumentacja techniczna", icon: <PenTool className="text-orange-600" /> },
-    service: { label: "Serwis, wsparcie i gwarancja", description: "opieka powdrożeniowa, serwis", icon: <LifeBuoy className="text-orange-600" /> }
+    service: { label: "Serwis, wsparcie i gwarancja", description: "stała opieka, rozbudowa systemu, nowe pomysły", icon: <LifeBuoy className="text-orange-600" /> }
   };
 
   const handleStatusUpdate = async (newStatus) => {
