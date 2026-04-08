@@ -403,6 +403,7 @@ export default function WycenaEditor({ project, onClose }) {
     Object.fromEntries(CATEGORIES.map(c => [c.key, false]))
   );
   const [roomsCollapsed,  setRoomsCollapsed]  = useState(false);
+  const roomSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [showTechList,    setShowTechList]    = useState(false);
   const [expandedNotes,   setExpandedNotes]   = useState(new Set());
   const [cennik,   setCennik]  = useState([]);
@@ -626,7 +627,7 @@ export default function WycenaEditor({ project, onClose }) {
                 {!roomsCollapsed && (
                   <>
                     <DndContext
-                      sensors={useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))}
+                      sensors={roomSensors}
                       collisionDetection={closestCenter}
                       onDragEnd={({ active, over }) => { if (over && active.id !== over.id) reorderRooms(active.id, over.id); }}
                     >
