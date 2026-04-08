@@ -20,6 +20,8 @@ import 'jspdf-autotable';
 import { font, LOGO_BASE64 } from "../ui/fonts";
 import { GAS_CONFIG } from "../../admin/api/gasConfig";
 
+const round2 = v => Math.round(v * 100) / 100;
+
 // Dane testowe, które naprawią błąd 'is not defined'
 const roomAnalysis = [
   { name: "Wiatrołap", area: 4.91, presence: 1, switch: 1, lightRelay: 2, shading: 1, heating: 1 },
@@ -104,10 +106,10 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
         const tableRows = items.map(item => {
           // Logika obliczeń:
           const unitPriceNet = item.unit_price;
-          const lineNet = item.quantity * unitPriceNet;
+          const lineNet = round2(item.quantity * unitPriceNet);
           const vatRate = (item.vat_rate ?? 23);
-          const lineGross = lineNet * (1 + vatRate / 100);
-          const lineVat = lineGross - lineNet;
+          const lineGross = round2(lineNet * (1 + vatRate / 100));
+          const lineVat = round2(lineGross - lineNet);
 
           // Akumulacja sum całkowitych
           totalNet += lineNet;
@@ -505,8 +507,8 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
               if (items.length === 0) return null;
               const config = categoryConfig[key];
               const isExpanded = expandedCategories[key];
-              const catNet   = items.reduce((sum, i) => sum + i.quantity * i.unit_price, 0);
-              const catTotal = items.reduce((sum, i) => sum + (i.quantity * i.unit_price * (1 + (i.vat_rate ?? 23) / 100)), 0);
+              const catNet   = items.reduce((sum, i) => sum + round2(i.quantity * i.unit_price), 0);
+              const catTotal = items.reduce((sum, i) => sum + round2(round2(i.quantity * i.unit_price) * (1 + (i.vat_rate ?? 23) / 100)), 0);
               return (
                 <div key={key} className="bg-white">
                   <button 
@@ -556,10 +558,10 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                           {items.map((item, i) => {
-                            const lineNet   = item.quantity * item.unit_price;
+                            const lineNet   = round2(item.quantity * item.unit_price);
                             const vatRate   = item.vat_rate ?? 23;
-                            const lineVat   = lineNet * vatRate / 100;
-                            const lineGross = lineNet + lineVat;
+                            const lineGross = round2(lineNet * (1 + vatRate / 100));
+                            const lineVat   = round2(lineGross - lineNet);
                             const noteKey = `${key}-${i}`;
                             const noteOpen = activeNote === noteKey;
                             return (
