@@ -119,9 +119,9 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
           return [
             item.name,
             item.quantity,
-            `${unitPriceNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł`,
+            `${unitPriceNet.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`,
             `${vatRate}%`,
-            `${lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł`
+            `${lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
           ];
         });
 
@@ -166,12 +166,12 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     // Netto
     doc.setFont("CustomFont", "normal");
     doc.text("Suma Netto:", summaryX, currentY);
-    doc.text(`${totalNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł`, 196, currentY, { align: 'right' });
+    doc.text(`${totalNet.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`, 196, currentY, { align: 'right' });
     
     // VAT
     currentY += 5;
     doc.text("Suma VAT:", summaryX, currentY);
-    doc.text(`${totalVat.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł`, 196, currentY, { align: 'right' });
+    doc.text(`${totalVat.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`, 196, currentY, { align: 'right' });
 
     // Brutto (Wyróżnione)
     currentY += 3;
@@ -180,7 +180,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     doc.setFont("CustomFont", "bold");
     doc.setTextColor(255, 255, 255);
     doc.text("SUMA BRUTTO:", summaryX, currentY + 6.5);
-    doc.text(`${totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł`, 194, currentY + 6.5, { align: 'right' });
+    doc.text(`${totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`, 194, currentY + 6.5, { align: 'right' });
 
     // --- ADNOTACJA ---
     currentY += 25;
@@ -225,11 +225,9 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
     );
   }
 
-  const totalNet = quotation.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
-  const totalGross = quotation.items.reduce((sum, item) => 
-    sum + (item.quantity * item.unit_price * (1 + (item.vat_rate ?? 23) / 100)), 0
-  );
-  const totalVat = totalGross - totalNet;
+  const totalNet   = quotation.items.reduce((sum, item) => sum + round2(item.quantity * item.unit_price), 0);
+  const totalGross = quotation.items.reduce((sum, item) => sum + round2(round2(item.quantity * item.unit_price) * (1 + (item.vat_rate ?? 23) / 100)), 0);
+  const totalVat   = round2(totalGross - totalNet);
 
   const currentStatus = investment.quotation_status || "Czeka na akceptację";
   const isAccepted = currentStatus === "Zaakceptowana";
@@ -428,7 +426,7 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                 Całkowity koszt inwestycji
               </div>
               <div className="text-4xl font-bold mb-2 tracking-tight">
-                {totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                {totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
               </div>
               <div className="text-[13px] text-slate-300 font-medium leading-relaxed">
                 Cena zawiera VAT, materiały, montaż i uruchomienie
@@ -526,10 +524,10 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                           {config.label}
                         </h4>
                         <span className="text-slate-400 font-medium text-xs whitespace-nowrap hidden sm:inline">
-                          {catNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł netto /
+                          {catNet.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł netto /
                         </span>
                         <span className="text-orange-600 font-bold text-sm whitespace-nowrap">
-                          {catTotal.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł brutto
+                          {catTotal.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł brutto
                         </span>
                       </div>
                       <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1 italic leading-tight">
@@ -589,19 +587,19 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                                   {item.quantity}
                                 </td>
                                 <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-600" : "text-slate-500"}`}>
-                                  {item.unit_price.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                  {item.unit_price.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
                                 </td>
                                 <td className={`p-2 sm:p-3 text-center hidden sm:table-cell text-[10px] ${isDiscount ? "text-green-500" : "text-slate-400"}`}>
                                   {vatRate}%
                                 </td>
                                 <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-600" : "text-slate-500"}`}>
-                                  {lineNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                  {lineNet.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
                                 </td>
                                 <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-500" : "text-slate-400"}`}>
-                                  {lineVat.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                  {lineVat.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
                                 </td>
                                 <td className={`p-2 sm:p-3 text-right font-bold whitespace-nowrap ${isDiscount ? "text-green-700" : "text-slate-900"}`}>
-                                  {lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
+                                  {lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł
                                 </td>
                               </tr>
                               {noteOpen && (
@@ -629,15 +627,15 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
           <div className="p-8 bg-slate-900 text-white rounded-b-xl flex flex-col items-end gap-2">
             <div className="flex justify-between w-full max-w-xs text-sm text-slate-400">
               <span>Wartość Netto:</span>
-              <span>{totalNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</span>
+              <span>{totalNet.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł</span>
             </div>
             <div className="flex justify-between w-full max-w-xs text-sm text-slate-400 border-b border-slate-700 pb-2">
               <span>Podatek VAT:</span>
-              <span>{totalVat.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</span>
+              <span>{totalVat.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł</span>
             </div>
             <div className="flex justify-between w-full max-w-xs text-2xl font-bold pt-2 text-orange-400 uppercase tracking-tight">
               <span>Razem:</span>
-              <span>{totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł</span>
+              <span>{totalGross.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł</span>
             </div>
           </div>
         </CardContent>
