@@ -130,9 +130,11 @@ function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote,
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const isDiscount = calcGross(item) < 0;
+
   return (
     <>
-      <tr ref={setNodeRef} style={style} className="hover:bg-slate-50/50">
+      <tr ref={setNodeRef} style={style} className={isDiscount ? "bg-green-50/60 hover:bg-green-50" : "hover:bg-slate-50/50"}>
         <td className="p-2 w-7">
           <button
             {...attributes} {...listeners}
@@ -230,7 +232,7 @@ function SortableRow({ item, updateItem, removeItem, noteExpanded, onToggleNote,
             <option value={23}>23%</option>
           </select>
         </td>
-        <td className="p-2 text-right font-semibold text-slate-900 whitespace-nowrap">
+        <td className={`p-2 text-right font-semibold whitespace-nowrap ${isDiscount ? "text-green-700" : "text-slate-900"}`}>
           {calcGross(item).toLocaleString("pl-PL", PLN)} zł
         </td>
         <td className="p-2">

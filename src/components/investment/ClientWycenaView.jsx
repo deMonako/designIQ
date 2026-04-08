@@ -564,12 +564,16 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                             const lineVat   = round2(lineGross - lineNet);
                             const noteKey = `${key}-${i}`;
                             const noteOpen = activeNote === noteKey;
+                            const isDiscount = lineGross < 0;
                             return (
                               <React.Fragment key={i}>
-                              <tr className="text-slate-700 hover:bg-slate-50/50">
+                              <tr className={isDiscount ? "bg-green-50/70 hover:bg-green-50" : "text-slate-700 hover:bg-slate-50/50"}>
                                 <td className="p-2 sm:p-3 font-medium leading-tight break-words">
                                   <div className="flex items-start gap-1.5">
-                                    <span>{item.name}</span>
+                                    <span className={isDiscount ? "text-green-800" : ""}>{item.name}</span>
+                                    {isDiscount && (
+                                      <span className="shrink-0 text-[10px] font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full leading-none mt-0.5">Zniżka</span>
+                                    )}
                                     {item.note && (
                                       <button
                                         onClick={() => setActiveNote(noteOpen ? null : noteKey)}
@@ -581,22 +585,22 @@ export default function ClientWycenaView({ investment, quotation, onBack, onRefr
                                     )}
                                   </div>
                                 </td>
-                                <td className="p-2 sm:p-3 text-center text-slate-400">
+                                <td className={`p-2 sm:p-3 text-center ${isDiscount ? "text-green-600" : "text-slate-400"}`}>
                                   {item.quantity}
                                 </td>
-                                <td className="p-2 sm:p-3 text-right text-slate-500 hidden sm:table-cell">
+                                <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-600" : "text-slate-500"}`}>
                                   {item.unit_price.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                                 </td>
-                                <td className="p-2 sm:p-3 text-center text-slate-400 hidden sm:table-cell text-[10px]">
+                                <td className={`p-2 sm:p-3 text-center hidden sm:table-cell text-[10px] ${isDiscount ? "text-green-500" : "text-slate-400"}`}>
                                   {vatRate}%
                                 </td>
-                                <td className="p-2 sm:p-3 text-right text-slate-500 hidden sm:table-cell">
+                                <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-600" : "text-slate-500"}`}>
                                   {lineNet.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                                 </td>
-                                <td className="p-2 sm:p-3 text-right text-slate-400 hidden sm:table-cell">
+                                <td className={`p-2 sm:p-3 text-right hidden sm:table-cell ${isDiscount ? "text-green-500" : "text-slate-400"}`}>
                                   {lineVat.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                                 </td>
-                                <td className="p-2 sm:p-3 text-right font-bold text-slate-900 whitespace-nowrap">
+                                <td className={`p-2 sm:p-3 text-right font-bold whitespace-nowrap ${isDiscount ? "text-green-700" : "text-slate-900"}`}>
                                   {lineGross.toLocaleString('pl-PL', { minimumFractionDigits: 2 })} zł
                                 </td>
                               </tr>
