@@ -22,7 +22,7 @@ export default function WarrantyAndSupport() {
     { 
       icon: <Wrench className="w-5 h-5 text-orange-600" />, 
       title: "Serwis pogwarancyjny", 
-      desc: "Możliwość wykupienia pakietu stałej opieki nad Twoim Smart Home." 
+      desc: "Stała opieka nad Twoim Smart Home + realizacja nowych pomysłów i rozbudowa systemu w dowolnym momencie."
     }
   ];
 
