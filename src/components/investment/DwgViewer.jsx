@@ -85,56 +85,6 @@ function clusterPoints(items) {
 
 // ── Rasteryzacja SVG → Canvas (eliminuje lag pana) ────────────────────────────
 //
-// Canvas to pojedyncza tekstura GPU. Pan = przesunięcie tekstury na GPU.
-// Zero repaintu SVG podczas przesuwania. Kosztem jednorazowego renderowania.
-
-async function rasterizeSvg(svgEl, svgW, svgH) {
-  // Rasteryzuj z rozdzielczością 3× viewBox × devicePixelRatio — dzięki temu
-  // ekrany Retina/AMOLED (DPR 2–3) zachowują ostrość przy powiększeniu.
-  const dpr = window.devicePixelRatio || 1;
-  const K  = Math.ceil(3 * Math.min(dpr, 3));  // max 9× żeby nie przekroczyć pamięci
-  const cw = Math.min(Math.ceil(svgW * K), 10000);
-  const ch = Math.min(Math.ceil(svgH * K), 10000);
-
-  // preserveAspectRatio=none — canvas wypełniony 1:1 z viewBox (bez wewnętrznego letterbox).
-  // Bez tego SVG domyślnie stosuje xMidYMid meet, co powoduje przesunięcie elementów
-  // w kierunku środka (widoczne przy narożnych punktach rzutu).
-  svgEl.setAttribute("width",  cw);
-  svgEl.setAttribute("height", ch);
-  svgEl.setAttribute("preserveAspectRatio", "none");
-
-  const serializer = new XMLSerializer();
-  let svgStr = serializer.serializeToString(svgEl);
-  if (!svgStr.includes('xmlns="http://www.w3.org/2000/svg"')) {
-    svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
-  }
-
-  const blob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
-  const url  = URL.createObjectURL(blob);
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width  = cw;
-      canvas.height = ch;
-      // CSS ustawia mountView po obliczeniu letterbox — tu tylko display:block
-      canvas.style.cssText = "display:block;";
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#f1f5f9";
-      ctx.fillRect(0, 0, cw, ch);
-      ctx.drawImage(img, 0, 0, cw, ch);
-      URL.revokeObjectURL(url);
-      resolve(canvas);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("SVG rasterization failed"));
-    };
-    img.src = url;
-  });
-}
-
 // ── Pomocnik: rysuje tspany wysokości w elemencie <text> ────────────────────
 // Deduplikuje identyczne wartości; jeśli któraś > 10 znaków — każda w nowej linii.
 function renderClusterHeights(heightEl, items, baseX) {
@@ -790,8 +740,8 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     });
   }, [showHeights]);
 
-  // ── Montowanie widoku: canvas + overlay SVG ────────────────────────────────
-  const mountView = useCallback(async () => {
+  // ── Montowanie widoku: SVG tła + overlay interaktywny ───────────────────────
+  const mountView = useCallback(() => {
     const wrap   = svgWrapRef.current;
     const svgStr = svgContentRef.current;
     const m      = metaRef.current;
@@ -838,39 +788,17 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     const layoutCss = `position:absolute;left:${offX}px;top:${offY}px;width:${dispW}px;height:${dispH}px;`;
 
 
-    // ── Krok 2: rasteryzuj SVG → Canvas
-    // rasterizeSvg wewnętrznie liczy rozdzielczość 3× viewBox (ostrość do 3× zooma)
-    let canvas = null;
-    try {
-      canvas = await rasterizeSvg(parsedSvg, svgW, svgH);
-    } catch (e) {
-      // Fallback: inline SVG z pointer-events injection
-      console.warn("DwgViewer: canvas fallback →", e.message);
-      wrap.innerHTML = svgStr;
-      const svgEl = wrap.querySelector("svg");
-      if (svgEl) {
-        svgEl.style.width  = "100%";
-        svgEl.style.height = "100%";
-        svgEl.removeAttribute("width");
-        svgEl.removeAttribute("height");
-        if (m) {
-          const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
-          styleEl.textContent = "svg > :not(#__overlay__) * { pointer-events: none !important; } #__overlay__ circle.hit { pointer-events: auto !important; cursor: pointer; }";
-          svgEl.insertBefore(styleEl, svgEl.firstChild);
-        }
-      }
-      setLoadProg({ pct: 100, label: "Gotowe" });
-      setTimeout(() => setLoadState("ok_mounted"), 300);
-      return;
-    }
+    // ── Krok 2: dołącz SVG bezpośrednio — wektorowe, ostro przy każdym zoomie
+    // Nie rasteryzujemy do canvasa; przeglądarka re-renderuje SVG wektorowo
+    // przy każdej zmianie skali (GPU layer via will-change:transform na rodzicu).
+    parsedSvg.removeAttribute("width");
+    parsedSvg.removeAttribute("height");
+    parsedSvg.style.cssText = layoutCss + "overflow:visible;pointer-events:none;";
+    wrap.appendChild(parsedSvg);
 
     setLoadProg({ pct: 80, label: "Nakładka…" });
 
-    // ── Krok 3: dołącz canvas z letterbox CSS
-    canvas.style.cssText += layoutCss;
-    wrap.appendChild(canvas);
-
-    // ── Krok 4: nakładka interaktywna (oddzielny SVG – nie dotyka canvasa)
+    // ── Krok 3: nakładka interaktywna (oddzielny SVG – nie dotyka tła)
     const hasCoords = m && Object.values(elems).some(e => e.X != null);
     if (hasCoords) {
       const { el: overlayEl, cleanup } = buildOverlay(svgW, svgH, vbX, vbY, elems, m, (selection) => {
@@ -888,7 +816,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
         if (!hasDragRef.current && !e.target.classList.contains("hit")) setSelected(null);
       });
 
-      // Overlay SVG dostaje ten sam letterbox CSS co canvas
+      // Overlay SVG dostaje ten sam letterbox CSS co SVG tła
       overlayEl.style.cssText = layoutCss + "overflow:visible;";
       wrap.appendChild(overlayEl);
       overlayElRef.current = overlayEl;
