@@ -1033,7 +1033,35 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     window.addEventListener("mouseup",   onUp);
   }, [flushTransform]);
 
-  // Touch pan + pinch-to-zoom (mobile)
+  // ── Zoom ─────────────────────────────────────────────────────────────────
+  // transformOrigin = "0 0" → skalowanie wokół lewego-górnego rogu wrappera.
+  // Formuła: newPan = oldPan + mouseFromTopLeft × (1 − actualRatio)
+  // gdzie actualRatio = newScale / oldScale (uwzględnia clamping do 0.1…15).
+  const applyZoom = useCallback((newScale, anchorX, anchorY) => {
+    const oldScale = tRef.current.scale;
+    const clamped  = Math.min(Math.max(newScale, 0.1), 15);
+    const ratio    = clamped / oldScale;
+    // Poprawna formuła: new_pan = old_pan * ratio + anchor * (1 - ratio)
+    // Równoważnie: new_pan = anchor + (old_pan - anchor) * ratio
+    // Dowód: punkt pod kursorem ma local = (anchor - old_pan) / old_scale
+    //        po zoom: local * new_scale + new_pan = anchor * ratio  + old_pan * ratio
+    //                                             ← zmieńmy: nie, sprawdźmy...
+    //        local = (anchorX - panX) / oldScale
+    //        new_panX = anchorX - local * clamped = anchorX - (anchorX - panX)/oldScale * clamped
+    //                 = anchorX - (anchorX - panX) * ratio = anchorX*(1-ratio) + panX*ratio
+    tRef.current.panX  = anchorX * (1 - ratio) + tRef.current.panX  * ratio;
+    tRef.current.panY  = anchorY * (1 - ratio) + tRef.current.panY  * ratio;
+    tRef.current.scale = clamped;
+    flushTransform();
+    if (!rafRef.current) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        setScalePct(Math.round(tRef.current.scale * 100));
+      });
+    }
+  }, [flushTransform]);
+
+  // Touch pan + pinch-to-zoom (mobile) — musi być po applyZoom
   const touchRef = useRef(null);
   const pinchRef = useRef(null);
   const onTouchStart = useCallback((e) => {
@@ -1077,34 +1105,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => { rafRef.current = null; flushTransform(); });
   }, [flushTransform, applyZoom]);
-
-  // ── Zoom ─────────────────────────────────────────────────────────────────
-  // transformOrigin = "0 0" → skalowanie wokół lewego-górnego rogu wrappera.
-  // Formuła: newPan = oldPan + mouseFromTopLeft × (1 − actualRatio)
-  // gdzie actualRatio = newScale / oldScale (uwzględnia clamping do 0.1…15).
-  const applyZoom = useCallback((newScale, anchorX, anchorY) => {
-    const oldScale = tRef.current.scale;
-    const clamped  = Math.min(Math.max(newScale, 0.1), 15);
-    const ratio    = clamped / oldScale;
-    // Poprawna formuła: new_pan = old_pan * ratio + anchor * (1 - ratio)
-    // Równoważnie: new_pan = anchor + (old_pan - anchor) * ratio
-    // Dowód: punkt pod kursorem ma local = (anchor - old_pan) / old_scale
-    //        po zoom: local * new_scale + new_pan = anchor * ratio  + old_pan * ratio
-    //                                             ← zmieńmy: nie, sprawdźmy...
-    //        local = (anchorX - panX) / oldScale
-    //        new_panX = anchorX - local * clamped = anchorX - (anchorX - panX)/oldScale * clamped
-    //                 = anchorX - (anchorX - panX) * ratio = anchorX*(1-ratio) + panX*ratio
-    tRef.current.panX  = anchorX * (1 - ratio) + tRef.current.panX  * ratio;
-    tRef.current.panY  = anchorY * (1 - ratio) + tRef.current.panY  * ratio;
-    tRef.current.scale = clamped;
-    flushTransform();
-    if (!rafRef.current) {
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        setScalePct(Math.round(tRef.current.scale * 100));
-      });
-    }
-  }, [flushTransform]);
 
   const handleWheel = useCallback((e) => {
     e.preventDefault();
