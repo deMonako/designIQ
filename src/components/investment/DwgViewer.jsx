@@ -1037,6 +1037,11 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
   // transformOrigin = "0 0" → skalowanie wokół lewego-górnego rogu wrappera.
   // Formuła: newPan = oldPan + mouseFromTopLeft × (1 − actualRatio)
   // gdzie actualRatio = newScale / oldScale (uwzględnia clamping do 0.1…15).
+
+  // Refs do obsługi dotyku — muszą być przed applyZoom, żeby zachować kolejność hooków
+  const touchRef = useRef(null);
+  const pinchRef = useRef(null);
+
   const applyZoom = useCallback((newScale, anchorX, anchorY) => {
     const oldScale = tRef.current.scale;
     const clamped  = Math.min(Math.max(newScale, 0.1), 15);
@@ -1061,9 +1066,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     }
   }, [flushTransform]);
 
-  // Touch pan + pinch-to-zoom (mobile) — musi być po applyZoom
-  const touchRef = useRef(null);
-  const pinchRef = useRef(null);
+  // Touch pan + pinch-to-zoom (mobile) — callbacki muszą być po applyZoom (TDZ)
   const onTouchStart = useCallback((e) => {
     if (e.touches.length === 1) {
       hasDragRef.current = false;
