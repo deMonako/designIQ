@@ -32,7 +32,10 @@ src/
 │   ├── configurator/
 │   │   └── RoomLayoutBuilder.jsx
 │   ├── investment/             # Komponenty panelu klienta
+│   │   ├── DwgViewer.jsx       # Interaktywny rzut DWG (SVG + overlay)
+│   │   └── ClientWycenaView.jsx
 │   ├── quotation/
+│   │   └── WarrantyAndSupport.jsx
 │   └── ui/                     # Button, Input, Label, Card, itp.
 ├── admin/
 │   ├── views/                  # Widoki panelu admina
@@ -43,7 +46,8 @@ src/
 │   │   ├── Wyceny.jsx / WycenaEditor.jsx
 │   │   ├── Zakupy.jsx / ZakupyEditor.jsx
 │   │   ├── Materialy.jsx
-│   │   └── ...
+│   │   ├── Dashboard.jsx       # Widget ostatnich wejść klientów
+│   │   └── Analityka.jsx
 │   └── api/
 │       ├── gasConfig.js        # URL głównego GAS + konfiguracja
 │       ├── gasClient.js        # gasGet() / gasPost() — niski poziom HTTP
@@ -132,6 +136,9 @@ await submit(payload, { onSuccess: () => {}, onError: (msg) => {} });
 | `getShoppingLists` | GET | Listy zakupów |
 | `getWyceny` | GET | Wyceny |
 | `getInvestment` | GET | Status inwestycji klienta |
+| `getLoginLogs` | GET | Logi wejść klientów (`{ limit: N }`) |
+| `getCennik` | GET | Cennik urządzeń (autocomplete wyceny) |
+| `getMaterialyJson` | GET | Katalog materiałów JSON (autocomplete wyceny) |
 | `zirytujMnie` | GET | Trigger Loxone buczek (`key=zirytuj_mnie` wymagany!) |
 | `createClient` | POST | Nowy klient |
 | `createProject` | POST | Nowy projekt (+ folder Drive) |
@@ -178,6 +185,29 @@ createLead(lead)
 - `EditableCell` — edycja inline w tabeli
 - **Uwaga:** `p.name` i `m.name` mogą być `null` — używaj `(p.name ?? "").toLowerCase()`
 
+### WycenaEditor.jsx (admin)
+- Edytor wycen z sekcjami kategorii
+- **Autocomplete nazw pozycji** — przy ≥3 znakach sugeruje z `getCennik` + `getMaterialyJson`; wybranie sugestii auto-uzupełnia `unit_price` z `price_pln`
+- **Drag & drop pomieszczeń** — `@dnd-kit/core` + `@dnd-kit/sortable`; każde pomieszczenie ma `id: rm-${Date.now()}-${random}`; `SortableRoomRow` z uchwytem `GripVertical`
+- **Ujemne pozycje** — `calcGross(item) < 0` → zielone tło wiersza + zielony tekst ("Zniżka")
+- `roomSensors` jako `const` na poziomie komponentu (nie inline w JSX — narusza Rules of Hooks)
+
+### ClientWycenaView.jsx (panel klienta)
+- `const round2 = v => Math.round(v * 100) / 100` — stosowany do wszystkich wartości monetarnych
+- `toLocaleString` z `{ minimumFractionDigits: 2, maximumFractionDigits: 2 }` wszędzie
+- Notatka do pozycji: drugi `<tr className="bg-orange-50/40">` jako `<React.Fragment>` — nie absolutnie pozycjonowany (unikamy przycięcia przez `overflow-x-hidden`)
+- **Ujemne pozycje** — zielone tło + badge "Zniżka"
+
+### DwgViewer.jsx (panel klienta)
+- Interaktywny rzut piętra z punktami instalacyjnymi
+- **Renderowanie:** SVG wstawiany bezpośrednio do DOM (nie canvas) — wektorowe, ostro przy każdym powiększeniu; `will-change: transform` na rodzicu = GPU composite layer
+- **Pan:** CSS transform na `wrapRef` (translate + scale), drag via `mousemove`
+- **Zoom:** `applyZoom(newScale, anchorX, anchorY)` — formuła: `newPan = anchor*(1-ratio) + oldPan*ratio`
+- **Pinch-to-zoom (mobile):** `touchRef` + `pinchRef` (useRef przed applyZoom!), touch eventy bindowane przez `useEffect` z `{passive: false}`
+- **Legenda filtrów:** domyślnie zwinięta (mały przycisk z kolorowymi kółkami), `max-h-[45vh]` po rozwinięciu
+- **Przełącznik pięter:** `absolute bottom-10 left-1/2 -translate-x-1/2` (nie top — nie koliduje z Toolbar)
+- **Panele mobilne (AttribPanel, ClusterPanel):** gdy `containerW < 480` → pełna szerokość, przypięty do dołu
+
 ### Konfigurator.jsx (publiczny)
 - 4-krokowy kreator: metraż → pakiet → opcje → kontakt
 - Krok 4: `ConfiguratorContactForm` → `useGasSubmit(REACT_APP_GAS_CONTACT_URL)`
@@ -193,13 +223,43 @@ createLead(lead)
 - Używa `REACT_APP_GAS_STATUS_URL`
 - Klient loguje się przez link z kodem projektu
 
+### Dashboard.jsx (admin)
+- Widget **"Ostatnie wejścia"** — `gasGet("getLoginLogs", { limit: 5 })` przy mount; kolorowe badge z kodem projektu + czas; umieszczony w lewej kolumnie pod "Nadchodzące"
+
+### Analityka.jsx (admin)
+- Logi logowań ograniczone do 20: `gasGet("getLoginLogs", { limit: 20 })` + `logs.slice(0, 20)`
+
 ---
 
-## Naprawione błędy (sesja 2026-03-15)
+## Nawigacja (Layout.js)
 
+- **Realizacje** — tymczasowo wykomentowane z menu nawigacji
+
+---
+
+## Pliki statyczne
+
+### public/.htaccess
+- Redirect non-www → `https://www.designiq.pl`
+- Redirect `http://www` → `https://www`
+- SPA fallback: `RewriteRule . /index.html [L]`
+
+---
+
+## Naprawione błędy
+
+### Sesja 2026-03-15
 1. **Irytacja "Failed to fetch"** — brakował parametr `?action=zirytujMnie` w `.env` + brak `.catch()` w Instalator.jsx
 2. **Konfigurator nie wysyłał maili** — formularze używały admin GAS zamiast `REACT_APP_GAS_CONTACT_URL`
 3. **Kalkulator `Cannot read properties of null (reading 'toLowerCase')`** — `ControlDevicePicker` nie obsługiwał `null` w `p.name`/`m.name`
+
+### Sesja 2026-04-09
+4. **DwgViewer TDZ "Cannot access applyZoom before initialization"** — `onTouchMove` useCallback był zadeklarowany przed `applyZoom`; fix: `touchRef`/`pinchRef` (useRef) przed `applyZoom`, a `onTouchStart`/`onTouchMove` (useCallback) po nim
+5. **Notatka wchodziła pod kolejną kategorię** — absolutnie pozycjonowany tooltip był przycinany przez `overflow-x-hidden`; fix: drugi `<tr>` jako inline row
+6. **Zaokrąglenia wyceny** — brakujące `round2()` powodowało np. `1111,111 zł`; fix: `round2 = v => Math.round(v * 100) / 100` stosowany wszędzie
+7. **DwgViewer blur przy zoomie** — canvas miał stałą liczbę pikseli; fix: zastąpienie canvasa bezpośrednim SVG w DOM (wektorowy re-render przy każdym zoomie)
+8. **Legenda zasłaniała obraz na mobile** — fix: domyślnie zwinięta, `max-h-[45vh]` po rozwinięciu
+9. **Przełącznik pięter zasłonięty** — fix: przeniesiony z `top-3` na `bottom-10`
 
 ---
 
@@ -212,6 +272,5 @@ npm run build      # produkcyjny build
 
 ## Git
 
-- Branch roboczy: `claude/update-status-and-name-ZRAlL`
 - Main branch: `main`
 - Remote: `origin`
