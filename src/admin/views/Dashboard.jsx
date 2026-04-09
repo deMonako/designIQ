@@ -658,16 +658,6 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
             </div>
           </section>
 
-          {/* Ostatnie wejścia do panelu klienta */}
-          <section>
-            <SectionHeader color="blue" badge={recentVisits.length || undefined}>
-              <span className="flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5" />Ostatnie wejścia</span>
-            </SectionHeader>
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2">
-              <RecentVisits logs={recentVisits} loading={visitsLoading} />
-            </div>
-          </section>
-
           {/* Nadchodzące – tutaj gdy dużo zadań na dziś (> 3) */}
           {!fewTasksToday && (
             <section>
@@ -700,6 +690,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
               )}
             </section>
           )}
+
+          {/* Ostatnie wejścia do panelu klienta */}
+          <section>
+            <SectionHeader color="blue" badge={recentVisits.length || undefined}>
+              <span className="flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5" />Ostatnie wejścia</span>
+            </SectionHeader>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2">
+              <RecentVisits logs={recentVisits} loading={visitsLoading} />
+            </div>
+          </section>
         </div>
       </div>
 
