@@ -89,12 +89,12 @@ function clusterPoints(items) {
 // Zero repaintu SVG podczas przesuwania. Kosztem jednorazowego renderowania.
 
 async function rasterizeSvg(svgEl, svgW, svgH) {
-  // Rasteryzuj z 3× rozdzielczością viewBox — Chrome renderuje SVG wektorowo
-  // do podanego rozmiaru, więc każdy zoom <3× zachowuje ostrość.
-  // preserveAspectRatio=none → canvas wypełniony 1:1 z viewBox (brak letterbox).
-  const K  = 3;
-  const cw = Math.min(Math.ceil(svgW * K), 6000);
-  const ch = Math.min(Math.ceil(svgH * K), 6000);
+  // Rasteryzuj z rozdzielczością 3× viewBox × devicePixelRatio — dzięki temu
+  // ekrany Retina/AMOLED (DPR 2–3) zachowują ostrość przy powiększeniu.
+  const dpr = window.devicePixelRatio || 1;
+  const K  = Math.ceil(3 * Math.min(dpr, 3));  // max 9× żeby nie przekroczyć pamięci
+  const cw = Math.min(Math.ceil(svgW * K), 10000);
+  const ch = Math.min(Math.ceil(svgH * K), 10000);
 
   // preserveAspectRatio=none — canvas wypełniony 1:1 z viewBox (bez wewnętrznego letterbox).
   // Bez tego SVG domyślnie stosuje xMidYMid meet, co powoduje przesunięcie elementów
@@ -515,6 +515,8 @@ function ClusterPanel({ items, pos, onSelectItem, onClose, containerRef }) {
 // ── Legenda ───────────────────────────────────────────────────────────────────
 
 function Legend({ elements, activeTypes, onToggle }) {
+  const [open, setOpen] = React.useState(false);
+
   const types = {};
   Object.values(elements).forEach(el => {
     if (el.typ && !types[el.typ]) types[el.typ] = dotColor(el.typ);
@@ -522,30 +524,55 @@ function Legend({ elements, activeTypes, onToggle }) {
   const entries = Object.entries(types);
   if (!entries.length) return null;
   const isFiltered = activeTypes && activeTypes.size > 0;
+
   return (
-    <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur border border-slate-200 rounded-lg px-2.5 py-2 shadow-sm z-40 max-w-[240px]">
-      {isFiltered && (
-        <div className="flex justify-between items-center mb-1">
-          <span className="text-[9px] text-blue-500 font-semibold uppercase tracking-wide">Filtr</span>
-          <button onClick={() => onToggle(null)} className="text-[9px] text-slate-400 hover:text-slate-600 underline">Pokaż wszystko</button>
+    <div className="absolute bottom-3 left-3 z-40 flex flex-col items-start gap-1">
+      {/* Przycisk-toggle */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border shadow-sm text-[10px] font-semibold transition-colors ${
+          isFiltered
+            ? "bg-blue-600 border-blue-600 text-white"
+            : "bg-white/95 backdrop-blur border-slate-200 text-slate-600 hover:bg-slate-50"
+        }`}
+      >
+        <div className="flex items-center gap-0.5">
+          {entries.slice(0, 3).map(([typ, color]) => (
+            <div key={typ} className="w-2 h-2 rounded-full" style={{ background: isFiltered && !activeTypes.has(typ) ? "#94a3b8" : color }} />
+          ))}
+          {entries.length > 3 && <span className="text-[9px] ml-0.5 opacity-60">+{entries.length - 3}</span>}
+        </div>
+        <span>{isFiltered ? `Filtr (${activeTypes.size})` : "Legenda"}</span>
+        <span className="opacity-50">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Panel rozwinięty */}
+      {open && (
+        <div className="bg-white/95 backdrop-blur border border-slate-200 rounded-lg px-2.5 py-2 shadow-sm max-w-[220px] max-h-[45vh] overflow-y-auto">
+          {isFiltered && (
+            <div className="flex justify-between items-center mb-1.5">
+              <span className="text-[9px] text-blue-500 font-semibold uppercase tracking-wide">Filtr aktywny</span>
+              <button onClick={() => onToggle(null)} className="text-[9px] text-slate-400 hover:text-slate-600 underline">Wyczyść</button>
+            </div>
+          )}
+          {!isFiltered && (
+            <div className="text-[9px] text-slate-400 mb-1.5">Kliknij typ aby filtrować</div>
+          )}
+          {entries.map(([typ, color]) => {
+            const isActive = !isFiltered || activeTypes.has(typ);
+            return (
+              <button
+                key={typ}
+                onClick={() => onToggle(typ)}
+                className={`flex items-center gap-1.5 text-[10px] py-0.5 w-full text-left transition-opacity ${isActive ? "text-slate-600" : "text-slate-400 opacity-40"}`}
+              >
+                <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isActive ? color : "#94a3b8" }} />
+                <span className="truncate">{typ}</span>
+              </button>
+            );
+          })}
         </div>
       )}
-      {!isFiltered && (
-        <div className="text-[9px] text-slate-400 mb-1">Kliknij typ aby filtrować</div>
-      )}
-      {entries.map(([typ, color]) => {
-        const isActive = !isFiltered || activeTypes.has(typ);
-        return (
-          <button
-            key={typ}
-            onClick={() => onToggle(typ)}
-            className={`flex items-center gap-1.5 text-[10px] py-0.5 w-full text-left transition-opacity ${isActive ? "text-slate-600" : "text-slate-400 opacity-40"}`}
-          >
-            <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: isActive ? color : "#94a3b8" }} />
-            <span className="truncate">{typ}</span>
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -1228,9 +1255,9 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
           <div ref={svgWrapRef} style={{ position: "relative", width: "100%", height: "100%" }} />
         </div>
 
-        {/* Przełącznik pięter – zawsze widoczny gdy są dane (nie tylko po załadowaniu) */}
+        {/* Przełącznik pięter – na dole wyśrodkowany, nie koliduje z Toolbar u góry */}
         {floorNames.length > 1 && (loadState === "ok_mounted" || loadState === "processing") && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1 shadow-sm z-40 pointer-events-auto">
+          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/90 backdrop-blur border border-slate-200 rounded-lg p-1 shadow-sm z-40 pointer-events-auto">
             {floorNames.map((name, idx) => (
               <button
                 key={name}
