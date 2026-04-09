@@ -542,7 +542,7 @@ function LoginTimeline({ logs }) {
   }, [logs]);
 
   // Logi z czytelnym czasem, od najnowszego
-  const entries = useMemo(() => logs.slice(0, 80).map(l => {
+  const entries = useMemo(() => logs.slice(0, 20).map(l => {
     const d = l.timestamp ? new Date(l.timestamp) : null;
     const hhmm  = d ? d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }) : "??:??";
     const date  = d ? d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" }) : "";
@@ -567,7 +567,7 @@ function LoginTimeline({ logs }) {
 
       {/* Lista ostatnich wejść */}
       <div>
-        <p className="text-xs text-slate-400 mb-2 font-medium">Ostatnie wejścia ({logs.length} łącznie)</p>
+        <p className="text-xs text-slate-400 mb-2 font-medium">Ostatnie 20 wejść</p>
         <div className="relative border-l-2 border-slate-100 ml-2 space-y-0">
           {entries.map((e, i) => (
             <div key={e.id || i} className="flex items-center gap-3 pl-4 py-1 relative">
@@ -595,7 +595,7 @@ export default function Analityka({ projects, tasks, checklists, clients = [], o
   const [loginLoading, setLoginLoading] = useState(true);
   useEffect(() => {
     if (!GAS_ON) { setLoginLoading(false); return; }
-    gasGet("getLoginLogs", { limit: 100 })
+    gasGet("getLoginLogs", { limit: 20 })
       .then(d => setLoginLogs(Array.isArray(d) ? d : []))
       .catch(() => {})
       .finally(() => setLoginLoading(false));

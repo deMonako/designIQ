@@ -393,15 +393,25 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
   const entries = Object.entries(attrib).filter(
     ([k, v]) => !HIDDEN_KEYS.has(k) && !k.startsWith("_") && v != null && v !== ""
   );
-  const panelW = 290;
-  const panelH = Math.min(entries.length * 32 + 80, 380);
-  let left = pos.x + 16, top = pos.y - 28;
 
-  if (containerRef?.current) {
-    const r = containerRef.current.getBoundingClientRect();
-    if (left + panelW > r.width  - 8) left = pos.x - panelW - 16;
-    if (top  + panelH > r.height - 8) top  = r.height - panelH - 8;
-    if (top  < 8) top = 8;
+  const r = containerRef?.current?.getBoundingClientRect();
+  const containerW = r?.width ?? 9999;
+  const containerH = r?.height ?? 9999;
+  const isMobile = containerW < 480;
+
+  const panelW = isMobile ? containerW - 16 : 290;
+  const panelH = Math.min(entries.length * 32 + 80, isMobile ? 260 : 380);
+
+  let left, top;
+  if (isMobile) {
+    left = 8;
+    top = containerH - panelH - 8;
+  } else {
+    left = pos.x + 16;
+    top = pos.y - 28;
+    if (left + panelW > containerW - 8) left = pos.x - panelW - 16;
+    if (top + panelH > containerH - 8) top = containerH - panelH - 8;
+    if (top < 8) top = 8;
     if (left < 8) left = 8;
   }
 
@@ -411,7 +421,7 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
     <AnimatePresence>
       <motion.div
         key="panel"
-        initial={{ opacity: 0, scale: 0.93, y: -4 }}
+        initial={{ opacity: 0, scale: 0.93, y: isMobile ? 8 : -4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.93 }}
         transition={{ duration: 0.12 }}
@@ -427,7 +437,7 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
             <X className="w-3.5 h-3.5" />
           </button>
         </div>
-        <div className="px-3 py-2 max-h-72 overflow-y-auto">
+        <div className="px-3 py-2 max-h-60 overflow-y-auto">
           {entries.map(([k, v]) => (
             <div key={k} className="flex gap-2 py-1 border-b border-slate-50 last:border-0 text-xs">
               <span className="text-slate-400 w-28 flex-shrink-0">{KEY_LABELS[k] ?? k}</span>
@@ -444,15 +454,24 @@ function AttribPanel({ tag, attrib, pos, onClose, containerRef }) {
 // ── Panel klastra (wiele punktów w jednym miejscu) ────────────────────────────
 
 function ClusterPanel({ items, pos, onSelectItem, onClose, containerRef }) {
-  const panelW = 240;
-  const panelH = Math.min(items.length * 38 + 52, 320);
-  let left = pos.x + 16, top = pos.y - 28;
+  const r = containerRef?.current?.getBoundingClientRect();
+  const containerW = r?.width ?? 9999;
+  const containerH = r?.height ?? 9999;
+  const isMobile = containerW < 480;
 
-  if (containerRef?.current) {
-    const r = containerRef.current.getBoundingClientRect();
-    if (left + panelW > r.width  - 8) left = pos.x - panelW - 16;
-    if (top  + panelH > r.height - 8) top  = r.height - panelH - 8;
-    if (top  < 8) top = 8;
+  const panelW = isMobile ? containerW - 16 : 240;
+  const panelH = Math.min(items.length * 38 + 52, 280);
+
+  let left, top;
+  if (isMobile) {
+    left = 8;
+    top = containerH - panelH - 8;
+  } else {
+    left = pos.x + 16;
+    top = pos.y - 28;
+    if (left + panelW > containerW - 8) left = pos.x - panelW - 16;
+    if (top + panelH > containerH - 8) top = containerH - panelH - 8;
+    if (top < 8) top = 8;
     if (left < 8) left = 8;
   }
 
@@ -460,7 +479,7 @@ function ClusterPanel({ items, pos, onSelectItem, onClose, containerRef }) {
     <AnimatePresence>
       <motion.div
         key="cluster-panel"
-        initial={{ opacity: 0, scale: 0.93, y: -4 }}
+        initial={{ opacity: 0, scale: 0.93, y: isMobile ? 8 : -4 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.93 }}
         transition={{ duration: 0.12 }}
@@ -1014,17 +1033,42 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     window.addEventListener("mouseup",   onUp);
   }, [flushTransform]);
 
-  // Touch pan (mobile)
+  // Touch pan + pinch-to-zoom (mobile)
   const touchRef = useRef(null);
+  const pinchRef = useRef(null);
   const onTouchStart = useCallback((e) => {
-    if (e.touches.length !== 1) return;
-    hasDragRef.current = false;
-    const { panX, panY } = tRef.current;
-    touchRef.current = { mx: e.touches[0].clientX, my: e.touches[0].clientY, px: panX, py: panY };
+    if (e.touches.length === 1) {
+      hasDragRef.current = false;
+      const { panX, panY } = tRef.current;
+      touchRef.current = { mx: e.touches[0].clientX, my: e.touches[0].clientY, px: panX, py: panY };
+      pinchRef.current = null;
+    } else if (e.touches.length === 2) {
+      touchRef.current = null;
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      pinchRef.current = {
+        dist: Math.hypot(dx, dy),
+        scale: tRef.current.scale,
+      };
+    }
   }, []);
   const onTouchMove = useCallback((e) => {
-    if (!touchRef.current || e.touches.length !== 1) return;
     e.preventDefault();
+    if (e.touches.length === 2 && pinchRef.current) {
+      const dx = e.touches[1].clientX - e.touches[0].clientX;
+      const dy = e.touches[1].clientY - e.touches[0].clientY;
+      const dist = Math.hypot(dx, dy);
+      const newScale = pinchRef.current.scale * (dist / pinchRef.current.dist);
+      const container = containerRef.current;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+        const my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+        applyZoom(newScale, mx, my);
+      }
+      return;
+    }
+    if (!touchRef.current || e.touches.length !== 1) return;
     const dx = e.touches[0].clientX - touchRef.current.mx;
     const dy = e.touches[0].clientY - touchRef.current.my;
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) hasDragRef.current = true;
@@ -1032,7 +1076,7 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     tRef.current.panY = touchRef.current.py + dy;
     if (rafRef.current) return;
     rafRef.current = requestAnimationFrame(() => { rafRef.current = null; flushTransform(); });
-  }, [flushTransform]);
+  }, [flushTransform, applyZoom]);
 
   // ── Zoom ─────────────────────────────────────────────────────────────────
   // transformOrigin = "0 0" → skalowanie wokół lewego-górnego rogu wrappera.
@@ -1079,6 +1123,18 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
     return () => el.removeEventListener("wheel", handleWheel);
   }, [handleWheel]);
 
+  // Touch events muszą być passive:false, żeby preventDefault() działał (pinch)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove",  onTouchMove,  { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove",  onTouchMove);
+    };
+  }, [onTouchStart, onTouchMove]);
+
   const handleReset = useCallback(() => {
     tRef.current = { scale: 1, panX: 0, panY: 0 };
     flushTransform();
@@ -1098,8 +1154,6 @@ export default function DwgViewer({ projectCode, height = 520, clientMode = fals
       style={containerStyle}
       ref={containerRef}
       onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
     >
 
       {/* Pasek ładowania */}

@@ -1,14 +1,18 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CheckCircle2, AlertTriangle, Calendar, Clock,
   FolderKanban, Phone, Mail, Pencil, Plus,
-  ChevronRight, ListTodo,
+  ChevronRight, ListTodo, LogIn,
 } from "lucide-react";
 import { format } from "date-fns";
 import { pl } from "date-fns/locale";
 import { TODAY, isOverdue } from "../mockData";
 import TaskModal, { projectLabel, DESIGNIQ_PROJECT_ID } from "../components/TaskModal";
+import { gasGet } from "../api/gasClient";
+import { GAS_CONFIG } from "../api/gasConfig";
+
+const GAS_ON = GAS_CONFIG.enabled && Boolean(GAS_CONFIG.scriptUrl);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -351,6 +355,7 @@ function SectionHeader({ color = "orange", children, badge, action }) {
     red:    "bg-red-500",
     slate:  "bg-slate-300",
     blue:   "bg-blue-400",
+    violet: "bg-violet-400",
   };
   return (
     <div className="flex items-center gap-2 mb-3">
@@ -364,6 +369,45 @@ function SectionHeader({ color = "orange", children, badge, action }) {
   );
 }
 
+
+// ─── RecentVisits ─────────────────────────────────────────────────────────────
+
+const CODE_COLORS = ["bg-blue-500","bg-violet-500","bg-teal-500","bg-pink-500","bg-indigo-500","bg-cyan-500","bg-lime-600","bg-rose-500"];
+function codeColor(code) {
+  if (!code || String(code).toUpperCase() === "DEMO") return "bg-orange-500";
+  let h = 0;
+  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) & 0xffff;
+  return CODE_COLORS[h % CODE_COLORS.length];
+}
+
+function RecentVisits({ logs, loading }) {
+  if (loading) return (
+    <div className="flex items-center justify-center py-6">
+      <Clock className="w-4 h-4 text-slate-300 animate-pulse" />
+    </div>
+  );
+  if (!logs.length) return (
+    <p className="text-xs text-slate-400 text-center py-4">Brak wejść do panelu klienta</p>
+  );
+  return (
+    <div className="space-y-1">
+      {logs.map((e, i) => {
+        const d = e.timestamp ? new Date(e.timestamp) : null;
+        const hhmm = d ? d.toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" }) : "—";
+        const date = d ? d.toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" }) : "";
+        const today = new Date().toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit" });
+        return (
+          <div key={e.id || i} className="flex items-center gap-2 px-1 py-1">
+            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${codeColor(e.code)}`} />
+            <span className={`text-xs font-semibold text-white px-2 py-0.5 rounded-full flex-shrink-0 ${codeColor(e.code)}`}>{e.code || "—"}</span>
+            <span className="text-xs font-mono text-slate-400 flex-shrink-0">{hhmm}</span>
+            {date !== today && <span className="text-[10px] text-slate-300">{date}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
@@ -413,6 +457,15 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
   const fewTasksToday = todayItems.length <= 3;
 
   const [editingTask, setEditingTask] = useState(null);
+  const [recentVisits, setRecentVisits] = useState([]);
+  const [visitsLoading, setVisitsLoading] = useState(true);
+  useEffect(() => {
+    if (!GAS_ON) { setVisitsLoading(false); return; }
+    gasGet("getLoginLogs", { limit: 5 })
+      .then(d => setRecentVisits(Array.isArray(d) ? d.slice(0, 5) : []))
+      .catch(() => {})
+      .finally(() => setVisitsLoading(false));
+  }, []);
 
   const handleStatusChange = (taskId, newStatus) => {
     const task = tasks.find(t => t.id === taskId);
@@ -602,6 +655,16 @@ export default function Dashboard({ projects, tasks, clients, onUpdateTask, onAd
               {activeProjects.length === 0 && (
                 <div className="text-sm text-slate-400 text-center py-4">Brak aktywnych projektów</div>
               )}
+            </div>
+          </section>
+
+          {/* Ostatnie wejścia do panelu klienta */}
+          <section>
+            <SectionHeader color="blue" badge={recentVisits.length || undefined}>
+              <span className="flex items-center gap-1.5"><LogIn className="w-3.5 h-3.5" />Ostatnie wejścia</span>
+            </SectionHeader>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm px-3 py-2">
+              <RecentVisits logs={recentVisits} loading={visitsLoading} />
             </div>
           </section>
 
